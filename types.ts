@@ -2,6 +2,7 @@
 export interface User {
     id: number;
     name: string;
+    username?: string; // Add username for URL routing (@username)
     firstName?: string;
     lastName?: string;
     profileImage: string;
@@ -27,6 +28,7 @@ export interface User {
     phone?: string;
     joinedDate?: string; 
     interests?: string[]; 
+    status?: 'active' | 'suspended' | 'deleted'; // For SEO and content handling
 }
 
 export interface Brand {
@@ -123,6 +125,7 @@ export interface Post {
     groupName?: string;
     brandId?: number;
     brandName?: string;
+    status?: 'active' | 'deleted'; // For SEO and content handling
 }
 
 export interface Story {

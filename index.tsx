@@ -1,6 +1,6 @@
 
 import React from 'react';
-import ReactDOM from 'react-dom/client';
+import { hydrateRoot } from 'react-dom/client';
 import App from './App';
 import { LanguageProvider } from './contexts/LanguageContext';
 
@@ -9,11 +9,14 @@ if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
 
-const root = ReactDOM.createRoot(rootElement);
-root.render(
+// @ts-ignore
+const initialData = window.__INITIAL_DATA__;
+
+hydrateRoot(
+  rootElement,
   <React.StrictMode>
     <LanguageProvider>
-      <App />
+      <App initialData={initialData} />
     </LanguageProvider>
   </React.StrictMode>
 );
