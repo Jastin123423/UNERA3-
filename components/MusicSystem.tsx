@@ -62,14 +62,28 @@ export const GlobalAudioPlayer: React.FC<GlobalAudioPlayerProps> = ({
         const managePlayback = async () => {
             if (currentTrack && currentTrack.url) {
                 if (lastUrlRef.current !== currentTrack.url) {
+                    // Stop and reset previous audio completely
                     audio.pause();
                     audio.currentTime = 0;
+                    audio.src = '';
+                    
+                    // Small delay to ensure audio context is cleared
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
                     audio.src = currentTrack.url;
                     lastUrlRef.current = currentTrack.url;
+                    
+                    // Load the new audio
+                    audio.load();
                 }
                 
                 if (isPlaying) {
                     try {
+                        // Cancel any existing play promise
+                        if (playPromiseRef.current) {
+                            playPromiseRef.current.catch(() => {});
+                        }
+                        
                         playPromiseRef.current = audio.play();
                         await playPromiseRef.current;
                     } catch (error: any) {
@@ -84,8 +98,9 @@ export const GlobalAudioPlayer: React.FC<GlobalAudioPlayerProps> = ({
                 }
             } else {
                 audio.pause();
+                audio.currentTime = 0;
                 if (lastUrlRef.current) {
-                    audio.removeAttribute('src');
+                    audio.src = '';
                     lastUrlRef.current = null;
                 }
             }
@@ -98,6 +113,13 @@ export const GlobalAudioPlayer: React.FC<GlobalAudioPlayerProps> = ({
             audio.removeEventListener('timeupdate', setAudioTime);
             audio.removeEventListener('ended', handleEnded);
             audio.removeEventListener('error', handleError);
+            
+            // Clean up audio on unmount
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current.currentTime = 0;
+                audioRef.current.src = '';
+            }
         };
     }, [currentTrack, isPlaying, onNext]);
 
@@ -253,7 +275,7 @@ export const GlobalAudioPlayer: React.FC<GlobalAudioPlayerProps> = ({
                             <h4 className="text-white font-bold text-[16px] truncate">{currentTrack.title}</h4>
                             <p className="text-gray-400 text-[14px] truncate flex items-center gap-1">
                                 {uploaderProfile ? `${uploaderProfile.name}` : currentTrack.artist}
-                                {currentTrack.isVerified && <i className="fas fa-check-circle text-[10px] text-[#1877F2]"></i>}
+                                {uploaderProfile?.isVerified && <i className="fas fa-check-circle text-[10px] text-[#1877F2]"></i>}
                             </p>
                         </div>
                     </div>
@@ -277,6 +299,172 @@ export const GlobalAudioPlayer: React.FC<GlobalAudioPlayerProps> = ({
     );
 };
 
+// Music Feed Post Component - For displaying music in homepage feeds
+interface MusicFeedPostProps {
+    song: Song;
+    currentUser: User | null;
+    users: User[];
+    onPlayTrack: (track: AudioTrack) => void;
+    onProfileClick?: (id: number) => void;
+}
+
+export const MusicFeedPost: React.FC<MusicFeedPostProps> = ({ 
+    song, 
+    currentUser, 
+    users, 
+    onPlayTrack,
+    onProfileClick 
+}) => {
+    const uploaderProfile = users.find(u => u.id === song.uploaderId);
+    
+    const handlePlayClick = () => {
+        const audioTrack: AudioTrack = {
+            id: song.id,
+            title: song.title,
+            artist: song.artist,
+            duration: typeof song.duration === 'string' ? 
+                parseInt(song.duration.split(':')[0]) * 60 + parseInt(song.duration.split(':')[1]) || 180 : 
+                song.duration || 180,
+            url: song.audioUrl || '',
+            uploaderId: song.uploaderId || 1,
+            cover: song.cover,
+            type: 'music',
+            isVerified: uploaderProfile?.isVerified || false
+        };
+        onPlayTrack(audioTrack);
+    };
+
+    return (
+        <div className="bg-[#242526] rounded-xl overflow-hidden border border-[#3A3B3C] hover:border-[#4E4F50] transition-colors">
+            {/* Music Header */}
+            <div className="p-4 border-b border-[#3A3B3C]">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <img 
+                            src={song.cover} 
+                            alt={song.title}
+                            className="w-12 h-12 rounded-lg object-cover"
+                        />
+                        <div>
+                            <h3 className="font-bold text-white text-lg">{song.title}</h3>
+                            <div className="flex items-center gap-2">
+                                <div 
+                                    className="flex items-center gap-1 text-[#B0B3B8] text-sm cursor-pointer hover:underline"
+                                    onClick={() => song.uploaderId && onProfileClick && onProfileClick(song.uploaderId)}
+                                >
+                                    <span>{song.artist}</span>
+                                    {uploaderProfile?.isVerified && (
+                                        <i className="fas fa-check-circle text-[#1877F2] text-xs"></i>
+                                    )}
+                                </div>
+                                {song.genre && (
+                                    <>
+                                        <span className="text-[#6C6E70]">•</span>
+                                        <span className="text-[#B0B3B8] text-xs">{song.genre}</span>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button 
+                            onClick={handlePlayClick}
+                            className="w-10 h-10 bg-[#1877F2] rounded-full flex items-center justify-center text-white cursor-pointer hover:scale-105 transition-transform shadow-lg"
+                        >
+                            <i className="fas fa-play ml-0.5 text-sm"></i>
+                        </button>
+                        {song.stats?.plays && song.stats.plays > 0 && (
+                            <span className="text-[#B0B3B8] text-xs">
+                                {song.stats.plays} {song.stats.plays === 1 ? 'play' : 'plays'}
+                            </span>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Music Cover Art Player */}
+            <div 
+                className="relative h-64 bg-gradient-to-br from-gray-900 to-black cursor-pointer group"
+                onClick={handlePlayClick}
+            >
+                <img 
+                    src={song.cover} 
+                    alt={song.title}
+                    className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
+                
+                {/* Play Button Overlay */}
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="w-20 h-20 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/30">
+                        <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-2xl">
+                            <i className="fas fa-play text-black text-2xl ml-1"></i>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Song Info Overlay */}
+                <div className="absolute bottom-4 left-4 right-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h4 className="text-white font-bold text-xl drop-shadow-lg">{song.title}</h4>
+                            <p className="text-gray-300 text-sm drop-shadow-lg flex items-center gap-1">
+                                {song.artist}
+                                {uploaderProfile?.isVerified && (
+                                    <i className="fas fa-check-circle text-[#1877F2] text-xs"></i>
+                                )}
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <div className="text-white bg-black/50 backdrop-blur-sm px-3 py-1 rounded-full text-sm">
+                                {song.duration || '3:00'}
+                            </div>
+                            {song.album && song.album !== 'Single' && (
+                                <div className="text-white bg-[#1877F2]/80 backdrop-blur-sm px-3 py-1 rounded-full text-sm">
+                                    {song.album}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Music Wave Visualization */}
+                <div className="absolute bottom-0 left-0 right-0 h-2 bg-gradient-to-r from-[#1877F2] via-[#45BD62] to-[#F3425F] opacity-70"></div>
+            </div>
+
+            {/* Music Stats & Actions */}
+            <div className="p-4">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <button className="flex items-center gap-2 text-[#B0B3B8] hover:text-white transition-colors">
+                            <i className="fas fa-play text-sm"></i>
+                            <span className="text-xs">{song.stats?.plays || 0}</span>
+                        </button>
+                        <button className="flex items-center gap-2 text-[#B0B3B8] hover:text-white transition-colors">
+                            <i className="far fa-heart text-sm"></i>
+                            <span className="text-xs">{song.stats?.likes || 0}</span>
+                        </button>
+                        <button className="flex items-center gap-2 text-[#B0B3B8] hover:text-white transition-colors">
+                            <i className="fas fa-share text-sm"></i>
+                            <span className="text-xs">{song.stats?.shares || 0}</span>
+                        </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {song.uploadDate && (
+                            <span className="text-[#6C6E70] text-xs">
+                                {new Date(song.uploadDate).toLocaleDateString('en-US', { 
+                                    month: 'short', 
+                                    day: 'numeric' 
+                                })}
+                            </span>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // Main MusicSystem Component - UPDATED to accept your props AND include upload features
 interface MusicSystemProps {
     songs: Song[];
@@ -288,7 +476,9 @@ interface MusicSystemProps {
     onDeleteEpisode: (id: string) => void;
     likedTracks: string[];
     onToggleLike: (id: string) => void;
-    onUploadToFeed?: (song: Song) => void; // Add this to send to homepage feeds
+    onUploadToFeed?: (song: Song) => void;
+    onAddSong?: (song: Song) => void;
+    onAddEpisode?: (episode: Episode) => void;
 }
 
 export const MusicSystem: React.FC<MusicSystemProps> = ({
@@ -302,6 +492,8 @@ export const MusicSystem: React.FC<MusicSystemProps> = ({
     likedTracks,
     onToggleLike,
     onUploadToFeed,
+    onAddSong,
+    onAddEpisode,
 }) => {
     const [view, setView] = useState<'music' | 'podcasts' | 'dashboard' | 'artist'>('music');
     const [searchQuery, setSearchQuery] = useState('');
@@ -357,6 +549,7 @@ export const MusicSystem: React.FC<MusicSystemProps> = ({
     };
     
     const handlePlayTrackFromSong = (song: Song) => {
+        const uploaderProfile = users?.find(u => u.id === song.uploaderId);
         const audioTrack: AudioTrack = {
             id: song.id,
             title: song.title,
@@ -368,12 +561,13 @@ export const MusicSystem: React.FC<MusicSystemProps> = ({
             uploaderId: song.uploaderId || 1,
             cover: song.cover,
             type: 'music',
-            isVerified: true
+            isVerified: uploaderProfile?.isVerified || false
         };
         onPlayTrack(audioTrack);
     };
     
     const handlePlayTrackFromEpisode = (episode: Episode) => {
+        const uploaderProfile = users?.find(u => u.id === episode.uploaderId);
         const audioTrack: AudioTrack = {
             id: episode.id,
             title: episode.title,
@@ -385,44 +579,72 @@ export const MusicSystem: React.FC<MusicSystemProps> = ({
             uploaderId: episode.uploaderId || 1,
             cover: episode.thumbnail,
             type: 'podcast',
-            isVerified: true
+            isVerified: uploaderProfile?.isVerified || false
         };
         onPlayTrack(audioTrack);
     };
     
+    // We'll get users from context or props - for now using a local variable
+    const users: User[] = []; // This should come from props or context
+    
     const handleUpload = (items: any[], type: 'music' | 'podcast', meta?: any) => {
         console.log('Uploaded:', items, type, meta);
         
-        // Here you would typically send to backend
-        // For now, simulate adding to feed
-        if (type === 'music' && items.length > 0 && onUploadToFeed) {
-            const newSong: Song = {
-                id: Date.now().toString(),
-                title: items[0].title,
-                artist: items[0].artist,
-                cover: items[0].cover,
-                audioUrl: items[0].audioUrl,
-                duration: items[0].duration,
-                uploaderId: currentUser?.id || 1,
-                uploadDate: new Date().toISOString(),
-                stats: {
-                    plays: 0,
-                    downloads: 0,
-                    shares: 0,
-                    likes: 0,
-                    reelsUse: 0
-                },
-                genre: items[0].genre,
-                album: items[0].album
-            };
+        if (type === 'music' && items.length > 0) {
+            items.forEach((item, index) => {
+                const newSong: Song = {
+                    id: `uploaded_${Date.now()}_${index}`,
+                    title: item.title,
+                    artist: item.artist,
+                    cover: item.cover,
+                    audioUrl: item.audioUrl,
+                    duration: item.duration || '3:00',
+                    uploaderId: currentUser?.id || 1,
+                    uploadDate: new Date().toISOString(),
+                    stats: { plays: 0, downloads: 0, shares: 0, likes: 0, reelsUse: 0 },
+                    genre: item.genre,
+                    album: item.album,
+                    isVerified: currentUser?.isVerified || false
+                };
+                
+                // Add to parent state if callback exists
+                if (onAddSong) {
+                    onAddSong(newSong);
+                }
+                
+                // Send to feed if callback exists
+                if (onUploadToFeed) {
+                    onUploadToFeed(newSong);
+                }
+            });
             
-            // Send to homepage feed
-            onUploadToFeed(newSong);
+            alert(`${items.length} music item(s) uploaded successfully! Your music is now available.`);
             
-            // Show success message
-            alert(`${items.length} ${type} item(s) uploaded successfully! Your music will appear in the feed and music list.`);
-        } else {
-            alert(`${items.length} ${type} item(s) uploaded successfully!`);
+        } else if (type === 'podcast') {
+            items.forEach((item, index) => {
+                const newEpisode: Episode = {
+                    id: `uploaded_${Date.now()}_${index}`,
+                    title: item.title,
+                    description: item.description,
+                    host: item.host,
+                    thumbnail: item.cover,
+                    audioUrl: item.audioUrl,
+                    duration: item.duration || '45:00',
+                    uploaderId: currentUser?.id || 1,
+                    uploadDate: new Date().toISOString(),
+                    stats: { plays: 0, downloads: 0, shares: 0, likes: 0, reelsUse: 0 },
+                    season: item.season,
+                    episode: item.episode,
+                    guests: item.guests
+                };
+                
+                // Add to parent state if callback exists
+                if (onAddEpisode) {
+                    onAddEpisode(newEpisode);
+                }
+            });
+            
+            alert(`${items.length} podcast episode(s) uploaded successfully!`);
         }
         
         // Close modal
@@ -448,7 +670,7 @@ export const MusicSystem: React.FC<MusicSystemProps> = ({
         followers: [],
         following: [],
         isOnline: false,
-        isVerified: true,
+        isVerified: false, // Default to not verified
         role: 'user'
     } as User;
     
@@ -553,11 +775,8 @@ export const MusicSystem: React.FC<MusicSystemProps> = ({
                                 />
                                 <i className="fas fa-search absolute left-3 top-3.5 text-[#B0B3B8]"></i>
                             </div>
-                            {/* Upload button removed from search bar - only in Dashboard */}
                         </div>
                     </div>
-                    
-                    {/* REMOVED: Stats Bar section */}
                 </div>
                 
                 {/* Main Content Views */}
@@ -599,7 +818,12 @@ export const MusicSystem: React.FC<MusicSystemProps> = ({
                                             </div>
                                             <div className="p-3">
                                                 <h3 className="font-bold text-white truncate text-sm">{song.title}</h3>
-                                                <p className="text-[#B0B3B8] text-xs truncate">{song.artist}</p>
+                                                <p className="text-[#B0B3B8] text-xs truncate flex items-center gap-1">
+                                                    {song.artist}
+                                                    {users.find(u => u.id === song.uploaderId)?.isVerified && (
+                                                        <i className="fas fa-check-circle text-[#1877F2] text-xs"></i>
+                                                    )}
+                                                </p>
                                                 <div className="flex justify-between items-center mt-2">
                                                     <span className="text-[#B0B3B8] text-xs">{song.duration || '3:00'}</span>
                                                     <button 
@@ -657,7 +881,12 @@ export const MusicSystem: React.FC<MusicSystemProps> = ({
                                             </div>
                                             <div className="p-3">
                                                 <h3 className="font-bold text-white truncate text-sm">{song.title}</h3>
-                                                <p className="text-[#B0B3B8] text-xs truncate">{song.artist}</p>
+                                                <p className="text-[#B0B3B8] text-xs truncate flex items-center gap-1">
+                                                    {song.artist}
+                                                    {users.find(u => u.id === song.uploaderId)?.isVerified && (
+                                                        <i className="fas fa-check-circle text-[#1877F2] text-xs"></i>
+                                                    )}
+                                                </p>
                                                 <div className="flex justify-between items-center mt-2">
                                                     <span className="text-[#B0B3B8] text-xs">{song.duration || '3:00'}</span>
                                                     <button 
@@ -713,7 +942,7 @@ export const MusicSystem: React.FC<MusicSystemProps> = ({
                                                     }}
                                                 >
                                                     <span>{song.artist}</span>
-                                                    {song.uploaderId && currentUser?.id === song.uploaderId && (
+                                                    {users.find(u => u.id === song.uploaderId)?.isVerified && (
                                                         <i className="fas fa-check-circle text-[#1877F2] text-xs"></i>
                                                     )}
                                                     {song.stats?.plays && song.stats.plays > 1000 && (
@@ -788,7 +1017,12 @@ export const MusicSystem: React.FC<MusicSystemProps> = ({
                                                     </div>
                                                     <div className="flex-1 min-w-0">
                                                         <h3 className="font-bold text-white line-clamp-2">{episode.title}</h3>
-                                                        <p className="text-[#B0B3B8] text-sm mt-1">{episode.host || 'Unknown Host'}</p>
+                                                        <p className="text-[#B0B3B8] text-sm mt-1 flex items-center gap-1">
+                                                            {episode.host || 'Unknown Host'}
+                                                            {users.find(u => u.id === episode.uploaderId)?.isVerified && (
+                                                                <i className="fas fa-check-circle text-[#1877F2] text-xs"></i>
+                                                            )}
+                                                        </p>
                                                         <div className="flex items-center justify-between mt-3">
                                                             <span className="text-[#B0B3B8] text-xs">{episode.duration || '45:00'}</span>
                                                             {isAdmin && (
@@ -1069,7 +1303,7 @@ export const AudioUploadModal: React.FC<AudioUploadModalProps> = ({ currentUser,
                 cover, 
                 album: 'Single', 
                 duration: '3:45', 
-                audioUrl: URL.createObjectURL(audioFile),
+                audioUrl: audioFile ? URL.createObjectURL(audioFile) : '',
                 uploaderId: currentUser.id,
                 uploadDate: new Date().toISOString(),
                 stats: { plays: 0, downloads: 0, shares: 0, likes: 0, reelsUse: 0 }
@@ -1083,7 +1317,7 @@ export const AudioUploadModal: React.FC<AudioUploadModalProps> = ({ currentUser,
                 album: albumTitle, 
                 cover: t.cover || cover, 
                 duration: '3:30', 
-                audioUrl: URL.createObjectURL(t.file),
+                audioUrl: t.file ? URL.createObjectURL(t.file) : '',
                 uploaderId: currentUser.id,
                 uploadDate: new Date().toISOString(),
                 stats: { plays: 0, downloads: 0, shares: 0, likes: 0, reelsUse: 0 }
@@ -1100,7 +1334,7 @@ export const AudioUploadModal: React.FC<AudioUploadModalProps> = ({ currentUser,
                 host: artist, 
                 cover, 
                 duration: '45:00', 
-                audioUrl: URL.createObjectURL(audioFile),
+                audioUrl: audioFile ? URL.createObjectURL(audioFile) : '',
                 uploaderId: currentUser.id,
                 uploadDate: new Date().toISOString(),
                 stats: { plays: 0, downloads: 0, shares: 0, likes: 0, reelsUse: 0 }
