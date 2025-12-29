@@ -150,7 +150,8 @@ const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
             name: brand.name,
             profileImage: brand.profileImage,
             isVerified: brand.isVerified,
-            id: brand.id
+            id: brand.id,
+            followers: brand.followers || []
         };
     }
     
@@ -164,6 +165,57 @@ const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
     }
     
     return null;
+};
+
+// Enhanced rankFeed function to boost brand posts for brand followers
+const rankFeedWithBrandBoost = (allContent: PostType[], currentUser: User | null, users: User[], brands: Brand[]) => {
+    const baseRanked = rankFeed(allContent, currentUser, users);
+    
+    if (!currentUser) return baseRanked;
+    
+    // Boost posts from brands the user follows
+    const userFollowedBrands = brands.filter(brand => 
+        brand.followers.includes(currentUser.id)
+    ).map(brand => brand.id);
+    
+    return baseRanked.map(post => {
+        const author = getAuthorForPost(post, users, brands);
+        const isBrandPost = author?.type === 'brand';
+        const isFollowedBrand = isBrandPost && userFollowedBrands.includes(post.authorId);
+        
+        // Add boost score for brand posts from followed brands
+        let boostScore = 0;
+        if (isFollowedBrand) {
+            // Boost followed brand posts higher
+            boostScore = 100;
+            
+            // Additional boost for recent posts (within last 24 hours)
+            const hoursSincePost = (Date.now() - post.createdAt) / (1000 * 60 * 60);
+            if (hoursSincePost < 24) {
+                boostScore += 50;
+            }
+            
+            // Boost for engagement
+            const engagementScore = (post.reactions?.length || 0) * 2 + (post.comments?.length || 0) * 3 + (post.shares || 0);
+            boostScore += Math.min(engagementScore, 30);
+        } else if (isBrandPost) {
+            // Smaller boost for brand posts from non-followed brands (discovery)
+            boostScore = 20;
+        }
+        
+        return {
+            ...post,
+            _boostScore: boostScore,
+            _isBrandPost: isBrandPost,
+            _isFollowedBrand: isFollowedBrand
+        };
+    })
+    .sort((a, b) => {
+        // Sort by boosted score
+        const scoreA = (a._boostScore || 0) + (a.createdAt || 0);
+        const scoreB = (b._boostScore || 0) + (b.createdAt || 0);
+        return scoreB - scoreA;
+    });
 };
 
 export default function App({ initialData, initialPath }: { initialData?: any, initialPath?: string }) {
@@ -265,6 +317,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }).sort((a,b) => b.createdAt - a.createdAt);
     }, [stories, users]);
 
+    // Enhanced ranked posts with brand boost
     const rankedPosts = useMemo(() => {
         const productPosts: PostType[] = products.map(p => ({ 
             id: p.id + 100000, 
@@ -299,12 +352,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         // Combine all posts including brand posts
         const allContent = [...posts, ...productPosts, ...reelPosts];
         
-        // Log for debugging
-        console.log("All posts for ranking:", allContent.length);
-        console.log("Regular posts:", posts.length);
-        console.log("Brand posts:", posts.filter(p => brands.find(b => b.id === p.authorId)).length);
-        
-        return rankFeed(allContent, currentUser, users);
+        // Use enhanced ranking with brand boost
+        return rankFeedWithBrandBoost(allContent, currentUser, users, brands);
     }, [posts, reels, products, currentUser, users, brands]);
 
     // Load data from localStorage
@@ -649,7 +698,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             contactEmail: brandData.contactEmail || '',
             contactPhone: brandData.contactPhone || '',
             adminId: currentUser.id,
-            followers: [],
+            followers: [currentUser.id], // AUTO-FOLLOW: Creator automatically follows the brand
             isVerified: false,
             posts: [],
             createdAt: Date.now(),
@@ -657,13 +706,46 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             coverImage: brandData.coverImage || 'https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-1.2.1&auto=format&fit=crop&w=1500&q=80'
         };
         
+        console.log("Creating new brand with auto-follow:", newBrand);
         setBrands(prev => [newBrand, ...prev]);
-        alert("Brand page created successfully!");
+        
+        // Also add the brand to user's following list
+        if (currentUser) {
+            setCurrentUser(prev => prev ? {
+                ...prev,
+                following: [...prev.following, newBrand.id]
+            } : prev);
+            
+            setUsers(prev => prev.map(user => 
+                user.id === currentUser.id 
+                    ? { ...user, following: [...user.following, newBrand.id] }
+                    : user
+            ));
+        }
+        
+        alert("Brand page created successfully! You are now following this page.");
     };
 
     const handleUpdateBrand = (brandId: number, data: Partial<Brand>) => {
         setBrands(prev => prev.map(brand => 
             brand.id === brandId ? { ...brand, ...data } : brand
+        ));
+    };
+
+    // ADMIN: Update brand cover/profile image
+    const handleUpdateBrandImage = (brandId: number, type: 'cover' | 'profile', file: File) => {
+        if (!isAdmin && !brands.find(b => b.id === brandId && b.adminId === currentUser?.id)) {
+            alert("Only admins or brand owners can update images");
+            return;
+        }
+        
+        const url = URL.createObjectURL(file);
+        setBrands(prev => prev.map(brand => 
+            brand.id === brandId 
+                ? (type === 'cover' 
+                    ? { ...brand, coverImage: url }
+                    : { ...brand, profileImage: url })
+                : brand
         ));
     };
 
@@ -692,19 +774,37 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         };
         
         console.log("New brand post created:", newPost);
-        setPosts(prev => [newPost, ...prev]);
+        setPosts(prev => [newPost, ...posts]);
     };
 
     const handleFollowBrand = (brandId: number) => {
         if (!currentUser) return alert("Login to follow brands.");
+        
         setBrands(prev => prev.map(b => {
             if (b.id === brandId) {
                 const isFollowing = b.followers.includes(currentUser!.id);
+                const updatedFollowers = isFollowing 
+                    ? b.followers.filter(id => id !== currentUser!.id) 
+                    : [...b.followers, currentUser!.id];
+                
+                // Update user's following list as well
+                if (currentUser) {
+                    const updatedFollowing = isFollowing
+                        ? currentUser.following.filter(id => id !== brandId)
+                        : [...currentUser.following, brandId];
+                    
+                    setCurrentUser(prev => prev ? { ...prev, following: updatedFollowing } : prev);
+                    
+                    setUsers(prev => prev.map(user => 
+                        user.id === currentUser.id 
+                            ? { ...user, following: updatedFollowing }
+                            : user
+                    ));
+                }
+                
                 return { 
                     ...b, 
-                    followers: isFollowing 
-                        ? b.followers.filter(id => id !== currentUser!.id) 
-                        : [...b.followers, currentUser!.id] 
+                    followers: updatedFollowers
                 };
             }
             return b;
@@ -717,6 +817,27 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             // Also delete posts from this brand
             setPosts(prev => prev.filter(p => p.authorId !== brandId));
             setView('brands'); 
+        }
+    };
+
+    // ADMIN: Verify brand
+    const handleVerifyBrand = (brandId: number) => {
+        if (!isAdmin) return;
+        setBrands(prev => prev.map(b => 
+            b.id === brandId ? { ...b, isVerified: !b.isVerified } : b
+        ));
+    };
+
+    // ADMIN: Delete post
+    const handleDeletePost = (postId: number) => {
+        if (!currentUser || !isAdmin) {
+            alert("Only admins can delete posts");
+            return;
+        }
+        
+        if (window.confirm("Are you sure you want to delete this post?")) {
+            setPosts(prev => prev.filter(p => p.id !== postId));
+            alert("Post deleted successfully");
         }
     };
     // ========== END BRAND MANAGEMENT FUNCTIONS ==========
@@ -1333,6 +1454,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 onFollow={handleFollowUser} 
                 isFollowing={isFollowing} 
                 onHashtagClick={handleTagClick} 
+                onDeletePost={isAdmin ? handleDeletePost : undefined}
+                isAdmin={isAdmin}
             />
         );
     };
@@ -1421,10 +1544,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     )}
                                     {rankedPosts.map(post => {
                                         const author = getAuthorForPost(post, users, brands);
-                                        if (!author) {
-                                            console.log("No author found for post:", post);
-                                            return null;
-                                        }
+                                        if (!author) return null;
                                         
                                         const isFollowing = currentUser && 'type' in author && author.type === 'user' 
                                             ? currentUser.following.includes(author.id)
@@ -1595,6 +1715,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 onOpenComments={setActiveCommentsPostId}
                                                 onVideoClick={() => {}}
                                                 onPlayAudioTrack={handlePlayTrack}
+                                                onDeletePost={isAdmin ? handleDeletePost : undefined}
+                                                isAdmin={isAdmin}
                                             />
                                         );
                                     })()}
@@ -1677,6 +1799,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                             handleCreateEvent(eventWithBrand);
                                         }
                                     }}
+                                    // ADMIN FUNCTIONS
+                                    onUpdateBrandImage={handleUpdateBrandImage}
+                                    onDeletePost={handleDeletePost}
+                                    onVerifyBrand={handleVerifyBrand}
                                     initialBrandId={activeBrandId}
                                     onPlayAudioTrack={handlePlayTrack}
                                 />
