@@ -555,7 +555,111 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setPosts([newPost, ...posts]);
     };
 
-    const handlePlayTrack = (track: AudioTrack) => { setCurrentAudioTrack(track); setIsAudioPlaying(true); };
+    // NEW: Handle adding songs from upload
+    const handleAddSong = (song: Song) => {
+        console.log("Adding new song to library:", song);
+        setSongs(prev => {
+            // Check if song already exists
+            const exists = prev.find(s => s.id === song.id);
+            if (exists) {
+                // Update existing song
+                return prev.map(s => s.id === song.id ? song : s);
+            }
+            // Add new song at the beginning
+            return [song, ...prev];
+        });
+        
+        // Also create a feed post for the new upload
+        if (currentUser) {
+            const audioTrack: AudioTrack = {
+                id: song.id,
+                title: song.title,
+                artist: song.artist,
+                duration: typeof song.duration === 'string' ? 
+                    parseInt(song.duration.split(':')[0]) * 60 + parseInt(song.duration.split(':')[1]) || 180 : 
+                    song.duration || 180,
+                url: song.audioUrl || '',
+                uploaderId: song.uploaderId || currentUser.id,
+                cover: song.cover,
+                type: 'music',
+                isVerified: true
+            };
+            
+            const newPost: PostType = {
+                id: Date.now(),
+                authorId: currentUser.id,
+                content: `🎵 Just released new music: "${song.title}" by ${song.artist}`,
+                timestamp: 'Just now',
+                createdAt: Date.now(),
+                reactions: [],
+                comments: [],
+                shares: 0,
+                views: 0,
+                type: 'music',
+                visibility: 'Public',
+                audioTrack: audioTrack
+            };
+            
+            setPosts(prev => [newPost, ...prev]);
+        }
+    };
+
+    // NEW: Handle adding episodes from upload
+    const handleAddEpisode = (episode: Episode) => {
+        console.log("Adding new episode to library:", episode);
+        setEpisodes(prev => {
+            const exists = prev.find(e => e.id === episode.id);
+            if (exists) {
+                return prev.map(e => e.id === episode.id ? episode : e);
+            }
+            return [episode, ...prev];
+        });
+        
+        // Also create a feed post for the new upload
+        if (currentUser) {
+            const audioTrack: AudioTrack = {
+                id: episode.id,
+                title: episode.title,
+                artist: episode.host || 'Podcast Host',
+                duration: typeof episode.duration === 'string' ?
+                    parseInt(episode.duration.split(':')[0]) * 60 + parseInt(episode.duration.split(':')[1]) || 1800 :
+                    episode.duration || 1800,
+                url: episode.audioUrl || '',
+                uploaderId: episode.uploaderId || currentUser.id,
+                cover: episode.thumbnail,
+                type: 'podcast',
+                isVerified: true
+            };
+            
+            const newPost: PostType = {
+                id: Date.now(),
+                authorId: currentUser.id,
+                content: `🎙️ New podcast episode: "${episode.title}" with ${episode.host || 'Podcast Host'}`,
+                timestamp: 'Just now',
+                createdAt: Date.now(),
+                reactions: [],
+                comments: [],
+                shares: 0,
+                views: 0,
+                type: 'podcast',
+                visibility: 'Public',
+                audioTrack: audioTrack
+            };
+            
+            setPosts(prev => [newPost, ...prev]);
+        }
+    };
+
+    // NEW: Handle upload to feed (kept for backward compatibility)
+    const handleUploadToFeed = (song: Song) => {
+        console.log("Uploading to feed (deprecated, using handleAddSong instead):", song);
+        handleAddSong(song);
+    };
+
+    const handlePlayTrack = (track: AudioTrack) => { 
+        setCurrentAudioTrack(track); 
+        setIsAudioPlaying(true); 
+    };
 
     const handleVerifyUser = (userId: number) => { if (isAdmin) setUsers(users.map(u => u.id === userId ? { ...u, isVerified: !u.isVerified } : u)); };
     const handleRestrictUser = (userId: number) => { if (isAdmin) setUsers(users.map(u => u.id === userId ? { ...u, isRestricted: true, restrictedUntil: Date.now() + 24 * 60 * 60 * 1000 } : u)); };
@@ -837,6 +941,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onDeleteEpisode={handleDeleteEpisode} 
                                     likedTracks={likedTracks} 
                                     onToggleLike={(id) => setLikedTracks(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])} 
+                                    onUploadToFeed={handleUploadToFeed} 
+                                    onAddSong={handleAddSong} 
+                                    onAddEpisode={handleAddEpisode} 
                                 />
                             )}
                             
