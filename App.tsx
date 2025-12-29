@@ -690,44 +690,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setPosts([newPost, ...posts]);
     };
     
-    // FIXED: Enhanced handleReact to handle product posts too
     const handleReact = (itemId: number, type: ReactionType) => {
         if (!currentUser) return alert("Please login to react.");
-        
-        // Check if this is a product post (ID > 100000)
-        if (itemId > 100000) {
-            const productId = itemId - 100000;
-            const product = products.find(p => p.id === productId);
-            if (product) {
-                // Update product reactions
-                setProducts(prev => prev.map(p => {
-                    if (p.id === productId) {
-                        const existingReaction = p.ratings.find((r: any) => r.userId === currentUser.id);
-                        let newRatings = [...p.ratings];
-                        
-                        if (existingReaction) {
-                            // Remove reaction if same type, update if different
-                            if (existingReaction.type === type) {
-                                newRatings = newRatings.filter(r => r.userId !== currentUser.id);
-                            } else {
-                                newRatings = newRatings.map(r => 
-                                    r.userId === currentUser.id ? { ...r, type } : r
-                                );
-                            }
-                        } else {
-                            // Add new reaction
-                            newRatings.push({ userId: currentUser.id, type, rating: 5 });
-                        }
-                        
-                        return { ...p, ratings: newRatings };
-                    }
-                    return p;
-                }));
-            }
-            return;
-        }
-        
-        // Handle regular posts
         setPosts(prev => prev.map(post => {
             if (post.id === itemId) {
                 const existing = post.reactions.find(r => r.userId === currentUser!.id);
@@ -763,40 +727,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }));
     };
 
-    // FIXED: Enhanced handleComment to handle product posts too
     const handleComment = (itemId: number, text: string, attachment?: any, parentId?: number) => {
         if (!currentUser) return;
-        
-        const newComment: Comment = { 
-            id: Date.now(), 
-            userId: currentUser.id, 
-            userName: currentUser.name,
-            userAvatar: currentUser.profileImage,
-            text, 
-            timestamp: 'Just now', 
-            date: Date.now(),
-            likes: 0,
-            hasLiked: false,
-            attachment 
-        };
-        
-        // Check if this is a product post (ID > 100000)
-        if (itemId > 100000) {
-            const productId = itemId - 100000;
-            const product = products.find(p => p.id === productId);
-            if (product) {
-                // Update product comments
-                setProducts(prev => prev.map(p => {
-                    if (p.id === productId) {
-                        return { ...p, comments: [...p.comments, newComment] };
-                    }
-                    return p;
-                }));
-            }
-            return;
-        }
-        
-        // Handle regular posts
+        const newComment: Comment = { id: Date.now(), userId: currentUser.id, text, timestamp: 'Just now', likes: 0, attachment };
         setPosts(prev => prev.map(p => {
             if (p.id === itemId) return { ...p, comments: [...p.comments, newComment] };
             return p;
@@ -1226,7 +1159,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         );
     };
 
-    // Function to render regular posts (including product posts)
+    // Function to render regular posts
     const renderRegularPost = (post: PostType, author: any, isFollowing?: boolean) => {
         return (
             <Post 
@@ -1354,7 +1287,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     user={users.find(u => u.id === selectedUserId)!} 
                                     currentUser={currentUser} 
                                     users={users} 
-                                    // Include product posts in user profile feed
+                                    // FIX: Include product posts in user profile feed
                                     posts={[
                                         ...posts.filter(p => p.authorId === selectedUserId),
                                         ...products
@@ -1365,11 +1298,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 content: `Just listed a new item: ${p.title}`,
                                                 timestamp: 'Just now',
                                                 createdAt: p.date,
-                                                reactions: p.ratings.map((r: any) => ({
-                                                    userId: r.userId,
-                                                    type: r.type || 'like'
-                                                })),
-                                                comments: p.comments,
+                                                reactions: [],
+                                                comments: [],
                                                 shares: 0,
                                                 views: p.views,
                                                 type: 'product' as const,
@@ -1395,7 +1325,15 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                             const productId = id - 100000;
                                             setProducts(prev => prev.filter(p => p.id !== productId));
                                         } else {
-                                            // This is a regular post
+                                            // This is a regular post - check if it's a music/podcast post
+                                            const postToDelete = posts.find(p => p.id === id);
+                                            if (postToDelete && (postToDelete.type === 'music' || postToDelete.type === 'podcast') && postToDelete.audioTrack) {
+                                                // Also delete the song/episode
+                                                const trackId = postToDelete.audioTrack.id;
+                                                setSongs(prev => prev.filter(s => s.id !== trackId));
+                                                setEpisodes(prev => prev.filter(e => e.id !== trackId));
+                                            }
+                                            // Delete the post
                                             setPosts(posts.filter(p => p.id !== id));
                                         }
                                     }} 
@@ -1418,8 +1356,26 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onLikeTrack={handleLikeTrack}
                                     onTrackComment={handleTrackComment}
                                     onTrackShare={handleTrackShare}
-                                    // FIXED: Use the same renderMusicPost function for consistent display
-                                    renderMusicPost={renderMusicPost}
+                                    // Add function to render music posts in profile - CRITICAL FIX
+                                    renderMusicPost={(post: PostType, author: any) => {
+                                        const song = getSongForPost(post, songs, episodes);
+                                        if (!song) return null;
+                                        
+                                        return (
+                                            <MusicFeedPost 
+                                                key={post.id}
+                                                song={song}
+                                                currentUser={currentUser}
+                                                users={users}
+                                                onPlayTrack={handlePlayTrack}
+                                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
+                                                onLikeTrack={handleLikeTrack}
+                                                onTrackComment={handleTrackComment}
+                                                onTrackShare={handleTrackShare}
+                                                isLiked={likedTracks.includes(song.id)}
+                                            />
+                                        );
+                                    }}
                                     renderRegularPost={renderRegularPost}
                                 />
                             )}
