@@ -238,101 +238,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }).sort((a,b) => b.createdAt - a.createdAt);
     }, [stories, users]);
 
-    // Function to get all user posts for profile including products, music, and podcast posts
-    const getUserPostsForProfile = (userId: number) => {
-        const regularPosts = posts.filter(p => p.authorId === userId);
-        
-        // Get product posts for this user
-        const productPosts = products
-            .filter(p => p.sellerId === userId)
-            .map(p => ({
-                id: p.id + 100000,
-                authorId: p.sellerId,
-                content: `${p.title} - ${p.description || 'Check out this item'}`,
-                timestamp: 'Just now',
-                createdAt: p.date,
-                reactions: [],
-                comments: [],
-                shares: 0,
-                views: p.views,
-                type: 'product' as const,
-                visibility: 'Public' as const,
-                product: p,
-                productId: p.id
-            }));
-        
-        // Get music and podcast posts for this user
-        const musicPosts = songs
-            .filter(s => s.uploaderId === userId)
-            .map(s => ({
-                id: Date.now() + Math.random(), // Generate unique ID
-                authorId: userId,
-                content: `${s.title} by ${s.artist}`,
-                timestamp: 'Just now',
-                createdAt: Date.parse(s.uploadDate || new Date().toISOString()),
-                reactions: [],
-                comments: [],
-                shares: 0,
-                views: s.plays || 0,
-                type: 'music' as const,
-                visibility: 'Public' as const,
-                audioTrack: {
-                    id: s.id,
-                    title: s.title,
-                    artist: s.artist,
-                    cover: s.cover,
-                    url: s.audioUrl,
-                    duration: typeof s.duration === 'string' ? 
-                        parseInt(s.duration.split(':')[0]) * 60 + parseInt(s.duration.split(':')[1]) || 180 : 
-                        180,
-                    uploaderId: s.uploaderId,
-                    type: 'music' as const,
-                    plays: s.plays || 0,
-                    likes: s.likes || 0,
-                    shares: s.shares || 0
-                }
-            }));
-        
-        const podcastPosts = episodes
-            .filter(e => e.uploaderId === userId)
-            .map(e => ({
-                id: Date.now() + Math.random(), // Generate unique ID
-                authorId: userId,
-                content: `${e.title} with ${e.host || 'Podcast Host'}`,
-                timestamp: 'Just now',
-                createdAt: Date.parse(e.uploadDate || new Date().toISOString()),
-                reactions: [],
-                comments: [],
-                shares: 0,
-                views: e.plays || 0,
-                type: 'podcast' as const,
-                visibility: 'Public' as const,
-                audioTrack: {
-                    id: e.id,
-                    title: e.title,
-                    artist: e.host || 'Podcast Host',
-                    cover: e.thumbnail || e.cover,
-                    url: e.audioUrl,
-                    duration: typeof e.duration === 'string' ?
-                        parseInt(e.duration.split(':')[0]) * 60 + parseInt(e.duration.split(':')[1]) || 1800 :
-                        1800,
-                    uploaderId: e.uploaderId,
-                    type: 'podcast' as const,
-                    plays: e.plays || 0,
-                    likes: e.likes || 0,
-                    shares: e.shares || 0
-                }
-            }));
-        
-        return [...regularPosts, ...productPosts, ...musicPosts, ...podcastPosts].sort((a, b) => b.createdAt! - a.createdAt!);
-    };
-
     const rankedPosts = useMemo(() => {
-        // Product posts with improved description
         const productPosts: PostType[] = products.map(p => ({ 
             id: p.id + 100000, 
             authorId: p.sellerId, 
-            content: `${p.title} - ${p.description || 'Check out this item'}`, 
+            content: `Just listed a new item: ${p.title}`, 
             timestamp: 'Just now', 
             createdAt: p.date, 
             reactions: [], 
@@ -344,67 +254,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             product: p, 
             productId: p.id 
         }));
-        
-        // Music posts with improved description
-        const musicPosts: PostType[] = songs.map(s => ({
-            id: s.id.charCodeAt(0) + Date.now(), // Generate unique ID
-            authorId: s.uploaderId || 0,
-            content: `${s.title} by ${s.artist}`,
-            timestamp: 'Just now',
-            createdAt: Date.parse(s.uploadDate || new Date().toISOString()),
-            reactions: [],
-            comments: [],
-            shares: 0,
-            views: s.plays || 0,
-            type: 'music',
-            visibility: 'Public',
-            audioTrack: {
-                id: s.id,
-                title: s.title,
-                artist: s.artist,
-                cover: s.cover,
-                url: s.audioUrl,
-                duration: typeof s.duration === 'string' ? 
-                    parseInt(s.duration.split(':')[0]) * 60 + parseInt(s.duration.split(':')[1]) || 180 : 
-                    180,
-                uploaderId: s.uploaderId,
-                type: 'music',
-                plays: s.plays || 0,
-                likes: s.likes || 0,
-                shares: s.shares || 0
-            }
-        }));
-        
-        // Podcast posts with improved description
-        const podcastPosts: PostType[] = episodes.map(e => ({
-            id: e.id.charCodeAt(0) + Date.now(), // Generate unique ID
-            authorId: e.uploaderId || 0,
-            content: `${e.title} with ${e.host || 'Podcast Host'}`,
-            timestamp: 'Just now',
-            createdAt: Date.parse(e.uploadDate || new Date().toISOString()),
-            reactions: [],
-            comments: [],
-            shares: 0,
-            views: e.plays || 0,
-            type: 'podcast',
-            visibility: 'Public',
-            audioTrack: {
-                id: e.id,
-                title: e.title,
-                artist: e.host || 'Podcast Host',
-                cover: e.thumbnail || e.cover,
-                url: e.audioUrl,
-                duration: typeof e.duration === 'string' ?
-                    parseInt(e.duration.split(':')[0]) * 60 + parseInt(e.duration.split(':')[1]) || 1800 :
-                    1800,
-                uploaderId: e.uploaderId,
-                type: 'podcast',
-                plays: e.plays || 0,
-                likes: e.likes || 0,
-                shares: e.shares || 0
-            }
-        }));
-        
         const reelPosts: PostType[] = reels.map(reel => ({ 
             id: reel.id + 200000, 
             authorId: reel.userId, 
@@ -419,10 +268,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             type: 'video', 
             visibility: 'Public' 
         }));
-        
-        const allContent = [...posts, ...productPosts, ...musicPosts, ...podcastPosts, ...reelPosts];
+        const allContent = [...posts, ...productPosts, ...reelPosts];
         return rankFeed(allContent, currentUser, users);
-    }, [posts, reels, products, songs, episodes, currentUser, users]);
+    }, [posts, reels, products, currentUser, users]);
 
     // Load data from localStorage
     useEffect(() => {
@@ -842,8 +690,44 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setPosts([newPost, ...posts]);
     };
     
+    // FIXED: Enhanced handleReact to handle product posts too
     const handleReact = (itemId: number, type: ReactionType) => {
         if (!currentUser) return alert("Please login to react.");
+        
+        // Check if this is a product post (ID > 100000)
+        if (itemId > 100000) {
+            const productId = itemId - 100000;
+            const product = products.find(p => p.id === productId);
+            if (product) {
+                // Update product reactions
+                setProducts(prev => prev.map(p => {
+                    if (p.id === productId) {
+                        const existingReaction = p.ratings.find((r: any) => r.userId === currentUser.id);
+                        let newRatings = [...p.ratings];
+                        
+                        if (existingReaction) {
+                            // Remove reaction if same type, update if different
+                            if (existingReaction.type === type) {
+                                newRatings = newRatings.filter(r => r.userId !== currentUser.id);
+                            } else {
+                                newRatings = newRatings.map(r => 
+                                    r.userId === currentUser.id ? { ...r, type } : r
+                                );
+                            }
+                        } else {
+                            // Add new reaction
+                            newRatings.push({ userId: currentUser.id, type, rating: 5 });
+                        }
+                        
+                        return { ...p, ratings: newRatings };
+                    }
+                    return p;
+                }));
+            }
+            return;
+        }
+        
+        // Handle regular posts
         setPosts(prev => prev.map(post => {
             if (post.id === itemId) {
                 const existing = post.reactions.find(r => r.userId === currentUser!.id);
@@ -879,9 +763,40 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }));
     };
 
+    // FIXED: Enhanced handleComment to handle product posts too
     const handleComment = (itemId: number, text: string, attachment?: any, parentId?: number) => {
         if (!currentUser) return;
-        const newComment: Comment = { id: Date.now(), userId: currentUser.id, text, timestamp: 'Just now', likes: 0, attachment };
+        
+        const newComment: Comment = { 
+            id: Date.now(), 
+            userId: currentUser.id, 
+            userName: currentUser.name,
+            userAvatar: currentUser.profileImage,
+            text, 
+            timestamp: 'Just now', 
+            date: Date.now(),
+            likes: 0,
+            hasLiked: false,
+            attachment 
+        };
+        
+        // Check if this is a product post (ID > 100000)
+        if (itemId > 100000) {
+            const productId = itemId - 100000;
+            const product = products.find(p => p.id === productId);
+            if (product) {
+                // Update product comments
+                setProducts(prev => prev.map(p => {
+                    if (p.id === productId) {
+                        return { ...p, comments: [...p.comments, newComment] };
+                    }
+                    return p;
+                }));
+            }
+            return;
+        }
+        
+        // Handle regular posts
         setPosts(prev => prev.map(p => {
             if (p.id === itemId) return { ...p, comments: [...p.comments, newComment] };
             return p;
@@ -1018,7 +933,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             const newPost: PostType = {
                 id: Date.now(),
                 authorId: currentUser.id,
-                content: `${song.title} by ${song.artist}`,
+                content: `🎵 Just released new music: "${song.title}" by ${song.artist}`,
                 timestamp: 'Just now',
                 createdAt: Date.now(),
                 reactions: [],
@@ -1084,7 +999,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             const newPost: PostType = {
                 id: Date.now(),
                 authorId: currentUser.id,
-                content: `${episode.title} with ${episode.host || 'Podcast Host'}`,
+                content: `🎙️ New podcast episode: "${episode.title}" with ${episode.host || 'Podcast Host'}`,
                 timestamp: 'Just now',
                 createdAt: Date.now(),
                 reactions: [],
@@ -1311,7 +1226,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         );
     };
 
-    // Function to render regular posts
+    // Function to render regular posts (including product posts)
     const renderRegularPost = (post: PostType, author: any, isFollowing?: boolean) => {
         return (
             <Post 
@@ -1439,8 +1354,30 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     user={users.find(u => u.id === selectedUserId)!} 
                                     currentUser={currentUser} 
                                     users={users} 
-                                    // CHANGED: Use getUserPostsForProfile to include products, music, and podcast posts
-                                    posts={getUserPostsForProfile(selectedUserId)}
+                                    // Include product posts in user profile feed
+                                    posts={[
+                                        ...posts.filter(p => p.authorId === selectedUserId),
+                                        ...products
+                                            .filter(p => p.sellerId === selectedUserId)
+                                            .map(p => ({
+                                                id: p.id + 100000,
+                                                authorId: p.sellerId,
+                                                content: `Just listed a new item: ${p.title}`,
+                                                timestamp: 'Just now',
+                                                createdAt: p.date,
+                                                reactions: p.ratings.map((r: any) => ({
+                                                    userId: r.userId,
+                                                    type: r.type || 'like'
+                                                })),
+                                                comments: p.comments,
+                                                shares: 0,
+                                                views: p.views,
+                                                type: 'product' as const,
+                                                visibility: 'Public' as const,
+                                                product: p,
+                                                productId: p.id
+                                            }))
+                                    ]}
                                     onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
                                     onFollow={handleFollowUser} 
                                     onReact={handleReact} 
@@ -1452,20 +1389,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onUpdateCoverImage={(f) => {}} 
                                     onUpdateUserDetails={(d) => {}} 
                                     onDeletePost={(id) => {
-                                        // Handle deleting all types of posts
+                                        // Handle deleting both regular posts and product posts
                                         if (id > 100000) {
                                             // This is a product post (ID > 100000)
                                             const productId = id - 100000;
                                             setProducts(prev => prev.filter(p => p.id !== productId));
-                                        } else if (id > 90000 && id < 100000) {
-                                            // This is a music/podcast post
-                                            // Find and remove from songs or episodes
-                                            const post = getUserPostsForProfile(selectedUserId).find(p => p.id === id);
-                                            if (post?.type === 'music' && post.audioTrack) {
-                                                setSongs(prev => prev.filter(s => s.id !== post.audioTrack?.id));
-                                            } else if (post?.type === 'podcast' && post.audioTrack) {
-                                                setEpisodes(prev => prev.filter(e => e.id !== post.audioTrack?.id));
-                                            }
                                         } else {
                                             // This is a regular post
                                             setPosts(posts.filter(p => p.id !== id));
@@ -1490,26 +1418,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onLikeTrack={handleLikeTrack}
                                     onTrackComment={handleTrackComment}
                                     onTrackShare={handleTrackShare}
-                                    // Add function to render music posts in profile
-                                    renderMusicPost={(post: PostType, author: any) => {
-                                        const song = getSongForPost(post, songs, episodes);
-                                        if (!song) return null;
-                                        
-                                        return (
-                                            <MusicFeedPost 
-                                                key={post.id}
-                                                song={song}
-                                                currentUser={currentUser}
-                                                users={users}
-                                                onPlayTrack={handlePlayTrack}
-                                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
-                                                onLikeTrack={handleLikeTrack}
-                                                onTrackComment={handleTrackComment}
-                                                onTrackShare={handleTrackShare}
-                                                isLiked={likedTracks.includes(song.id)}
-                                            />
-                                        );
-                                    }}
+                                    // FIXED: Use the same renderMusicPost function for consistent display
+                                    renderMusicPost={renderMusicPost}
                                     renderRegularPost={renderRegularPost}
                                 />
                             )}
