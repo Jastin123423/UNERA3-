@@ -167,57 +167,6 @@ const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
     return null;
 };
 
-// Enhanced rankFeed function to boost brand posts for brand followers
-const rankFeedWithBrandBoost = (allContent: PostType[], currentUser: User | null, users: User[], brands: Brand[]) => {
-    const baseRanked = rankFeed(allContent, currentUser, users);
-    
-    if (!currentUser) return baseRanked;
-    
-    // Boost posts from brands the user follows
-    const userFollowedBrands = brands.filter(brand => 
-        brand.followers.includes(currentUser.id)
-    ).map(brand => brand.id);
-    
-    return baseRanked.map(post => {
-        const author = getAuthorForPost(post, users, brands);
-        const isBrandPost = author?.type === 'brand';
-        const isFollowedBrand = isBrandPost && userFollowedBrands.includes(post.authorId);
-        
-        // Add boost score for brand posts from followed brands
-        let boostScore = 0;
-        if (isFollowedBrand) {
-            // Boost followed brand posts higher
-            boostScore = 100;
-            
-            // Additional boost for recent posts (within last 24 hours)
-            const hoursSincePost = (Date.now() - post.createdAt) / (1000 * 60 * 60);
-            if (hoursSincePost < 24) {
-                boostScore += 50;
-            }
-            
-            // Boost for engagement
-            const engagementScore = (post.reactions?.length || 0) * 2 + (post.comments?.length || 0) * 3 + (post.shares || 0);
-            boostScore += Math.min(engagementScore, 30);
-        } else if (isBrandPost) {
-            // Smaller boost for brand posts from non-followed brands (discovery)
-            boostScore = 20;
-        }
-        
-        return {
-            ...post,
-            _boostScore: boostScore,
-            _isBrandPost: isBrandPost,
-            _isFollowedBrand: isFollowedBrand
-        };
-    })
-    .sort((a, b) => {
-        // Sort by boosted score
-        const scoreA = (a._boostScore || 0) + (a.createdAt || 0);
-        const scoreB = (b._boostScore || 0) + (b.createdAt || 0);
-        return scoreB - scoreA;
-    });
-};
-
 export default function App({ initialData, initialPath }: { initialData?: any, initialPath?: string }) {
     const { t } = useLanguage();
 
@@ -317,7 +266,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }).sort((a,b) => b.createdAt - a.createdAt);
     }, [stories, users]);
 
-    // Enhanced ranked posts with brand boost
+    // Enhanced ranked posts with brand boost using the unified rankFeed function
     const rankedPosts = useMemo(() => {
         const productPosts: PostType[] = products.map(p => ({ 
             id: p.id + 100000, 
@@ -352,8 +301,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         // Combine all posts including brand posts
         const allContent = [...posts, ...productPosts, ...reelPosts];
         
-        // Use enhanced ranking with brand boost
-        return rankFeedWithBrandBoost(allContent, currentUser, users, brands);
+        // Use the unified rankFeed function that now accepts brands
+        return rankFeed(allContent, currentUser, users, brands);
     }, [posts, reels, products, currentUser, users, brands]);
 
     // Load data from localStorage
@@ -774,7 +723,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         };
         
         console.log("New brand post created:", newPost);
-        setPosts(prev => [newPost, ...posts]);
+        setPosts(prev => [newPost, ...prev]);
     };
 
     const handleFollowBrand = (brandId: number) => {
