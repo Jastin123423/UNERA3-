@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Song, Episode, AudioTrack, User } from '../types';
 import { MOCK_SONGS, MOCK_EPISODES } from '../constants';
 
-// Re-export GlobalAudioPlayer
-export { GlobalAudioPlayer } from './MusicSystem';
+// REMOVED THE PROBLEMATIC RE-EXPORT LINE:
+// export { GlobalAudioPlayer } from './MusicSystem';
 
 // Main MusicSystem Component - UPDATED to accept your props AND include upload features
 interface MusicSystemProps {
