@@ -253,13 +253,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             const storedSongs = localStorage.getItem('universeSongs');
             const storedEpisodes = localStorage.getItem('universeEpisodes');
             const storedLikedTracks = localStorage.getItem('universeLikedTracks');
-            const storedProducts = localStorage.getItem('marketplaceProducts'); // ADD THIS
+            const storedProducts = localStorage.getItem('marketplaceProducts');
             
             if (storedUsers) setUsers(JSON.parse(storedUsers));
             if (storedSongs) setSongs(JSON.parse(storedSongs));
             if (storedEpisodes) setEpisodes(JSON.parse(storedEpisodes));
             if (storedLikedTracks) setLikedTracks(JSON.parse(storedLikedTracks));
-            if (storedProducts) setProducts(JSON.parse(storedProducts)); // ADD THIS
+            if (storedProducts) setProducts(JSON.parse(storedProducts));
             
             if (storedUser) {
                 const user = JSON.parse(storedUser);
@@ -301,7 +301,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     }, [likedTracks, isClient]);
 
-    // ADD THIS: Save products to localStorage
     useEffect(() => {
         if (isClient) {
             localStorage.setItem('marketplaceProducts', JSON.stringify(products));
@@ -536,7 +535,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    // ADD THIS: Product creation handler
     const handleCreateProduct = (productData: Partial<Product>) => {
         console.log("Creating product with data:", productData);
         
@@ -1262,7 +1260,27 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     user={users.find(u => u.id === selectedUserId)!} 
                                     currentUser={currentUser} 
                                     users={users} 
-                                    posts={posts.filter(p => p.authorId === selectedUserId)} 
+                                    // MINIMAL CHANGE: Include product posts in user profile feed
+                                    posts={[
+                                        ...posts.filter(p => p.authorId === selectedUserId),
+                                        ...products
+                                            .filter(p => p.sellerId === selectedUserId)
+                                            .map(p => ({
+                                                id: p.id + 100000,
+                                                authorId: p.sellerId,
+                                                content: `Just listed a new item: ${p.title}`,
+                                                timestamp: 'Just now',
+                                                createdAt: p.date,
+                                                reactions: [],
+                                                comments: [],
+                                                shares: 0,
+                                                views: p.views,
+                                                type: 'product' as const,
+                                                visibility: 'Public' as const,
+                                                product: p,
+                                                productId: p.id
+                                            }))
+                                    ]}
                                     onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
                                     onFollow={handleFollowUser} 
                                     onReact={handleReact} 
@@ -1273,7 +1291,17 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onUpdateProfileImage={(f) => {}} 
                                     onUpdateCoverImage={(f) => {}} 
                                     onUpdateUserDetails={(d) => {}} 
-                                    onDeletePost={(id) => setPosts(posts.filter(p => p.id !== id))} 
+                                    onDeletePost={(id) => {
+                                        // Handle deleting both regular posts and product posts
+                                        if (id > 100000) {
+                                            // This is a product post (ID > 100000)
+                                            const productId = id - 100000;
+                                            setProducts(prev => prev.filter(p => p.id !== productId));
+                                        } else {
+                                            // This is a regular post
+                                            setPosts(posts.filter(p => p.id !== id));
+                                        }
+                                    }} 
                                     onEditPost={() => {}} 
                                     getCommentAuthor={(id) => users.find(u => u.id === id)} 
                                     onViewImage={setFullScreenImage} 
