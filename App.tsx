@@ -281,12 +281,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             const storedEpisodes = localStorage.getItem('universeEpisodes');
             const storedLikedTracks = localStorage.getItem('universeLikedTracks');
             const storedProducts = localStorage.getItem('marketplaceProducts');
+            const storedBrands = localStorage.getItem('universeBrands');
             
             if (storedUsers) setUsers(JSON.parse(storedUsers));
             if (storedSongs) setSongs(JSON.parse(storedSongs));
             if (storedEpisodes) setEpisodes(JSON.parse(storedEpisodes));
             if (storedLikedTracks) setLikedTracks(JSON.parse(storedLikedTracks));
             if (storedProducts) setProducts(JSON.parse(storedProducts));
+            if (storedBrands) setBrands(JSON.parse(storedBrands));
             
             if (storedUser) {
                 const user = JSON.parse(storedUser);
@@ -333,6 +335,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             localStorage.setItem('marketplaceProducts', JSON.stringify(products));
         }
     }, [products, isClient]);
+
+    useEffect(() => {
+        if (isClient) {
+            localStorage.setItem('universeBrands', JSON.stringify(brands));
+        }
+    }, [brands, isClient]);
 
     const handleLogin = (email: string, pass: string) => {
         const user = users.find(u => u.email === email && u.password === pass);
@@ -554,13 +562,121 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleCreatePost = (text: string, file: File | null, type: any, visibility: any, location?: string, feeling?: string, taggedUsers?: number[], background?: string, linkPreview?: LinkPreview) => {
         if (!currentUser) return;
-        const newPost: PostType = { id: Date.now(), authorId: currentUser.id, content: text, image: file && type === 'image' ? URL.createObjectURL(file) : undefined, video: file && type === 'video' ? URL.createObjectURL(file) : undefined, timestamp: 'Just now', createdAt: Date.now(), reactions: [], comments: [], shares: 0, views: 0, type, visibility, location, feeling, taggedUsers, background, linkPreview };
+        const newPost: PostType = { 
+            id: Date.now(), 
+            authorId: currentUser.id, 
+            content: text, 
+            image: file && type === 'image' ? URL.createObjectURL(file) : undefined, 
+            video: file && type === 'video' ? URL.createObjectURL(file) : undefined, 
+            timestamp: 'Just now', 
+            createdAt: Date.now(), 
+            reactions: [], 
+            comments: [], 
+            shares: 0, 
+            views: 0, 
+            type, 
+            visibility, 
+            location, 
+            feeling, 
+            taggedUsers, 
+            background, 
+            linkPreview 
+        };
         setPosts([newPost, ...posts]);
         if (taggedUsers && taggedUsers.length > 0) {
             const newNotifications: Notification[] = taggedUsers.map(userId => ({ id: Date.now() + userId, userId: userId, senderId: currentUser.id, type: 'mention', content: 'mentioned you in a post.', postId: newPost.id, timestamp: Date.now(), read: false, }));
             setNotifications(prev => [...newNotifications, ...prev]);
         }
     };
+
+    // ========== BRAND MANAGEMENT FUNCTIONS ==========
+    const handleCreateBrand = (brandData: Partial<Brand>) => {
+        if (!currentUser) {
+            alert("Please login to create a brand page.");
+            return;
+        }
+        
+        const newBrand: Brand = {
+            id: Date.now(),
+            name: brandData.name || 'New Brand',
+            category: brandData.category || 'Business',
+            description: brandData.description || '',
+            location: brandData.location || '',
+            website: brandData.website || '',
+            contactEmail: brandData.contactEmail || '',
+            contactPhone: brandData.contactPhone || '',
+            adminId: currentUser.id,
+            followers: [],
+            isVerified: false,
+            posts: [],
+            createdAt: Date.now(),
+            profileImage: brandData.profileImage || `https://ui-avatars.com/api/?name=${brandData.name || 'Brand'}&background=random&size=150`,
+            coverImage: brandData.coverImage || 'https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-1.2.1&auto=format&fit=crop&w=1500&q=80'
+        };
+        
+        setBrands(prev => [newBrand, ...prev]);
+        alert("Brand page created successfully!");
+    };
+
+    const handleUpdateBrand = (brandId: number, data: Partial<Brand>) => {
+        setBrands(prev => prev.map(brand => 
+            brand.id === brandId ? { ...brand, ...data } : brand
+        ));
+    };
+
+    const handlePostAsBrand = (brandId: number, content: any) => {
+        console.log("Creating post as brand:", { brandId, content });
+        
+        const newPost: PostType = { 
+            id: Date.now(), 
+            authorId: brandId,  // CRITICAL: This must be the brand ID, not user ID
+            content: content.text || content.content || '', 
+            image: content.file && content.type === 'image' ? URL.createObjectURL(content.file) : undefined, 
+            video: content.file && content.type === 'video' ? URL.createObjectURL(content.file) : undefined, 
+            timestamp: 'Just now', 
+            createdAt: Date.now(), 
+            reactions: [], 
+            comments: [], 
+            shares: 0, 
+            views: 0, 
+            type: content.type || 'text', 
+            visibility: 'Public', 
+            location: content.location,
+            feeling: content.feeling,
+            taggedUsers: content.taggedUsers,
+            background: content.background, 
+            linkPreview: content.linkPreview 
+        };
+        
+        console.log("New post created:", newPost);
+        setPosts(prev => [newPost, ...prev]);
+    };
+
+    const handleFollowBrand = (brandId: number) => {
+        if (!currentUser) return alert("Login to follow brands.");
+        setBrands(prev => prev.map(b => {
+            if (b.id === brandId) {
+                const isFollowing = b.followers.includes(currentUser!.id);
+                return { 
+                    ...b, 
+                    followers: isFollowing 
+                        ? b.followers.filter(id => id !== currentUser!.id) 
+                        : [...b.followers, currentUser!.id] 
+                };
+            }
+            return b;
+        }));
+    };
+
+    const handleDeleteBrand = (brandId: number) => {
+        if(isAdmin && window.confirm("Delete this brand page permanently?")) { 
+            setBrands(prev => prev.filter(b => b.id !== brandId));
+            // Also delete posts from this brand
+            setPosts(prev => prev.filter(p => p.authorId !== brandId));
+            setView('brands'); 
+        }
+    };
+    // ========== END BRAND MANAGEMENT FUNCTIONS ==========
 
     const handleCreateProduct = (productData: Partial<Product>) => {
         console.log("Creating product with data:", productData);
@@ -674,22 +790,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }));
     };
 
-    const handleFollowBrand = (brandId: number) => {
-        if (!currentUser) return alert("Login to follow brands.");
-        setBrands(prev => prev.map(b => {
-            if (b.id === brandId) {
-                const isFollowing = b.followers.includes(currentUser!.id);
-                return { ...b, followers: isFollowing ? b.followers.filter(id => id !== currentUser!.id) : [...b.followers, currentUser!.id] };
-            }
-            return b;
-        }));
-    };
-
-    const handlePostAsBrand = (brandId: number, content: any) => {
-        const newPost: PostType = { id: Date.now(), authorId: brandId, content: content.text, image: content.file && content.type === 'image' ? URL.createObjectURL(content.file) : undefined, video: content.file && content.type === 'video' ? URL.createObjectURL(content.file) : undefined, timestamp: 'Just now', createdAt: Date.now(), reactions: [], comments: [], shares: 0, views: 0, type: content.type, visibility: 'Public', background: content.background, linkPreview: content.linkPreview };
-        setPosts([newPost, ...posts]);
-    };
-    
     const handleReact = (itemId: number, type: ReactionType) => {
         if (!currentUser) return alert("Please login to react.");
         setPosts(prev => prev.map(post => {
@@ -1117,10 +1217,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const handleRestrictUser = (userId: number) => { if (isAdmin) setUsers(users.map(u => u.id === userId ? { ...u, isRestricted: true, restrictedUntil: Date.now() + 24 * 60 * 60 * 1000 } : u)); };
     const handleDeleteUser = (userId: number) => { if (isAdmin && window.confirm("Delete this user and all their content? This is irreversible.")) { setUsers(users.filter(u => u.id !== userId)); setPosts(posts.filter(p => p.authorId !== userId)); setReels(reels.filter(r => r.userId !== userId)); setStories(stories.filter(s => s.userId !== userId)); } };
     const handleMakeModerator = (userId: number) => { if (isAdmin) setUsers(users.map(u => u.id === userId ? { ...u, role: u.role === 'moderator' ? 'user' : 'moderator' } : u)); };
-    const handleDeleteBrand = (brandId: number) => { if(isAdmin && window.confirm("Delete this brand page permanently?")) { setBrands(prev => prev.filter(b => b.id !== brandId)); setView('brands'); } };
-    const handleDeleteSong = (id: string) => { if(isAdmin) { setSongs(prev => prev.filter(s => s.id !== id)); } };
-    const handleDeleteEpisode = (id: string) => { if(isAdmin) { setEpisodes(prev => prev.filter(e => e.id !== id)); } };
-
+    
     const handleCreateGroup = (groupData: Partial<Group>) => {
         if (!currentUser) return;
         const newGroup: Group = { ...groupData, id: `g${Date.now()}`, adminId: currentUser.id, members: [currentUser.id], posts: [], createdDate: Date.now() } as Group;
@@ -1489,15 +1586,39 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             
                             {effectiveView === 'brands' && (
                                 <BrandsPage 
-                                    brands={brands} 
-                                    currentUser={currentUser} 
-                                    users={users} 
-                                    onFollowBrand={handleFollowBrand} 
-                                    onPostAsBrand={handlePostAsBrand} 
-                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
-                                    activeBrandId={activeBrandId} 
-                                    onBrandClick={setActiveBrandId} 
-                                    onDeleteBrand={handleDeleteBrand} 
+                                    currentUser={currentUser}
+                                    brands={brands}
+                                    posts={posts}  // ADDED: Pass posts to BrandsPage
+                                    users={users}
+                                    onCreateBrand={handleCreateBrand}  // ADDED: Create brand function
+                                    onFollowBrand={handleFollowBrand}
+                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
+                                    onPostAsBrand={handlePostAsBrand}
+                                    onReact={handleReact}  // ADDED: React function
+                                    onShare={(id) => setActiveSharePostId(id)}  // ADDED: Share function
+                                    onOpenComments={(postId) => setActiveCommentsPostId(postId)}  // ADDED: Comments function
+                                    onUpdateBrand={handleUpdateBrand}  // ADDED: Update brand function
+                                    onDeleteBrand={handleDeleteBrand}
+                                    onMessage={(brandId) => {
+                                        // Optional: Handle brand messaging
+                                        const brand = brands.find(b => b.id === brandId);
+                                        if (brand && currentUser) {
+                                            alert(`Messaging ${brand.name} - Feature coming soon!`);
+                                        }
+                                    }}
+                                    onCreateEvent={(brandId, eventData) => {
+                                        // Handle brand event creation
+                                        if (currentUser) {
+                                            const eventWithBrand = {
+                                                ...eventData,
+                                                brandId: brandId,
+                                                brandName: brands.find(b => b.id === brandId)?.name
+                                            };
+                                            handleCreateEvent(eventWithBrand);
+                                        }
+                                    }}
+                                    initialBrandId={activeBrandId}
+                                    onPlayAudioTrack={handlePlayTrack}
                                 />
                             )}
                             
