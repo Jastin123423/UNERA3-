@@ -2,8 +2,280 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Song, Episode, AudioTrack, User } from '../types';
 import { MOCK_SONGS, MOCK_EPISODES } from '../constants';
 
-// REMOVED THE PROBLEMATIC RE-EXPORT LINE:
-// export { GlobalAudioPlayer } from './MusicSystem';
+// Global Audio Player Component
+interface GlobalAudioPlayerProps {
+    currentTrack: AudioTrack | null;
+    isPlaying: boolean;
+    onTogglePlay: () => void;
+    onNext: () => void;
+    onPrevious: () => void;
+    onClose: () => void;
+    onDownload: (id: string) => void;
+    onLike: (id: string) => void;
+    onArtistClick?: (uploaderId: number) => void;
+    isLiked: boolean;
+    uploaderProfile?: User | null; 
+}
+
+export const GlobalAudioPlayer: React.FC<GlobalAudioPlayerProps> = ({ 
+    currentTrack, isPlaying, onTogglePlay, onNext, onPrevious, 
+    onClose, onDownload, onLike, onArtistClick, isLiked, uploaderProfile 
+}) => {
+    const [currentTime, setCurrentTime] = useState(0);
+    const [duration, setDuration] = useState(0);
+    const [expanded, setExpanded] = useState(false); 
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+    const lastUrlRef = useRef<string | null>(null);
+    const playPromiseRef = useRef<Promise<void> | null>(null);
+    
+    useEffect(() => {
+        if (!audioRef.current) {
+            audioRef.current = new Audio();
+            audioRef.current.preload = 'metadata';
+        }
+        
+        const audio = audioRef.current;
+
+        const setAudioData = () => {
+            if (!isNaN(audio.duration)) {
+                setDuration(audio.duration);
+            }
+        };
+
+        const setAudioTime = () => {
+            setCurrentTime(audio.currentTime);
+        };
+
+        const handleEnded = () => {
+            onNext();
+        };
+
+        const handleError = (e: Event) => {
+            console.warn("Audio playback warning:", e);
+        };
+
+        audio.addEventListener('loadeddata', setAudioData);
+        audio.addEventListener('timeupdate', setAudioTime);
+        audio.addEventListener('ended', handleEnded);
+        audio.addEventListener('error', handleError);
+
+        const managePlayback = async () => {
+            if (currentTrack && currentTrack.url) {
+                if (lastUrlRef.current !== currentTrack.url) {
+                    audio.pause();
+                    audio.currentTime = 0;
+                    audio.src = currentTrack.url;
+                    lastUrlRef.current = currentTrack.url;
+                }
+                
+                if (isPlaying) {
+                    try {
+                        playPromiseRef.current = audio.play();
+                        await playPromiseRef.current;
+                    } catch (error: any) {
+                        if (error.name !== 'AbortError' && error.name !== 'NotSupportedError') {
+                            console.error("Playback failed", error);
+                        }
+                    }
+                } else {
+                    if (!audio.paused) {
+                        audio.pause();
+                    }
+                }
+            } else {
+                audio.pause();
+                if (lastUrlRef.current) {
+                    audio.removeAttribute('src');
+                    lastUrlRef.current = null;
+                }
+            }
+        };
+
+        managePlayback();
+
+        return () => {
+            audio.removeEventListener('loadeddata', setAudioData);
+            audio.removeEventListener('timeupdate', setAudioTime);
+            audio.removeEventListener('ended', handleEnded);
+            audio.removeEventListener('error', handleError);
+        };
+    }, [currentTrack, isPlaying, onNext]);
+
+    const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const time = Number(e.target.value);
+        if (audioRef.current) {
+            audioRef.current.currentTime = time;
+            setCurrentTime(time);
+        }
+    };
+
+    const formatTime = (time: number) => {
+        if (isNaN(time)) return "0:00";
+        const minutes = Math.floor(time / 60);
+        const seconds = Math.floor(time % 60);
+        return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+    };
+
+    const handleStop = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+        }
+        if (isPlaying) {
+            onTogglePlay();
+        }
+    };
+
+    if (!currentTrack) return null;
+
+    return (
+        <div className={`fixed bottom-0 left-0 right-0 bg-[#0A0A0A] border-t border-[#222] transition-all duration-500 z-[160] shadow-2xl ${expanded ? 'h-full border-none' : 'h-20 mb-0'}`}>
+            
+            {expanded && (
+                <div className="flex flex-col h-full w-full relative overflow-hidden bg-gradient-to-b from-gray-900 to-black animate-slide-up">
+                    <div 
+                        className="absolute inset-0 z-0 opacity-40 blur-3xl scale-150 pointer-events-none" 
+                        style={{ backgroundImage: `url(${currentTrack.cover})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+                    ></div>
+
+                    <div className="relative z-10 flex justify-between items-center p-6 pt-10 text-white">
+                        <div onClick={() => setExpanded(false)} className="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center cursor-pointer transition-colors">
+                            <i className="fas fa-chevron-down text-2xl"></i>
+                        </div>
+                        
+                        <div className="flex flex-col items-center">
+                            <span className="text-[10px] font-bold tracking-widest uppercase text-gray-400">Now Playing</span>
+                            <div className="flex items-center gap-1">
+                                <span className="text-xs font-bold bg-[#1877F2] px-1.5 py-0.5 rounded text-white">Hi-Res</span>
+                                <span className="text-sm font-bold">{currentTrack.type === 'podcast' ? 'Podcast' : 'Music'}</span>
+                            </div>
+                        </div>
+                        
+                        <div onClick={onClose} className="w-10 h-10 rounded-full hover:bg-red-500/20 flex items-center justify-center cursor-pointer transition-colors text-gray-400 hover:text-red-500">
+                            <i className="fas fa-times text-xl"></i>
+                        </div>
+                    </div>
+
+                    <div className="relative z-10 flex-1 flex items-center justify-center p-8">
+                        <div 
+                            className={`w-[280px] h-[280px] sm:w-[320px] sm:h-[320px] rounded-full border-[8px] border-[#1A1A1A] shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden relative flex items-center justify-center ${isPlaying ? 'animate-[spin_15s_linear_infinite]' : ''}`}
+                            style={{ animationPlayState: isPlaying ? 'running' : 'paused' }}
+                        >
+                            <img src={currentTrack.cover} className="w-full h-full object-cover" alt="" />
+                            <div className="absolute w-8 h-8 bg-[#0A0A0A] rounded-full border-2 border-[#333]"></div>
+                        </div>
+                    </div>
+
+                    <div className="relative z-10 p-6 sm:p-8 pb-12 bg-gradient-to-t from-black via-black/90 to-transparent">
+                        
+                        <div className="flex justify-between items-end mb-6">
+                            <div className="flex-1 pr-4">
+                                <h2 className="text-2xl font-bold text-white mb-2 line-clamp-1 leading-tight">{currentTrack.title}</h2>
+                                <div 
+                                    className="flex items-center gap-2 cursor-pointer hover:bg-white/10 p-2 -ml-2 rounded-lg transition-colors w-fit"
+                                    onClick={() => currentTrack.uploaderId && onArtistClick && onArtistClick(currentTrack.uploaderId)}
+                                >
+                                    {uploaderProfile ? (
+                                        <>
+                                            <img src={uploaderProfile.profileImage} className="w-8 h-8 rounded-full border border-white/20" alt="" />
+                                            <div className="flex flex-col">
+                                                <div className="flex items-center gap-1">
+                                                    <span className="text-white text-[16px] font-bold">{uploaderProfile.name}</span>
+                                                    {uploaderProfile.isVerified && <i className="fas fa-check-circle text-xs text-[#1877F2]"></i>}
+                                                </div>
+                                                <span className="text-[#B0B3B8] text-[14px]">~ {currentTrack.artist}</span>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <img src={currentTrack.cover} className="w-8 h-8 rounded-full border border-white/20 object-cover" alt="" />
+                                            <div className="flex flex-col">
+                                                <div className="flex items-center gap-1">
+                                                    <span className="text-white text-[16px] font-bold">{currentTrack.artist}</span>
+                                                    {currentTrack.isVerified && <i className="fas fa-check-circle text-xs text-[#1877F2]"></i>}
+                                                </div>
+                                                <span className="text-[#B0B3B8] text-[14px]">{currentTrack.type === 'podcast' ? 'Host' : 'Artist'}</span>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="flex gap-4">
+                                <i className="fas fa-download text-white text-2xl cursor-pointer hover:text-[#1877F2] transition-colors" onClick={() => onDownload(currentTrack.id)} title="Download"></i>
+                                <i className={`${isLiked ? 'fas text-[#F3425F]' : 'far text-white'} fa-heart text-2xl cursor-pointer hover:scale-110 transition-transform`} onClick={() => onLike(currentTrack.id)}></i>
+                            </div>
+                        </div>
+
+                        <div className="mb-6 group">
+                            <input 
+                                type="range" 
+                                min={0} 
+                                max={duration || 100} 
+                                value={currentTime} 
+                                onChange={handleSeek}
+                                className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[#1877F2]"
+                            />
+                            <div className="flex justify-between text-[11px] text-gray-400 font-medium mt-2">
+                                <span>{formatTime(currentTime)}</span>
+                                <span>{formatTime(duration)}</span>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-between items-center mb-10 px-4">
+                            <i className="fas fa-stop text-[#B0B3B8] text-xl cursor-pointer hover:text-red-500 transition-colors" onClick={handleStop} title="Stop"></i>
+                            <i className="fas fa-step-backward text-white text-3xl cursor-pointer hover:text-[#1877F2] transition-colors" onClick={onPrevious}></i>
+                            <div 
+                                className="w-16 h-16 bg-[#1877F2] rounded-full flex items-center justify-center cursor-pointer shadow-[0_0_20px_rgba(24,119,242,0.4)] hover:scale-110 hover:shadow-[0_0_30px_rgba(24,119,242,0.6)] transition-all"
+                                onClick={onTogglePlay}
+                            >
+                                <i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play ml-1'} text-white text-2xl`}></i>
+                            </div>
+                            <i className="fas fa-step-forward text-white text-3xl cursor-pointer hover:text-[#1877F2] transition-colors" onClick={onNext}></i>
+                            <div className="cursor-pointer text-gray-400 hover:text-white transition-colors" onClick={onClose}><i className="fas fa-times text-xl"></i></div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {!expanded && (
+                <div className="flex items-center justify-between px-4 h-full bg-[#141414] border-t border-[#333] relative">
+                    <div className="absolute top-0 left-0 right-0 h-[2px] bg-gray-800">
+                        <div className="h-full bg-[#1877F2]" style={{ width: `${(currentTime / duration) * 100}%` }}></div>
+                    </div>
+
+                    <div className="flex items-center flex-1 overflow-hidden" onClick={() => setExpanded(true)}>
+                        <div className="w-12 h-12 relative group cursor-pointer mr-3">
+                            <img src={currentTrack.cover} alt="Cover" className={`w-full h-full object-cover rounded-lg border border-[#333] ${isPlaying ? 'animate-pulse' : ''}`} />
+                        </div>
+
+                        <div className="flex-1 cursor-pointer overflow-hidden">
+                            <h4 className="text-white font-bold text-[16px] truncate">{currentTrack.title}</h4>
+                            <p className="text-gray-400 text-[14px] truncate flex items-center gap-1">
+                                {uploaderProfile ? `${uploaderProfile.name}` : currentTrack.artist}
+                                {currentTrack.isVerified && <i className="fas fa-check-circle text-[10px] text-[#1877F2]"></i>}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <i className="fas fa-step-backward text-gray-400 cursor-pointer hover:text-white text-lg" onClick={onPrevious}></i>
+                        <div 
+                            className="w-10 h-10 bg-[#1877F2] rounded-full flex items-center justify-center text-white cursor-pointer hover:scale-105 transition-transform shadow-lg"
+                            onClick={onTogglePlay}
+                        >
+                            <i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play ml-0.5'} text-sm`}></i>
+                        </div>
+                        <i className="fas fa-step-forward text-gray-400 cursor-pointer hover:text-white text-lg" onClick={onNext}></i>
+                        <div className="cursor-pointer text-gray-400 hover:text-red-500 ml-2" onClick={onClose}>
+                            <i className="fas fa-times text-lg"></i>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 // Main MusicSystem Component - UPDATED to accept your props AND include upload features
 interface MusicSystemProps {
