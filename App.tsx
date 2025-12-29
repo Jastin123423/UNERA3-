@@ -13,6 +13,8 @@ import { HelpSupportPage } from './components/HelpSupport';
 import { CreateEventModal } from './components/Events';
 import { BrandsPage } from './components/Brands';
 import { MusicSystem, GlobalAudioPlayer } from './components/MusicSystem'; 
+// Import MusicFeedPost component
+import { MusicFeedPost } from './components/MusicSystem';
 import { GroupsPage } from './components/Groups';
 import { ToolsPage } from './components/Tools';
 import { PrivacyPolicyPage } from './components/PrivacyPolicy';
@@ -758,6 +760,53 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                         const author = users.find(u => u.id === post.authorId) || brands.find(b => b.id === post.authorId);
                                         if (!author) return null;
                                         const isFollowing = currentUser && author && 'followers' in author ? currentUser.following.includes(author.id) : false;
+                                        
+                                        // Handle music posts with MusicFeedPost component
+                                        if (post.type === 'music' && post.audioTrack) {
+                                            return (
+                                                <MusicFeedPost 
+                                                    key={post.id}
+                                                    song={songs.find(s => s.id === post.audioTrack?.id) || {
+                                                        id: post.audioTrack.id,
+                                                        title: post.audioTrack.title,
+                                                        artist: post.audioTrack.artist,
+                                                        cover: post.audioTrack.cover,
+                                                        audioUrl: post.audioTrack.url,
+                                                        duration: post.audioTrack.duration,
+                                                        uploaderId: post.audioTrack.uploaderId
+                                                    }}
+                                                    currentUser={currentUser}
+                                                    users={users}
+                                                    onPlayTrack={handlePlayTrack}
+                                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
+                                                />
+                                            );
+                                        }
+                                        
+                                        // Handle podcast posts with MusicFeedPost component
+                                        if (post.type === 'podcast' && post.audioTrack) {
+                                            return (
+                                                <MusicFeedPost 
+                                                    key={post.id}
+                                                    song={{
+                                                        id: post.audioTrack.id,
+                                                        title: post.audioTrack.title,
+                                                        artist: post.audioTrack.artist,
+                                                        cover: post.audioTrack.cover,
+                                                        audioUrl: post.audioTrack.url,
+                                                        duration: post.audioTrack.duration,
+                                                        uploaderId: post.audioTrack.uploaderId,
+                                                        type: 'podcast'
+                                                    }}
+                                                    currentUser={currentUser}
+                                                    users={users}
+                                                    onPlayTrack={handlePlayTrack}
+                                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
+                                                />
+                                            );
+                                        }
+                                        
+                                        // Handle all other post types with regular Post component
                                         return (
                                             <Post 
                                                 key={post.id} 
