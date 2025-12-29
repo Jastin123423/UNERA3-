@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Notification } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -30,9 +29,9 @@ export const MenuOverlay: React.FC<MenuOverlayProps> = ({ currentUser, onClose, 
 
     const bottomItems = [
         { id: 'settings', title: 'Settings & Privacy', icon: 'fas fa-cog' },
-        { id: 'privacy', title: 'Privacy Policy', icon: 'fas fa-user-shield' },
-        { id: 'help', title: 'Help & Support', icon: 'fas fa-question-circle' },
-        { id: 'terms', title: 'Terms of Service', icon: 'fas fa-file-alt' },
+        { id: 'privacy_policy', title: 'Privacy Policy', icon: 'fas fa-user-shield' },
+        { id: 'help_support', title: 'Help & Support', icon: 'fas fa-question-circle' },
+        { id: 'terms_of_service', title: 'Terms of Service', icon: 'fas fa-file-alt' },
     ];
 
     return (
@@ -218,6 +217,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentUser, onProfileClick, o
         { id: 'marketplace', label: 'Marketplace', icon: 'fas fa-store', color: '#1877F2', onClick: onMarketplaceClick },
         { id: 'reels', label: 'Reels', icon: 'fas fa-clapperboard', color: '#E41E3F', onClick: onReelsClick },
         { id: 'events', label: 'Events', icon: 'fas fa-calendar-alt', color: '#F3425F' },
+        { id: 'music', label: 'UNERA Music', icon: 'fas fa-music', color: '#0055FF' },
+        { id: 'brands', label: 'Brands', icon: 'fas fa-award', color: '#F7B928' },
     ];
 
     return (
@@ -230,7 +231,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentUser, onProfileClick, o
                 <div 
                     key={item.id} 
                     className="flex items-center gap-3 p-2 hover:bg-[#3A3B3C] rounded-lg cursor-pointer transition-colors mb-1"
-                    onClick={item.onClick}
+                    onClick={() => {
+                        if (item.id === 'friends' || item.id === 'memories' || item.id === 'saved' || item.id === 'events' || item.id === 'music' || item.id === 'brands') {
+                            // These need to be handled by the parent's onNavigate
+                            // For now, they can just navigate to a placeholder
+                            console.log(`Navigate to ${item.id}`);
+                        } else if (item.onClick) {
+                            item.onClick();
+                        }
+                    }}
                 >
                     <div className="w-9 h-9 flex items-center justify-center">
                         <i className={`${item.icon} text-[22px]`} style={{ color: item.color }}></i>
