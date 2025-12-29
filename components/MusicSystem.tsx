@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Song, Episode, AudioTrack, User } from '../types';
-import { MOCK_SONGS, MOCK_EPISODES, INITIAL_USERS } from '../constants';
 
-// Global Audio Player remains the same
+// Global Audio Player remains the same as before
 interface GlobalAudioPlayerProps {
     currentTrack: AudioTrack | null;
     isPlaying: boolean;
@@ -277,7 +276,7 @@ export const GlobalAudioPlayer: React.FC<GlobalAudioPlayerProps> = ({
     );
 };
 
-// Main MusicSystem Component - UPDATED to accept your props
+// UPDATED MusicSystem Component - Matching the props from App.tsx
 interface MusicSystemProps {
     songs: Song[];
     episodes: Episode[];
@@ -303,7 +302,6 @@ export const MusicSystem: React.FC<MusicSystemProps> = ({
 }) => {
     const [view, setView] = useState<'music' | 'podcasts'>('music');
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedArtistId, setSelectedArtistId] = useState<number | null>(null);
     
     // Filter songs based on search
     const filteredSongs = songs.filter(song => 
@@ -330,9 +328,7 @@ export const MusicSystem: React.FC<MusicSystemProps> = ({
             id: song.id,
             title: song.title,
             artist: song.artist,
-            duration: typeof song.duration === 'string' ? 
-                parseInt(song.duration.split(':')[0]) * 60 + parseInt(song.duration.split(':')[1]) || 180 : 
-                song.duration || 180,
+            duration: 180, // Default duration
             url: song.audioUrl || '',
             uploaderId: song.uploaderId || 1,
             cover: song.cover,
@@ -346,9 +342,7 @@ export const MusicSystem: React.FC<MusicSystemProps> = ({
             id: episode.id,
             title: episode.title,
             artist: episode.host || 'Podcast Host',
-            duration: typeof episode.duration === 'string' ?
-                parseInt(episode.duration.split(':')[0]) * 60 + parseInt(episode.duration.split(':')[1]) || 1800 :
-                episode.duration || 1800,
+            duration: 1800, // Default duration for podcasts
             url: episode.audioUrl || '',
             uploaderId: episode.uploaderId || 1,
             cover: episode.thumbnail,
@@ -357,33 +351,40 @@ export const MusicSystem: React.FC<MusicSystemProps> = ({
         onPlayTrack(audioTrack);
     };
     
+    // If you're still seeing blank page, add this debug div temporarily:
+    if (window.location.pathname === '/music') {
+        console.log('🎵 MusicSystem rendering with:', {
+            songsCount: songs.length,
+            episodesCount: episodes.length,
+            currentUser: currentUser?.name,
+            view,
+            searchQuery
+        });
+    }
+    
     return (
         <div className="min-h-screen bg-[#18191A] text-white">
             <div className="max-w-7xl mx-auto px-4 py-8">
-                {/* Header */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-                    <div>
-                        <h1 className="text-4xl font-bold text-white mb-2">🎵 UNERA Music</h1>
-                        <p className="text-[#B0B3B8] text-lg">Listen to music and podcasts</p>
-                    </div>
-                    
-                    <div className="flex items-center gap-4">
-                        <div className="relative">
-                            <input
-                                type="text"
-                                placeholder="Search music or podcasts..."
-                                className="bg-[#242526] text-white px-4 py-3 pl-10 rounded-xl w-full md:w-64 border border-[#3E4042] focus:border-[#1877F2] focus:outline-none"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                            />
-                            <i className="fas fa-search absolute left-3 top-3.5 text-[#B0B3B8]"></i>
+                {/* Header - with temporary debug background */}
+                <div className="mb-8 p-4 bg-[#242526] rounded-2xl">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div>
+                            <h1 className="text-4xl font-bold text-white mb-2">🎵 UNERA Music</h1>
+                            <p className="text-[#B0B3B8] text-lg">Listen to music and podcasts</p>
                         </div>
                         
-                        {currentUser && (
-                            <button className="bg-[#1877F2] hover:bg-[#166FE5] text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-2">
-                                <i className="fas fa-plus"></i> Upload
-                            </button>
-                        )}
+                        <div className="flex items-center gap-4">
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    placeholder="Search music or podcasts..."
+                                    className="bg-[#3A3B3C] text-white px-4 py-3 pl-10 rounded-xl w-full md:w-64 border border-[#4E4F50] focus:border-[#1877F2] focus:outline-none"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
+                                <i className="fas fa-search absolute left-3 top-3.5 text-[#B0B3B8]"></i>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
@@ -406,44 +407,98 @@ export const MusicSystem: React.FC<MusicSystemProps> = ({
                 {/* Content */}
                 {view === 'music' ? (
                     <div className="space-y-6">
-                        {/* Featured Section */}
-                        <div className="bg-[#242526] rounded-2xl p-6">
-                            <h2 className="text-2xl font-bold mb-4">Featured Music</h2>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                {songs.slice(0, 4).map((song) => (
-                                    <div 
-                                        key={song.id}
-                                        className="bg-[#3A3B3C] rounded-xl overflow-hidden hover:bg-[#4E4F50] transition-colors cursor-pointer group"
-                                        onClick={() => handlePlayTrackFromSong(song)}
-                                    >
-                                        <div className="relative h-48 overflow-hidden">
-                                            <img 
-                                                src={song.cover} 
-                                                alt={song.title}
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                            />
-                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
-                                                    <i className="fas fa-play text-black text-xl ml-1"></i>
+                        {filteredSongs.length > 0 ? (
+                            <>
+                                {/* Featured Section */}
+                                <div className="bg-[#242526] rounded-2xl p-6">
+                                    <h2 className="text-2xl font-bold mb-4">Featured Music</h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                        {filteredSongs.slice(0, 4).map((song) => (
+                                            <div 
+                                                key={song.id}
+                                                className="bg-[#3A3B3C] rounded-xl overflow-hidden hover:bg-[#4E4F50] transition-colors cursor-pointer group"
+                                                onClick={() => handlePlayTrackFromSong(song)}
+                                            >
+                                                <div className="relative h-48 overflow-hidden">
+                                                    <img 
+                                                        src={song.cover} 
+                                                        alt={song.title}
+                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
+                                                            <i className="fas fa-play text-black text-xl ml-1"></i>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="p-4">
+                                                    <h3 className="font-bold text-white truncate">{song.title}</h3>
+                                                    <p className="text-[#B0B3B8] text-sm truncate">
+                                                        {song.artist}
+                                                    </p>
+                                                    <div className="flex justify-between items-center mt-3">
+                                                        <span className="text-[#B0B3B8] text-sm">{song.duration || '3:00'}</span>
+                                                        <div className="flex items-center gap-3">
+                                                            <button 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    onToggleLike(song.id);
+                                                                }}
+                                                                className="text-lg hover:scale-110 transition-transform"
+                                                            >
+                                                                <i className={`${likedTracks.includes(song.id) ? 'fas text-[#F3425F]' : 'far'} fa-heart`}></i>
+                                                            </button>
+                                                            {isAdmin && (
+                                                                <button 
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        onDeleteSong(song.id);
+                                                                    }}
+                                                                    className="text-red-500 hover:text-red-400"
+                                                                >
+                                                                    <i className="fas fa-trash"></i>
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                        <div className="p-4">
-                                            <h3 className="font-bold text-white truncate">{song.title}</h3>
-                                            <p className="text-[#B0B3B8] text-sm truncate">
-                                                {song.artist}
-                                            </p>
-                                            <div className="flex justify-between items-center mt-3">
-                                                <span className="text-[#B0B3B8] text-sm">{song.duration || '3:00'}</span>
-                                                <div className="flex items-center gap-3">
+                                        ))}
+                                    </div>
+                                </div>
+                                
+                                {/* All Songs List */}
+                                <div className="bg-[#242526] rounded-2xl p-6">
+                                    <h2 className="text-2xl font-bold mb-4">All Songs ({filteredSongs.length})</h2>
+                                    <div className="space-y-2">
+                                        {filteredSongs.map((song, index) => (
+                                            <div 
+                                                key={song.id}
+                                                className="flex items-center gap-4 p-4 hover:bg-[#3A3B3C] rounded-xl cursor-pointer transition-colors group"
+                                                onClick={() => handlePlayTrackFromSong(song)}
+                                            >
+                                                <div className="text-[#B0B3B8] font-bold w-6 text-center">
+                                                    {index + 1}
+                                                </div>
+                                                <img 
+                                                    src={song.cover} 
+                                                    alt={song.title}
+                                                    className="w-12 h-12 rounded-lg object-cover"
+                                                />
+                                                <div className="flex-1 min-w-0">
+                                                    <h3 className="font-semibold text-white truncate">{song.title}</h3>
+                                                    <p className="text-[#B0B3B8] text-sm truncate">{song.artist}</p>
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <span className="text-[#B0B3B8] text-sm">{song.duration || '3:00'}</span>
                                                     <button 
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             onToggleLike(song.id);
                                                         }}
-                                                        className="text-lg"
+                                                        className="text-lg hover:scale-110 transition-transform"
                                                     >
-                                                        <i className={`${likedTracks.includes(song.id) ? 'fas text-red-500' : 'far'} fa-heart`}></i>
+                                                        <i className={`${likedTracks.includes(song.id) ? 'fas text-[#F3425F]' : 'far'} fa-heart`}></i>
                                                     </button>
                                                     {isAdmin && (
                                                         <button 
@@ -451,107 +506,92 @@ export const MusicSystem: React.FC<MusicSystemProps> = ({
                                                                 e.stopPropagation();
                                                                 onDeleteSong(song.id);
                                                             }}
-                                                            className="text-red-500 hover:text-red-400"
+                                                            className="text-red-500 hover:text-red-400 ml-2"
                                                         >
                                                             <i className="fas fa-trash"></i>
                                                         </button>
                                                     )}
                                                 </div>
                                             </div>
-                                        </div>
+                                        ))}
                                     </div>
-                                ))}
+                                </div>
+                            </>
+                        ) : (
+                            <div className="bg-[#242526] rounded-2xl p-12 text-center">
+                                <i className="fas fa-music text-6xl text-[#B0B3B8] mb-4"></i>
+                                <h3 className="text-2xl font-bold text-white mb-2">No Music Available</h3>
+                                <p className="text-[#B0B3B8]">Check back later for new music releases</p>
                             </div>
-                        </div>
-                        
-                        {/* All Songs List */}
-                        <div className="bg-[#242526] rounded-2xl p-6">
-                            <h2 className="text-2xl font-bold mb-4">All Songs ({filteredSongs.length})</h2>
-                            <div className="space-y-2">
-                                {filteredSongs.length > 0 ? (
-                                    filteredSongs.map((song, index) => (
-                                        <div 
-                                            key={song.id}
-                                            className="flex items-center gap-4 p-4 hover:bg-[#3A3B3C] rounded-xl cursor-pointer transition-colors group"
-                                            onClick={() => handlePlayTrackFromSong(song)}
-                                        >
-                                            <div className="text-[#B0B3B8] font-bold w-6 text-center">
-                                                {index + 1}
-                                            </div>
-                                            <img 
-                                                src={song.cover} 
-                                                alt={song.title}
-                                                className="w-12 h-12 rounded-lg object-cover"
-                                            />
-                                            <div className="flex-1 min-w-0">
-                                                <h3 className="font-semibold text-white truncate">{song.title}</h3>
-                                                <div 
-                                                    className="flex items-center gap-1 text-[#B0B3B8] text-sm cursor-pointer hover:underline"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        if (song.uploaderId) {
-                                                            handleArtistClick(song.uploaderId);
-                                                        }
-                                                    }}
-                                                >
-                                                    <span>{song.artist}</span>
-                                                    {song.uploaderId && users?.find(u => u.id === song.uploaderId)?.isVerified && (
-                                                        <i className="fas fa-check-circle text-[#1877F2] text-xs"></i>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-4">
-                                                <span className="text-[#B0B3B8] text-sm">{song.duration || '3:00'}</span>
-                                                <button 
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        onToggleLike(song.id);
-                                                    }}
-                                                    className="text-lg"
-                                                >
-                                                    <i className={`${likedTracks.includes(song.id) ? 'fas text-red-500' : 'far'} fa-heart`}></i>
-                                                </button>
-                                                {isAdmin && (
-                                                    <button 
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            onDeleteSong(song.id);
-                                                        }}
-                                                        className="text-red-500 hover:text-red-400"
-                                                    >
-                                                        <i className="fas fa-trash"></i>
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <div className="text-center py-12">
-                                        <i className="fas fa-music text-5xl text-[#B0B3B8] mb-4"></i>
-                                        <p className="text-[#B0B3B8] text-lg">No songs found</p>
-                                        {searchQuery && (
-                                            <p className="text-[#B0B3B8] text-sm mt-2">Try a different search term</p>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+                        )}
                     </div>
                 ) : (
                     <div className="space-y-6">
-                        {/* Featured Podcasts */}
-                        <div className="bg-[#242526] rounded-2xl p-6">
-                            <h2 className="text-2xl font-bold mb-4">Featured Podcasts</h2>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {episodes.slice(0, 6).map((episode) => (
-                                    <div 
-                                        key={episode.id}
-                                        className="bg-[#3A3B3C] rounded-xl overflow-hidden hover:bg-[#4E4F50] transition-colors cursor-pointer group"
-                                        onClick={() => handlePlayTrackFromEpisode(episode)}
-                                    >
-                                        <div className="p-4">
-                                            <div className="flex items-start gap-4">
-                                                <div className="relative w-16 h-16 flex-shrink-0">
+                        {filteredEpisodes.length > 0 ? (
+                            <>
+                                {/* Featured Podcasts */}
+                                <div className="bg-[#242526] rounded-2xl p-6">
+                                    <h2 className="text-2xl font-bold mb-4">Featured Podcasts</h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {filteredEpisodes.slice(0, 6).map((episode) => (
+                                            <div 
+                                                key={episode.id}
+                                                className="bg-[#3A3B3C] rounded-xl overflow-hidden hover:bg-[#4E4F50] transition-colors cursor-pointer group"
+                                                onClick={() => handlePlayTrackFromEpisode(episode)}
+                                            >
+                                                <div className="p-4">
+                                                    <div className="flex items-start gap-4">
+                                                        <div className="relative w-16 h-16 flex-shrink-0">
+                                                            <img 
+                                                                src={episode.thumbnail} 
+                                                                alt={episode.title}
+                                                                className="w-full h-full object-cover rounded-lg"
+                                                            />
+                                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <i className="fas fa-play text-white"></i>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <h3 className="font-bold text-white line-clamp-2">{episode.title}</h3>
+                                                            <p className="text-[#B0B3B8] text-sm mt-1">{episode.host || 'Unknown Host'}</p>
+                                                            <div className="flex items-center justify-between mt-3">
+                                                                <span className="text-[#B0B3B8] text-xs">{episode.duration || '45:00'}</span>
+                                                                {isAdmin && (
+                                                                    <button 
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            onDeleteEpisode(episode.id);
+                                                                        }}
+                                                                        className="text-red-500 hover:text-red-400"
+                                                                    >
+                                                                        <i className="fas fa-trash"></i>
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {episode.description && (
+                                                        <p className="text-[#B0B3B8] text-sm mt-3 line-clamp-2">
+                                                            {episode.description}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                
+                                {/* All Episodes */}
+                                <div className="bg-[#242526] rounded-2xl p-6">
+                                    <h2 className="text-2xl font-bold mb-4">All Episodes ({filteredEpisodes.length})</h2>
+                                    <div className="space-y-4">
+                                        {filteredEpisodes.map((episode) => (
+                                            <div 
+                                                key={episode.id}
+                                                className="flex items-center gap-4 p-4 hover:bg-[#3A3B3C] rounded-xl cursor-pointer transition-colors group"
+                                                onClick={() => handlePlayTrackFromEpisode(episode)}
+                                            >
+                                                <div className="relative w-20 h-20 flex-shrink-0">
                                                     <img 
                                                         src={episode.thumbnail} 
                                                         alt={episode.title}
@@ -562,124 +602,72 @@ export const MusicSystem: React.FC<MusicSystemProps> = ({
                                                     </div>
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <h3 className="font-bold text-white line-clamp-2">{episode.title}</h3>
+                                                    <h3 className="font-semibold text-white line-clamp-1">{episode.title}</h3>
                                                     <p className="text-[#B0B3B8] text-sm mt-1">{episode.host || 'Unknown Host'}</p>
-                                                    <div className="flex items-center justify-between mt-3">
-                                                        <span className="text-[#B0B3B8] text-xs">{episode.duration || '45:00'}</span>
-                                                        {isAdmin && (
-                                                            <button 
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    onDeleteEpisode(episode.id);
-                                                                }}
-                                                                className="text-red-500 hover:text-red-400"
-                                                            >
-                                                                <i className="fas fa-trash"></i>
-                                                            </button>
-                                                        )}
+                                                    {episode.description && (
+                                                        <p className="text-[#B0B3B8] text-sm mt-2 line-clamp-2">
+                                                            {episode.description}
+                                                        </p>
+                                                    )}
+                                                    <div className="flex items-center gap-4 mt-2 text-xs text-[#B0B3B8]">
+                                                        <span>{episode.date || 'Recent'}</span>
+                                                        <span>•</span>
+                                                        <span>{episode.duration || '45:00'}</span>
                                                     </div>
                                                 </div>
-                                            </div>
-                                            {episode.description && (
-                                                <p className="text-[#B0B3B8] text-sm mt-3 line-clamp-2">
-                                                    {episode.description}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        
-                        {/* All Episodes */}
-                        <div className="bg-[#242526] rounded-2xl p-6">
-                            <h2 className="text-2xl font-bold mb-4">All Episodes ({filteredEpisodes.length})</h2>
-                            <div className="space-y-4">
-                                {filteredEpisodes.length > 0 ? (
-                                    filteredEpisodes.map((episode) => (
-                                        <div 
-                                            key={episode.id}
-                                            className="flex items-center gap-4 p-4 hover:bg-[#3A3B3C] rounded-xl cursor-pointer transition-colors group"
-                                            onClick={() => handlePlayTrackFromEpisode(episode)}
-                                        >
-                                            <div className="relative w-20 h-20 flex-shrink-0">
-                                                <img 
-                                                    src={episode.thumbnail} 
-                                                    alt={episode.title}
-                                                    className="w-full h-full object-cover rounded-lg"
-                                                />
-                                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <i className="fas fa-play text-white"></i>
-                                                </div>
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <h3 className="font-semibold text-white line-clamp-1">{episode.title}</h3>
-                                                <p className="text-[#B0B3B8] text-sm mt-1">{episode.host || 'Unknown Host'}</p>
-                                                {episode.description && (
-                                                    <p className="text-[#B0B3B8] text-sm mt-2 line-clamp-2">
-                                                        {episode.description}
-                                                    </p>
-                                                )}
-                                                <div className="flex items-center gap-4 mt-2 text-xs text-[#B0B3B8]">
-                                                    <span>{episode.date || 'Recent'}</span>
-                                                    <span>•</span>
-                                                    <span>{episode.duration || '45:00'}</span>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-4">
-                                                <button 
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        onToggleLike(episode.id);
-                                                    }}
-                                                    className="text-lg"
-                                                >
-                                                    <i className={`${likedTracks.includes(episode.id) ? 'fas text-red-500' : 'far'} fa-heart`}></i>
-                                                </button>
-                                                {isAdmin && (
+                                                <div className="flex items-center gap-4">
                                                     <button 
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            onDeleteEpisode(episode.id);
+                                                            onToggleLike(episode.id);
                                                         }}
-                                                        className="text-red-500 hover:text-red-400"
+                                                        className="text-lg hover:scale-110 transition-transform"
                                                     >
-                                                        <i className="fas fa-trash"></i>
+                                                        <i className={`${likedTracks.includes(episode.id) ? 'fas text-[#F3425F]' : 'far'} fa-heart`}></i>
                                                     </button>
-                                                )}
+                                                    {isAdmin && (
+                                                        <button 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                onDeleteEpisode(episode.id);
+                                                            }}
+                                                            className="text-red-500 hover:text-red-400"
+                                                        >
+                                                            <i className="fas fa-trash"></i>
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <div className="text-center py-12">
-                                        <i className="fas fa-podcast text-5xl text-[#B0B3B8] mb-4"></i>
-                                        <p className="text-[#B0B3B8] text-lg">No podcasts found</p>
-                                        {searchQuery && (
-                                            <p className="text-[#B0B3B8] text-sm mt-2">Try a different search term</p>
-                                        )}
+                                        ))}
                                     </div>
-                                )}
+                                </div>
+                            </>
+                        ) : (
+                            <div className="bg-[#242526] rounded-2xl p-12 text-center">
+                                <i className="fas fa-podcast text-6xl text-[#B0B3B8] mb-4"></i>
+                                <h3 className="text-2xl font-bold text-white mb-2">No Podcasts Available</h3>
+                                <p className="text-[#B0B3B8]">Check back later for new podcast episodes</p>
                             </div>
-                        </div>
+                        )}
                     </div>
                 )}
                 
                 {/* Stats Footer */}
                 <div className="mt-12 bg-[#242526] rounded-2xl p-6">
-                    <h3 className="text-xl font-bold mb-4">UNERA Music Stats</h3>
+                    <h3 className="text-xl font-bold mb-4 text-white">UNERA Music Stats</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="text-center">
+                        <div className="text-center p-4 bg-[#3A3B3C] rounded-xl">
                             <div className="text-4xl font-bold text-[#1877F2]">{songs.length + episodes.length}</div>
                             <p className="text-[#B0B3B8] mt-2">Total Tracks</p>
                         </div>
-                        <div className="text-center">
+                        <div className="text-center p-4 bg-[#3A3B3C] rounded-xl">
                             <div className="text-4xl font-bold text-[#45BD62]">
                                 {songs.reduce((acc, s) => acc + (s.stats?.plays || 0), 0) + 
-                                 episodes.reduce((acc, e) => acc + (e.stats?.plays || 0), 0).toLocaleString()}
+                                 episodes.reduce((acc, e) => acc + (e.stats?.plays || 0), 0)}
                             </div>
                             <p className="text-[#B0B3B8] mt-2">Total Plays</p>
                         </div>
-                        <div className="text-center">
+                        <div className="text-center p-4 bg-[#3A3B3C] rounded-xl">
                             <div className="text-4xl font-bold text-[#F3425F]">{likedTracks.length}</div>
                             <p className="text-[#B0B3B8] mt-2">Liked Tracks</p>
                         </div>
