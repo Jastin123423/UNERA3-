@@ -253,11 +253,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             const storedSongs = localStorage.getItem('universeSongs');
             const storedEpisodes = localStorage.getItem('universeEpisodes');
             const storedLikedTracks = localStorage.getItem('universeLikedTracks');
+            const storedProducts = localStorage.getItem('marketplaceProducts'); // ADD THIS
             
             if (storedUsers) setUsers(JSON.parse(storedUsers));
             if (storedSongs) setSongs(JSON.parse(storedSongs));
             if (storedEpisodes) setEpisodes(JSON.parse(storedEpisodes));
             if (storedLikedTracks) setLikedTracks(JSON.parse(storedLikedTracks));
+            if (storedProducts) setProducts(JSON.parse(storedProducts)); // ADD THIS
             
             if (storedUser) {
                 const user = JSON.parse(storedUser);
@@ -298,6 +300,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             localStorage.setItem('universeLikedTracks', JSON.stringify(likedTracks));
         }
     }, [likedTracks, isClient]);
+
+    // ADD THIS: Save products to localStorage
+    useEffect(() => {
+        if (isClient) {
+            localStorage.setItem('marketplaceProducts', JSON.stringify(products));
+        }
+    }, [products, isClient]);
 
     const handleLogin = (email: string, pass: string) => {
         const user = users.find(u => u.email === email && u.password === pass);
@@ -525,6 +534,54 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             const newNotifications: Notification[] = taggedUsers.map(userId => ({ id: Date.now() + userId, userId: userId, senderId: currentUser.id, type: 'mention', content: 'mentioned you in a post.', postId: newPost.id, timestamp: Date.now(), read: false, }));
             setNotifications(prev => [...newNotifications, ...prev]);
         }
+    };
+
+    // ADD THIS: Product creation handler
+    const handleCreateProduct = (productData: Partial<Product>) => {
+        console.log("Creating product with data:", productData);
+        
+        if (!currentUser) {
+            alert("Please login to create a product listing.");
+            return;
+        }
+
+        // Generate a shareId
+        const generateShareId = () => {
+            return 'prod_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        };
+
+        // Create a complete product object
+        const newProduct: Product = {
+            id: Date.now(),
+            title: productData.title || 'Untitled',
+            description: productData.description || '',
+            category: productData.category || 'other',
+            mainPrice: productData.mainPrice || 0,
+            discountPrice: productData.discountPrice || null,
+            quantity: productData.quantity || 1,
+            images: productData.images || [],
+            address: productData.address || '',
+            country: productData.country || 'US',
+            phoneNumber: productData.phoneNumber || '',
+            sellerId: currentUser.id,
+            sellerName: currentUser.name,
+            sellerAvatar: currentUser.profileImage || 'https://via.placeholder.com/150',
+            status: 'active',
+            views: 0,
+            ratings: [],
+            comments: [],
+            date: Date.now(),
+            shareId: generateShareId(),
+        };
+
+        console.log("New product created:", newProduct);
+        
+        // Update products state
+        setProducts(prev => [...prev, newProduct]);
+        
+        alert("Product listed successfully!");
+        
+        return newProduct;
     };
 
     const handleCreateStory = (storyData: Partial<Story>) => {
@@ -1299,8 +1356,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                 <MarketplacePage 
                                     products={products} 
                                     currentUser={currentUser} 
-                                    onProductClick={setActiveProduct} 
-                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                    onNavigateHome={() => handleNavigate('home')}
+                                    onCreateProduct={handleCreateProduct}
+                                    onViewProduct={(product) => setActiveProduct(product)}
                                 />
                             )}
                             
