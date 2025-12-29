@@ -813,7 +813,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setPosts([newPost, ...posts]);
     };
 
-    // Handle adding songs from upload
+    // Handle adding songs from upload - ENHANCED to ensure complete audioTrack data
     const handleAddSong = (song: Song) => {
         console.log("Adding new song to library:", song);
         const newSong = {
@@ -844,7 +844,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             return [newSong, ...prev];
         });
         
-        // Also create a feed post for the new upload
+        // Also create a feed post for the new upload - ENSURE COMPLETE AUDIOTRACK DATA
         if (currentUser) {
             const audioTrack: AudioTrack = {
                 id: song.id,
@@ -855,7 +855,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     song.duration || 180,
                 url: song.audioUrl || '',
                 uploaderId: song.uploaderId || currentUser.id,
-                cover: song.cover,
+                cover: song.cover || '/default-cover.jpg', // ENSURE COVER EXISTS
                 type: 'music',
                 isVerified: true,
                 plays: song.plays || 0,
@@ -882,7 +882,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    // Handle adding episodes from upload
+    // Handle adding episodes from upload - ENHANCED to ensure complete audioTrack data
     const handleAddEpisode = (episode: Episode) => {
         console.log("Adding new episode to library:", episode);
         const newEpisode = {
@@ -910,7 +910,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             return [newEpisode, ...prev];
         });
         
-        // Also create a feed post for the new upload
+        // Also create a feed post for the new upload - ENSURE COMPLETE AUDIOTRACK DATA
         if (currentUser) {
             const audioTrack: AudioTrack = {
                 id: episode.id,
@@ -921,7 +921,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     episode.duration || 1800,
                 url: episode.audioUrl || '',
                 uploaderId: episode.uploaderId || currentUser.id,
-                cover: episode.thumbnail || episode.cover,
+                cover: episode.thumbnail || episode.cover || '/default-cover.jpg', // ENSURE COVER EXISTS
                 type: 'podcast',
                 isVerified: true,
                 plays: episode.plays || 0,
@@ -1287,27 +1287,54 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     user={users.find(u => u.id === selectedUserId)!} 
                                     currentUser={currentUser} 
                                     users={users} 
-                                    // FIX: Include product posts in user profile feed
-                                    posts={[
-                                        ...posts.filter(p => p.authorId === selectedUserId),
-                                        ...products
-                                            .filter(p => p.sellerId === selectedUserId)
-                                            .map(p => ({
-                                                id: p.id + 100000,
-                                                authorId: p.sellerId,
-                                                content: `Just listed a new item: ${p.title}`,
-                                                timestamp: 'Just now',
-                                                createdAt: p.date,
-                                                reactions: [],
-                                                comments: [],
-                                                shares: 0,
-                                                views: p.views,
-                                                type: 'product' as const,
-                                                visibility: 'Public' as const,
-                                                product: p,
-                                                productId: p.id
-                                            }))
-                                    ]}
+                                    // CRITICAL FIX: Ensure music posts have complete audioTrack data for UserProfile
+                                    posts={(() => {
+                                        const userPosts = posts.filter(p => p.authorId === selectedUserId);
+                                        
+                                        // Enhance music/podcast posts with complete audioTrack data
+                                        const enhancedPosts = userPosts.map(post => {
+                                            if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
+                                                // Find the song/episode to get complete data
+                                                const song = songs.find(s => s.id === post.audioTrack?.id);
+                                                const episode = episodes.find(e => e.id === post.audioTrack?.id);
+                                                
+                                                if (song || episode) {
+                                                    return {
+                                                        ...post,
+                                                        audioTrack: {
+                                                            ...post.audioTrack,
+                                                            cover: song?.cover || episode?.thumbnail || post.audioTrack.cover || '/default-cover.jpg',
+                                                            plays: song?.plays || episode?.plays || post.audioTrack.plays || 0,
+                                                            likes: song?.likes || episode?.likes || post.audioTrack.likes || 0,
+                                                            shares: song?.shares || episode?.shares || post.audioTrack.shares || 0,
+                                                        }
+                                                    };
+                                                }
+                                            }
+                                            return post;
+                                        });
+                                        
+                                        return [
+                                            ...enhancedPosts,
+                                            ...products
+                                                .filter(p => p.sellerId === selectedUserId)
+                                                .map(p => ({
+                                                    id: p.id + 100000,
+                                                    authorId: p.sellerId,
+                                                    content: `Just listed a new item: ${p.title}`,
+                                                    timestamp: 'Just now',
+                                                    createdAt: p.date,
+                                                    reactions: [],
+                                                    comments: [],
+                                                    shares: 0,
+                                                    views: p.views,
+                                                    type: 'product' as const,
+                                                    visibility: 'Public' as const,
+                                                    product: p,
+                                                    productId: p.id
+                                                }))
+                                        ];
+                                    })()}
                                     onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
                                     onFollow={handleFollowUser} 
                                     onReact={handleReact} 
@@ -1356,7 +1383,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onLikeTrack={handleLikeTrack}
                                     onTrackComment={handleTrackComment}
                                     onTrackShare={handleTrackShare}
-                                    // Add function to render music posts in profile - CRITICAL FIX
+                                    // Add function to render music posts in profile
                                     renderMusicPost={(post: PostType, author: any) => {
                                         const song = getSongForPost(post, songs, episodes);
                                         if (!song) return null;
