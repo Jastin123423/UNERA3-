@@ -12,9 +12,7 @@ import { EventsPage, BirthdaysPage, SuggestedProfilesPage, SettingsPage, Memorie
 import { HelpSupportPage } from './components/HelpSupport';
 import { CreateEventModal } from './components/Events';
 import { BrandsPage } from './components/Brands';
-import { MusicSystem, GlobalAudioPlayer } from './components/MusicSystem'; 
-// Import MusicFeedPost component
-import { MusicFeedPost } from './components/MusicSystem';
+import { MusicSystem, GlobalAudioPlayer, MusicFeedPost } from './components/MusicSystem'; 
 import { GroupsPage } from './components/Groups';
 import { ToolsPage } from './components/Tools';
 import { PrivacyPolicyPage } from './components/PrivacyPolicy';
@@ -63,6 +61,84 @@ const parsePath = (path: string, users: User[]) => {
     return { view: 'home' };
 };
 
+// Helper function to get song for post
+const getSongForPost = (post: PostType, songs: Song[], episodes: Episode[]) => {
+    if (!post.audioTrack) return null;
+    
+    // Check songs array first
+    const song = songs.find(s => s.id === post.audioTrack?.id);
+    if (song) {
+        return {
+            ...song,
+            type: post.type === 'podcast' ? 'podcast' : 'music',
+            plays: song.plays || post.audioTrack.plays || 0,
+            likes: song.likes || post.audioTrack.likes || 0,
+            shares: song.shares || post.audioTrack.shares || 0,
+            comments: song.comments || 0,
+            stats: {
+                plays: song.plays || post.audioTrack.plays || 0,
+                likes: song.likes || post.audioTrack.likes || 0,
+                shares: song.shares || post.audioTrack.shares || 0,
+                comments: song.comments || 0,
+                downloads: song.stats?.downloads || 0,
+                reelsUse: song.stats?.reelsUse || 0
+            }
+        };
+    }
+    
+    // Check episodes array
+    const episode = episodes.find(e => e.id === post.audioTrack?.id);
+    if (episode) {
+        return {
+            id: episode.id,
+            title: episode.title,
+            artist: episode.host || 'Podcast Host',
+            cover: episode.thumbnail || episode.cover,
+            audioUrl: episode.audioUrl,
+            duration: episode.duration,
+            uploaderId: episode.uploaderId,
+            type: 'podcast',
+            plays: episode.plays || post.audioTrack.plays || 0,
+            likes: episode.likes || post.audioTrack.likes || 0,
+            shares: episode.shares || post.audioTrack.shares || 0,
+            comments: episode.comments || 0,
+            description: episode.description,
+            stats: {
+                plays: episode.plays || post.audioTrack.plays || 0,
+                likes: episode.likes || post.audioTrack.likes || 0,
+                shares: episode.shares || post.audioTrack.shares || 0,
+                comments: episode.comments || 0,
+                downloads: episode.stats?.downloads || 0,
+                reelsUse: episode.stats?.reelsUse || 0
+            }
+        };
+    }
+    
+    // Create song object from audioTrack if not found in arrays
+    return {
+        id: post.audioTrack.id,
+        title: post.audioTrack.title,
+        artist: post.audioTrack.artist,
+        cover: post.audioTrack.cover || '/default-cover.jpg',
+        audioUrl: post.audioTrack.url,
+        duration: post.audioTrack.duration,
+        uploaderId: post.audioTrack.uploaderId,
+        type: post.type === 'podcast' ? 'podcast' : 'music',
+        plays: post.audioTrack.plays || 0,
+        likes: post.audioTrack.likes || 0,
+        shares: post.audioTrack.shares || 0,
+        comments: 0,
+        stats: {
+            plays: post.audioTrack.plays || 0,
+            likes: post.audioTrack.likes || 0,
+            shares: post.audioTrack.shares || 0,
+            comments: 0,
+            downloads: 0,
+            reelsUse: 0
+        }
+    };
+};
+
 export default function App({ initialData, initialPath }: { initialData?: any, initialPath?: string }) {
     const { t } = useLanguage();
 
@@ -80,8 +156,38 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const [groups, setGroups] = useState<Group[]>(INITIAL_GROUPS);
     const [brands, setBrands] = useState<Brand[]>(INITIAL_BRANDS);
     
-    const [songs, setSongs] = useState<Song[]>(MOCK_SONGS);
-    const [episodes, setEpisodes] = useState<Episode[]>(MOCK_EPISODES);
+    // Initialize songs and episodes with proper stats
+    const [songs, setSongs] = useState<Song[]>(MOCK_SONGS.map(song => ({
+        ...song,
+        plays: song.plays || 0,
+        likes: song.likes || 0,
+        shares: song.shares || 0,
+        comments: song.comments || 0,
+        stats: song.stats || {
+            plays: song.plays || 0,
+            likes: song.likes || 0,
+            shares: song.shares || 0,
+            comments: song.comments || 0,
+            downloads: 0,
+            reelsUse: 0
+        }
+    })));
+    
+    const [episodes, setEpisodes] = useState<Episode[]>(MOCK_EPISODES.map(episode => ({
+        ...episode,
+        plays: episode.plays || 0,
+        likes: episode.likes || 0,
+        shares: episode.shares || 0,
+        comments: episode.comments || 0,
+        stats: episode.stats || {
+            plays: episode.plays || 0,
+            likes: episode.likes || 0,
+            shares: episode.shares || 0,
+            comments: episode.comments || 0,
+            downloads: 0,
+            reelsUse: 0
+        }
+    })));
     
     const [currentUser, setCurrentUser] = useState<User | null>(initialData?.currentUser || null);
     const [showRegister, setShowRegister] = useState(false);
@@ -106,6 +212,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const [currentAudioTrack, setCurrentAudioTrack] = useState<AudioTrack | null>(null);
     const [isAudioPlaying, setIsAudioPlaying] = useState(false);
     const [likedTracks, setLikedTracks] = useState<string[]>([]);
+    const [playHistory, setPlayHistory] = useState<{trackId: string, timestamp: number, duration: number}[]>([]);
 
     const [showCreatePostModal, setShowCreatePostModal] = useState(false);
     const [showCreateStoryModal, setShowCreateStoryModal] = useState(false);
@@ -138,11 +245,20 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         return rankFeed(allContent, currentUser, users);
     }, [posts, reels, products, currentUser, users]);
 
+    // Load data from localStorage
     useEffect(() => {
         if (isClient) {
             const storedUser = localStorage.getItem('universeCurrentUser');
             const storedUsers = localStorage.getItem('universeUsers');
+            const storedSongs = localStorage.getItem('universeSongs');
+            const storedEpisodes = localStorage.getItem('universeEpisodes');
+            const storedLikedTracks = localStorage.getItem('universeLikedTracks');
+            
             if (storedUsers) setUsers(JSON.parse(storedUsers));
+            if (storedSongs) setSongs(JSON.parse(storedSongs));
+            if (storedEpisodes) setEpisodes(JSON.parse(storedEpisodes));
+            if (storedLikedTracks) setLikedTracks(JSON.parse(storedLikedTracks));
+            
             if (storedUser) {
                 const user = JSON.parse(storedUser);
                 const freshUser = (storedUsers ? JSON.parse(storedUsers) : INITIAL_USERS).find((u: User) => u.id === user.id);
@@ -152,10 +268,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setTimeout(() => setIsLoading(false), 800);
     }, [isClient]);
 
+    // Save data to localStorage
     useEffect(() => {
-        if (isClient) {
-            if (currentUser) localStorage.setItem('universeCurrentUser', JSON.stringify(currentUser));
-            else localStorage.removeItem('universeCurrentUser');
+        if (isClient && currentUser) {
+            localStorage.setItem('universeCurrentUser', JSON.stringify(currentUser));
         }
     }, [currentUser, isClient]);
 
@@ -164,6 +280,24 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             localStorage.setItem('universeUsers', JSON.stringify(users));
         }
     }, [users, isClient]);
+
+    useEffect(() => {
+        if (isClient) {
+            localStorage.setItem('universeSongs', JSON.stringify(songs));
+        }
+    }, [songs, isClient]);
+
+    useEffect(() => {
+        if (isClient) {
+            localStorage.setItem('universeEpisodes', JSON.stringify(episodes));
+        }
+    }, [episodes, isClient]);
+
+    useEffect(() => {
+        if (isClient) {
+            localStorage.setItem('universeLikedTracks', JSON.stringify(likedTracks));
+        }
+    }, [likedTracks, isClient]);
 
     const handleLogin = (email: string, pass: string) => {
         const user = users.find(u => u.email === email && u.password === pass);
@@ -519,6 +653,15 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             return p;
         }));
 
+        // Update comment count for music/podcast posts
+        const post = posts.find(p => p.id === itemId);
+        if (post && (post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
+            const song = getSongForPost(post, songs, episodes);
+            if (song) {
+                handleTrackComment(song.id);
+            }
+        }
+
         const mentionRegex = /@(\w+(?:\s\w+)?)/g;
         const mentions = [...text.matchAll(mentionRegex)];
         if (mentions.length > 0) {
@@ -542,11 +685,42 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         if (!currentUser) return;
         const sourcePost = rankedPosts.find(p => p.id === postId);
         if (!sourcePost) return;
-        const newSharedPost: PostType = { ...sourcePost, id: Date.now(), authorId: currentUser.id, content: extraCaption ? `${extraCaption}\n\n${sourcePost.content || ''}` : sourcePost.content, timestamp: 'Just now', createdAt: Date.now(), reactions: [], comments: [], shares: 0, sharedPostId: sourcePost.id };
+        
+        // Check if it's a music/podcast post and update share count
+        if (sourcePost.type === 'music' || sourcePost.type === 'podcast') {
+            if (sourcePost.audioTrack) {
+                const song = getSongForPost(sourcePost, songs, episodes);
+                if (song) {
+                    handleTrackShare(song.id);
+                }
+            }
+        }
+        
+        const newSharedPost: PostType = { 
+            ...sourcePost, 
+            id: Date.now(), 
+            authorId: currentUser.id, 
+            content: extraCaption ? `${extraCaption}\n\n${sourcePost.content || ''}` : sourcePost.content, 
+            timestamp: 'Just now', 
+            createdAt: Date.now(), 
+            reactions: [], 
+            comments: [], 
+            shares: 0, 
+            sharedPostId: sourcePost.id 
+        };
+        
         if (targetType === 'profile') setPosts([newSharedPost, ...posts]);
         else if (targetType === 'brand' && targetId) {
             setPosts([{ ...newSharedPost, brandId: Number(targetId) }, ...posts]);
         }
+        
+        // Update original post share count
+        setPosts(prev => prev.map(post => 
+            post.id === postId 
+                ? { ...post, shares: (post.shares || 0) + 1 }
+                : post
+        ));
+        
         setActiveSharePostId(null);
         alert("Shared successfully!");
     };
@@ -557,18 +731,35 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setPosts([newPost, ...posts]);
     };
 
-    // NEW: Handle adding songs from upload
+    // Handle adding songs from upload
     const handleAddSong = (song: Song) => {
         console.log("Adding new song to library:", song);
+        const newSong = {
+            ...song,
+            plays: song.plays || 0,
+            likes: song.likes || 0,
+            shares: song.shares || 0,
+            comments: song.comments || 0,
+            uploadDate: song.uploadDate || new Date().toISOString(),
+            stats: song.stats || {
+                plays: song.plays || 0,
+                likes: song.likes || 0,
+                shares: song.shares || 0,
+                comments: song.comments || 0,
+                downloads: 0,
+                reelsUse: 0
+            }
+        };
+        
         setSongs(prev => {
             // Check if song already exists
             const exists = prev.find(s => s.id === song.id);
             if (exists) {
                 // Update existing song
-                return prev.map(s => s.id === song.id ? song : s);
+                return prev.map(s => s.id === song.id ? newSong : s);
             }
             // Add new song at the beginning
-            return [song, ...prev];
+            return [newSong, ...prev];
         });
         
         // Also create a feed post for the new upload
@@ -584,7 +775,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 uploaderId: song.uploaderId || currentUser.id,
                 cover: song.cover,
                 type: 'music',
-                isVerified: true
+                isVerified: true,
+                plays: song.plays || 0,
+                likes: song.likes || 0,
+                shares: song.shares || 0
             };
             
             const newPost: PostType = {
@@ -606,15 +800,32 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    // NEW: Handle adding episodes from upload
+    // Handle adding episodes from upload
     const handleAddEpisode = (episode: Episode) => {
         console.log("Adding new episode to library:", episode);
+        const newEpisode = {
+            ...episode,
+            plays: episode.plays || 0,
+            likes: episode.likes || 0,
+            shares: episode.shares || 0,
+            comments: episode.comments || 0,
+            uploadDate: episode.uploadDate || new Date().toISOString(),
+            stats: episode.stats || {
+                plays: episode.plays || 0,
+                likes: episode.likes || 0,
+                shares: episode.shares || 0,
+                comments: episode.comments || 0,
+                downloads: 0,
+                reelsUse: 0
+            }
+        };
+        
         setEpisodes(prev => {
             const exists = prev.find(e => e.id === episode.id);
             if (exists) {
-                return prev.map(e => e.id === episode.id ? episode : e);
+                return prev.map(e => e.id === episode.id ? newEpisode : e);
             }
-            return [episode, ...prev];
+            return [newEpisode, ...prev];
         });
         
         // Also create a feed post for the new upload
@@ -628,9 +839,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     episode.duration || 1800,
                 url: episode.audioUrl || '',
                 uploaderId: episode.uploaderId || currentUser.id,
-                cover: episode.thumbnail,
+                cover: episode.thumbnail || episode.cover,
                 type: 'podcast',
-                isVerified: true
+                isVerified: true,
+                plays: episode.plays || 0,
+                likes: episode.likes || 0,
+                shares: episode.shares || 0
             };
             
             const newPost: PostType = {
@@ -652,15 +866,169 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    // NEW: Handle upload to feed (kept for backward compatibility)
+    // Handle upload to feed (kept for backward compatibility)
     const handleUploadToFeed = (song: Song) => {
         console.log("Uploading to feed (deprecated, using handleAddSong instead):", song);
         handleAddSong(song);
     };
 
+    // Enhanced handlePlayTrack with proper play counting
     const handlePlayTrack = (track: AudioTrack) => { 
         setCurrentAudioTrack(track); 
         setIsAudioPlaying(true); 
+        
+        // Add to play history
+        setPlayHistory(prev => [...prev, {
+            trackId: track.id,
+            timestamp: Date.now(),
+            duration: track.duration
+        }]);
+        
+        // Update play count for the track
+        if (track.type === 'music') {
+            setSongs(prev => prev.map(song => 
+                song.id === track.id 
+                    ? { 
+                        ...song, 
+                        plays: (song.plays || 0) + 1,
+                        stats: {
+                            ...song.stats,
+                            plays: (song.stats?.plays || 0) + 1
+                        }
+                    }
+                    : song
+            ));
+        } else if (track.type === 'podcast') {
+            setEpisodes(prev => prev.map(episode => 
+                episode.id === track.id 
+                    ? { 
+                        ...episode, 
+                        plays: (episode.plays || 0) + 1,
+                        stats: {
+                            ...episode.stats,
+                            plays: (episode.stats?.plays || 0) + 1
+                        }
+                    }
+                    : episode
+            ));
+        }
+    };
+
+    // Handle like for music/podcast posts
+    const handleLikeTrack = (trackId: string, isLiked: boolean) => {
+        setLikedTracks(prev => 
+            isLiked 
+                ? prev.filter(id => id !== trackId)
+                : [...prev, trackId]
+        );
+        
+        // Update song/episode like count
+        const track = songs.find(s => s.id === trackId) || episodes.find(e => e.id === trackId);
+        if (track) {
+            if ('artist' in track) {
+                // It's a song
+                setSongs(prev => prev.map(song => 
+                    song.id === trackId 
+                        ? { 
+                            ...song, 
+                            likes: isLiked ? Math.max(0, (song.likes || 0) - 1) : (song.likes || 0) + 1,
+                            stats: {
+                                ...song.stats,
+                                likes: isLiked ? Math.max(0, (song.stats?.likes || 0) - 1) : (song.stats?.likes || 0) + 1
+                            }
+                        }
+                        : song
+                ));
+            } else {
+                // It's an episode
+                setEpisodes(prev => prev.map(episode => 
+                    episode.id === trackId 
+                        ? { 
+                            ...episode, 
+                            likes: isLiked ? Math.max(0, (episode.likes || 0) - 1) : (episode.likes || 0) + 1,
+                            stats: {
+                                ...episode.stats,
+                                likes: isLiked ? Math.max(0, (episode.stats?.likes || 0) - 1) : (episode.stats?.likes || 0) + 1
+                            }
+                        }
+                        : episode
+                ));
+            }
+        }
+    };
+
+    // Handle comment count for music/podcast posts
+    const handleTrackComment = (trackId: string) => {
+        // Update song/episode comment count
+        const track = songs.find(s => s.id === trackId) || episodes.find(e => e.id === trackId);
+        if (track) {
+            if ('artist' in track) {
+                // It's a song
+                setSongs(prev => prev.map(song => 
+                    song.id === trackId 
+                        ? { 
+                            ...song, 
+                            comments: (song.comments || 0) + 1,
+                            stats: {
+                                ...song.stats,
+                                comments: (song.stats?.comments || 0) + 1
+                            }
+                        }
+                        : song
+                ));
+            } else {
+                // It's an episode
+                setEpisodes(prev => prev.map(episode => 
+                    episode.id === trackId 
+                        ? { 
+                            ...episode, 
+                            comments: (episode.comments || 0) + 1,
+                            stats: {
+                                ...episode.stats,
+                                comments: (episode.stats?.comments || 0) + 1
+                            }
+                        }
+                        : episode
+                ));
+            }
+        }
+    };
+
+    // Handle share for music/podcast posts
+    const handleTrackShare = (trackId: string) => {
+        // Update song/episode share count
+        const track = songs.find(s => s.id === trackId) || episodes.find(e => e.id === trackId);
+        if (track) {
+            if ('artist' in track) {
+                // It's a song
+                setSongs(prev => prev.map(song => 
+                    song.id === trackId 
+                        ? { 
+                            ...song, 
+                            shares: (song.shares || 0) + 1,
+                            stats: {
+                                ...song.stats,
+                                shares: (song.stats?.shares || 0) + 1
+                            }
+                        }
+                        : song
+                ));
+            } else {
+                // It's an episode
+                setEpisodes(prev => prev.map(episode => 
+                    episode.id === trackId 
+                        ? { 
+                            ...episode, 
+                            shares: (episode.shares || 0) + 1,
+                            stats: {
+                                ...episode.stats,
+                                shares: (episode.stats?.shares || 0) + 1
+                            }
+                        }
+                        : episode
+                ));
+            }
+        }
     };
 
     const handleVerifyUser = (userId: number) => { if (isAdmin) setUsers(users.map(u => u.id === userId ? { ...u, isVerified: !u.isVerified } : u)); };
@@ -688,6 +1056,52 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const effectiveView = isClient ? view : (initialData?.view || parsedPath.view);
     
+    // Function to render music/podcast posts (used in both homepage and profile)
+    const renderMusicPost = (post: PostType, author: any) => {
+        const song = getSongForPost(post, songs, episodes);
+        if (!song) return null;
+        
+        return (
+            <MusicFeedPost 
+                key={post.id}
+                song={song}
+                currentUser={currentUser}
+                users={users}
+                onPlayTrack={handlePlayTrack}
+                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
+                onLikeTrack={handleLikeTrack}
+                onTrackComment={handleTrackComment}
+                onTrackShare={handleTrackShare}
+                isLiked={likedTracks.includes(song.id)}
+            />
+        );
+    };
+
+    // Function to render regular posts
+    const renderRegularPost = (post: PostType, author: any, isFollowing?: boolean) => {
+        return (
+            <Post 
+                key={post.id} 
+                post={post} 
+                author={author as any} 
+                currentUser={currentUser} 
+                users={users} 
+                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                onReact={handleReact} 
+                onShare={(id) => setActiveSharePostId(id)} 
+                onViewImage={(url) => setFullScreenImage(url)} 
+                onOpenComments={(postId) => setActiveCommentsPostId(postId)} 
+                onVideoClick={(p) => { setActiveReelId(p.id - 200000); setView('reels'); }} 
+                onViewProduct={(p) => setActiveProduct(p)} 
+                onGroupClick={(groupId) => { setInitialGroupIdToView(groupId); setView('groups'); setActiveTab('groups'); }} 
+                onPlayAudioTrack={handlePlayTrack} 
+                onFollow={handleFollowUser} 
+                isFollowing={isFollowing} 
+                onHashtagClick={handleTagClick} 
+            />
+        );
+    };
+    
     return (
         <div className="bg-[#18191A] min-h-screen flex flex-col font-sans">
             {isLoading ? (
@@ -703,7 +1117,21 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     : <Login onLogin={handleLogin} onNavigateToRegister={() => { setShowRegister(true); setShowForgotPassword(false); }} onNavigateToForgotPassword={() => { setShowForgotPassword(true); setShowRegister(false); }} onClose={() => { setView('home'); setCurrentUser(null); }} error={loginError} />
             ) : (
                 <>
-                    {currentAudioTrack && (<GlobalAudioPlayer currentTrack={currentAudioTrack} isPlaying={isAudioPlaying} onTogglePlay={() => setIsAudioPlaying(!isAudioPlaying)} onNext={() => {}} onPrevious={() => {}} onClose={() => { setCurrentAudioTrack(null); setIsAudioPlaying(false); }} onDownload={() => alert("Download started...")} onLike={(id) => setLikedTracks(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])} isLiked={likedTracks.includes(currentAudioTrack.id)} uploaderProfile={users.find(u => u.id === currentAudioTrack.uploaderId)} onArtistClick={(id) => { setSelectedUserId(id); setView('profile'); }} />)}
+                    {currentAudioTrack && (
+                        <GlobalAudioPlayer 
+                            currentTrack={currentAudioTrack} 
+                            isPlaying={isAudioPlaying} 
+                            onTogglePlay={() => setIsAudioPlaying(!isAudioPlaying)} 
+                            onNext={() => {}} 
+                            onPrevious={() => {}} 
+                            onClose={() => { setCurrentAudioTrack(null); setIsAudioPlaying(false); }} 
+                            onDownload={() => alert("Download started...")} 
+                            onLike={(id) => setLikedTracks(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])} 
+                            isLiked={likedTracks.includes(currentAudioTrack.id)} 
+                            uploaderProfile={users.find(u => u.id === currentAudioTrack.uploaderId)} 
+                            onArtistClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                        />
+                    )}
                     <Header 
                         onHomeClick={() => handleNavigate('home')} 
                         onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
@@ -761,73 +1189,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                         if (!author) return null;
                                         const isFollowing = currentUser && author && 'followers' in author ? currentUser.following.includes(author.id) : false;
                                         
-                                        // Handle music posts with MusicFeedPost component
-                                        if (post.type === 'music' && post.audioTrack) {
-                                            return (
-                                                <MusicFeedPost 
-                                                    key={post.id}
-                                                    song={songs.find(s => s.id === post.audioTrack?.id) || {
-                                                        id: post.audioTrack.id,
-                                                        title: post.audioTrack.title,
-                                                        artist: post.audioTrack.artist,
-                                                        cover: post.audioTrack.cover,
-                                                        audioUrl: post.audioTrack.url,
-                                                        duration: post.audioTrack.duration,
-                                                        uploaderId: post.audioTrack.uploaderId
-                                                    }}
-                                                    currentUser={currentUser}
-                                                    users={users}
-                                                    onPlayTrack={handlePlayTrack}
-                                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
-                                                />
-                                            );
-                                        }
-                                        
-                                        // Handle podcast posts with MusicFeedPost component
-                                        if (post.type === 'podcast' && post.audioTrack) {
-                                            return (
-                                                <MusicFeedPost 
-                                                    key={post.id}
-                                                    song={{
-                                                        id: post.audioTrack.id,
-                                                        title: post.audioTrack.title,
-                                                        artist: post.audioTrack.artist,
-                                                        cover: post.audioTrack.cover,
-                                                        audioUrl: post.audioTrack.url,
-                                                        duration: post.audioTrack.duration,
-                                                        uploaderId: post.audioTrack.uploaderId,
-                                                        type: 'podcast'
-                                                    }}
-                                                    currentUser={currentUser}
-                                                    users={users}
-                                                    onPlayTrack={handlePlayTrack}
-                                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
-                                                />
-                                            );
+                                        // Handle music/podcast posts with MusicFeedPost component
+                                        if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
+                                            return renderMusicPost(post, author);
                                         }
                                         
                                         // Handle all other post types with regular Post component
-                                        return (
-                                            <Post 
-                                                key={post.id} 
-                                                post={post} 
-                                                author={author as any} 
-                                                currentUser={currentUser} 
-                                                users={users} 
-                                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
-                                                onReact={handleReact} 
-                                                onShare={(id) => setActiveSharePostId(id)} 
-                                                onViewImage={(url) => setFullScreenImage(url)} 
-                                                onOpenComments={(postId) => setActiveCommentsPostId(postId)} 
-                                                onVideoClick={(p) => { setActiveReelId(p.id - 200000); setView('reels'); }} 
-                                                onViewProduct={(p) => setActiveProduct(p)} 
-                                                onGroupClick={(groupId) => { setInitialGroupIdToView(groupId); setView('groups'); setActiveTab('groups'); }} 
-                                                onPlayAudioTrack={handlePlayTrack} 
-                                                onFollow={handleFollowUser} 
-                                                isFollowing={isFollowing} 
-                                                onHashtagClick={handleTagClick} 
-                                            />
-                                        );
+                                        return renderRegularPost(post, author, isFollowing);
                                     })}
                                 </div>
                             )}
@@ -837,7 +1205,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     user={users.find(u => u.id === selectedUserId)!} 
                                     currentUser={currentUser} 
                                     users={users} 
-                                    posts={posts} 
+                                    posts={posts.filter(p => p.authorId === selectedUserId)} 
                                     onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
                                     onFollow={handleFollowUser} 
                                     onReact={handleReact} 
@@ -861,25 +1229,69 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onDeleteUser={handleDeleteUser} 
                                     onMakeModerator={handleMakeModerator} 
                                     onHashtagClick={handleTagClick} 
+                                    // Add these props to handle music posts in profile
+                                    songs={songs}
+                                    episodes={episodes}
+                                    likedTracks={likedTracks}
+                                    onLikeTrack={handleLikeTrack}
+                                    onTrackComment={handleTrackComment}
+                                    onTrackShare={handleTrackShare}
+                                    // Add function to render music posts in profile
+                                    renderMusicPost={(post: PostType, author: any) => {
+                                        const song = getSongForPost(post, songs, episodes);
+                                        if (!song) return null;
+                                        
+                                        return (
+                                            <MusicFeedPost 
+                                                key={post.id}
+                                                song={song}
+                                                currentUser={currentUser}
+                                                users={users}
+                                                onPlayTrack={handlePlayTrack}
+                                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
+                                                onLikeTrack={handleLikeTrack}
+                                                onTrackComment={handleTrackComment}
+                                                onTrackShare={handleTrackShare}
+                                                isLiked={likedTracks.includes(song.id)}
+                                            />
+                                        );
+                                    }}
+                                    renderRegularPost={renderRegularPost}
                                 />
                             )}
                             
                             {effectiveView === 'single_post' && activeSinglePostId !== null && (
                                 <div className="w-full pt-4 md:px-8 pb-10">
-                                    <Post
-                                        key={activeSinglePostId}
-                                        post={posts.find(p => p.id === activeSinglePostId)!}
-                                        author={users.find(u => u.id === posts.find(p => p.id === activeSinglePostId)!.authorId)!}
-                                        currentUser={currentUser}
-                                        users={users}
-                                        onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
-                                        onReact={handleReact}
-                                        onShare={(id) => setActiveSharePostId(id)}
-                                        onViewImage={setFullScreenImage}
-                                        onOpenComments={setActiveCommentsPostId}
-                                        onVideoClick={() => {}}
-                                        onPlayAudioTrack={handlePlayTrack}
-                                    />
+                                    {(() => {
+                                        const post = posts.find(p => p.id === activeSinglePostId);
+                                        if (!post) return null;
+                                        
+                                        const author = users.find(u => u.id === post.authorId);
+                                        if (!author) return null;
+                                        
+                                        // Handle music/podcast posts
+                                        if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
+                                            return renderMusicPost(post, author);
+                                        }
+                                        
+                                        // Handle regular posts
+                                        return (
+                                            <Post
+                                                key={activeSinglePostId}
+                                                post={post}
+                                                author={author}
+                                                currentUser={currentUser}
+                                                users={users}
+                                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
+                                                onReact={handleReact}
+                                                onShare={(id) => setActiveSharePostId(id)}
+                                                onViewImage={setFullScreenImage}
+                                                onOpenComments={setActiveCommentsPostId}
+                                                onVideoClick={() => {}}
+                                                onPlayAudioTrack={handlePlayTrack}
+                                            />
+                                        );
+                                    })()}
                                 </div>
                             )}
                             
@@ -989,10 +1401,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onDeleteSong={handleDeleteSong} 
                                     onDeleteEpisode={handleDeleteEpisode} 
                                     likedTracks={likedTracks} 
-                                    onToggleLike={(id) => setLikedTracks(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])} 
+                                    onToggleLike={handleLikeTrack} 
                                     onUploadToFeed={handleUploadToFeed} 
                                     onAddSong={handleAddSong} 
                                     onAddEpisode={handleAddEpisode} 
+                                    playHistory={playHistory}
                                 />
                             )}
                             
