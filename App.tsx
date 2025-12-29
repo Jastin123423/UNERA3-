@@ -446,6 +446,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 terms_of_service: '/terms',
                 profile: currentUser ? `/@${currentUser.username || currentUser.id}` : '/login',
                 create_event: '/create-event',
+                brand_view: '/brands', // Add brand view route
             };
             window.history.pushState({}, '', pathMap[targetView] || '/');
         }
@@ -540,6 +541,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 } else {
                     setView('login');
                 }
+                break;
+            case 'brand_view':
+                setView('brands');
+                setActiveTab('brands');
                 break;
             default:
                 setView(targetView);
@@ -1382,8 +1387,16 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         );
     };
 
-    // Function to render regular posts
+    // Function to render regular posts with brand support
     const renderRegularPost = (post: PostType, author: any, isFollowing?: boolean) => {
+        // Check if author is a brand
+        const isBrandAuthor = author?.type === 'brand';
+        
+        // For brand authors, check if user is following
+        const isFollowingBrand = isBrandAuthor && currentUser ? 
+            brands.find(b => b.id === author.id)?.followers.includes(currentUser.id) || false : 
+            false;
+        
         return (
             <Post 
                 key={post.id} 
@@ -1391,7 +1404,17 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 author={author as any} 
                 currentUser={currentUser} 
                 users={users} 
-                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                onProfileClick={(id) => { 
+                    if (isBrandAuthor) {
+                        // For brands, navigate to brands page with the specific brand active
+                        setActiveBrandId(id);
+                        handleNavigate('brand_view');
+                    } else {
+                        // For users, navigate to profile page
+                        setSelectedUserId(id); 
+                        setView('profile');
+                    }
+                }} 
                 onReact={handleReact} 
                 onShare={(id) => setActiveSharePostId(id)} 
                 onViewImage={(url) => setFullScreenImage(url)} 
@@ -1400,8 +1423,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 onViewProduct={(p) => setActiveProduct(p)} 
                 onGroupClick={(groupId) => { setInitialGroupIdToView(groupId); setView('groups'); setActiveTab('groups'); }} 
                 onPlayAudioTrack={handlePlayTrack} 
-                onFollow={handleFollowUser} 
-                isFollowing={isFollowing} 
+                onFollow={isBrandAuthor ? handleFollowBrand : handleFollowUser} 
+                isFollowing={isBrandAuthor ? isFollowingBrand : isFollowing} 
                 onHashtagClick={handleTagClick} 
                 onDeletePost={isAdmin ? handleDeletePost : undefined}
                 isAdmin={isAdmin}
@@ -1495,9 +1518,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                         const author = getAuthorForPost(post, users, brands);
                                         if (!author) return null;
                                         
-                                        const isFollowing = currentUser && 'type' in author && author.type === 'user' 
-                                            ? currentUser.following.includes(author.id)
-                                            : false;
+                                        // Check if following (for users) or following brand (for brands)
+                                        let isFollowing = false;
+                                        if (author.type === 'user' && currentUser) {
+                                            isFollowing = currentUser.following.includes(author.id);
+                                        } else if (author.type === 'brand' && currentUser) {
+                                            const brand = brands.find(b => b.id === author.id);
+                                            isFollowing = brand ? brand.followers.includes(currentUser.id) : false;
+                                        }
                                         
                                         // Handle music/podcast posts with MusicFeedPost component
                                         if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
@@ -1657,13 +1685,27 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 author={author}
                                                 currentUser={currentUser}
                                                 users={users}
-                                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
+                                                onProfileClick={(id) => { 
+                                                    if (author.type === 'brand') {
+                                                        setActiveBrandId(id);
+                                                        handleNavigate('brand_view');
+                                                    } else {
+                                                        setSelectedUserId(id); 
+                                                        setView('profile');
+                                                    }
+                                                }}
                                                 onReact={handleReact}
                                                 onShare={(id) => setActiveSharePostId(id)}
                                                 onViewImage={setFullScreenImage}
                                                 onOpenComments={setActiveCommentsPostId}
                                                 onVideoClick={() => {}}
                                                 onPlayAudioTrack={handlePlayTrack}
+                                                onFollow={author.type === 'brand' ? handleFollowBrand : handleFollowUser}
+                                                isFollowing={author.type === 'brand' && currentUser ? 
+                                                    brands.find(b => b.id === author.id)?.followers.includes(currentUser.id) || false :
+                                                    author.type === 'user' && currentUser ?
+                                                    currentUser.following.includes(author.id) : false}
+                                                onHashtagClick={handleTagClick}
                                                 onDeletePost={isAdmin ? handleDeletePost : undefined}
                                                 isAdmin={isAdmin}
                                             />
