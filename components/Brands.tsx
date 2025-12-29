@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { User, Brand, Post as PostType, Event, LinkPreview, AudioTrack } from '../types';
 import { Post, CreatePostModal } from './Feed';
@@ -178,12 +177,16 @@ interface BrandsPageProps {
     onCreateEvent?: (brandId: number, event: Partial<Event>) => void;
     initialBrandId?: number | null;
     onPlayAudioTrack?: (track: AudioTrack) => void;
+    onUpdateBrandImage?: (brandId: number, type: 'cover' | 'profile', file: File) => void;
+    onDeletePost?: (postId: number) => void;
+    onVerifyBrand?: (brandId: number) => void;
 }
 
 export const BrandsPage: React.FC<BrandsPageProps> = ({ 
     currentUser, brands, posts, users, onCreateBrand, onFollowBrand, 
     onProfileClick, onPostAsBrand, onReact, onShare, onOpenComments,
-    onUpdateBrand, onDeleteBrand, onMessage, onCreateEvent, initialBrandId, onPlayAudioTrack
+    onUpdateBrand, onDeleteBrand, onMessage, onCreateEvent, initialBrandId, onPlayAudioTrack,
+    onUpdateBrandImage, onDeletePost, onVerifyBrand
 }) => {
     const [view, setView] = useState<'list' | 'detail'>('list');
     const [activeBrandId, setActiveBrandId] = useState<number | null>(null);
@@ -232,15 +235,39 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
 
     const handleCreatePost = (text: string, file: File | null, type: any, visibility: any, location?: string, feeling?: string, taggedUsers?: number[], background?: string, linkPreview?: LinkPreview) => {
         if (!activeBrand) return;
-        onPostAsBrand(activeBrand.id, { text, file, type, visibility, location, feeling, taggedUsers, background, linkPreview });
+        
+        // Create proper content object that matches App.tsx expectations
+        const postContent = {
+            text: text,
+            content: text, // Add both text and content for compatibility
+            file: file,
+            type: type,
+            visibility: visibility,
+            location: location,
+            feeling: feeling,
+            taggedUsers: taggedUsers,
+            background: background,
+            linkPreview: linkPreview
+        };
+        
+        console.log("Creating post as brand:", { brandId: activeBrand.id, content: postContent });
+        
+        onPostAsBrand(activeBrand.id, postContent);
         setShowCreatePostModal(false);
     };
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'cover' | 'profile') => {
-        if (e.target.files && e.target.files[0] && activeBrand && onUpdateBrand) {
+        if (e.target.files && e.target.files[0] && activeBrand) {
             const file = e.target.files[0];
-            const url = URL.createObjectURL(file);
-            onUpdateBrand(activeBrand.id, type === 'cover' ? { coverImage: url } : { profileImage: url });
+            
+            if (onUpdateBrandImage) {
+                // Use admin function if available
+                onUpdateBrandImage(activeBrand.id, type, file);
+            } else if (onUpdateBrand) {
+                // Fallback to regular update
+                const url = URL.createObjectURL(file);
+                onUpdateBrand(activeBrand.id, type === 'cover' ? { coverImage: url } : { profileImage: url });
+            }
         }
     };
 
@@ -346,7 +373,7 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
                 <div className="max-w-[1100px] mx-auto">
                     <div className="h-[200px] md:h-[350px] relative group bg-[#3A3B3C]">
                         <img src={activeBrand.coverImage} className="w-full h-full object-cover md:rounded-b-xl" alt="Cover" />
-                        {canManage && (
+                        {(canManage || isPlatformAdmin) && (
                             <div className="absolute bottom-4 right-4 bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-lg cursor-pointer hover:bg-white/20 font-bold text-white text-sm flex items-center gap-2" onClick={() => coverInputRef.current?.click()}>
                                 <i className="fas fa-camera"></i> Edit Cover
                             </div>
@@ -358,7 +385,7 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
                                 <div className="w-[100px] h-[100px] md:w-[140px] md:h-[140px] rounded-full border-4 border-[#242526] overflow-hidden bg-[#242526]">
                                     <img src={activeBrand.profileImage} className="w-full h-full object-cover" alt="" />
                                 </div>
-                                {canManage && (
+                                {(canManage || isPlatformAdmin) && (
                                     <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" onClick={() => profileInputRef.current?.click()}>
                                         <i className="fas fa-camera text-white text-2xl"></i>
                                     </div>
@@ -398,14 +425,30 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
                                         )}
                                     </>
                                 )}
-                                <button onClick={() => setShowOptionsMenu(!showOptionsMenu)} className="bg-[#3A3B3C] text-[#E4E6EB] px-3 py-2 rounded-lg font-bold hover:bg-[#4E4F50] transition-colors">
+                                <button onClick={() => setShowOptionsMenu(!showOptionsMenu)} className="bg-[#3A3B3C] text-[#E4E6EB] px-3 py-2 rounded-lg font-bold hover:bg-[#4E4F50] transition-colors relative">
                                     <i className="fas fa-ellipsis-h"></i>
+                                    {showOptionsMenu && (isPlatformAdmin || canManage) && (
+                                        <div className="absolute top-full right-0 mt-2 w-48 bg-[#242526] border border-[#3E4042] rounded-lg shadow-xl z-20 py-1">
+                                            {isPlatformAdmin && (
+                                                <>
+                                                    {onVerifyBrand && (
+                                                        <div onClick={() => { onVerifyBrand(activeBrand.id); setShowOptionsMenu(false); }} className="px-4 py-2 hover:bg-[#3A3B3C] text-[#1877F2] cursor-pointer flex items-center gap-2">
+                                                            <i className="fas fa-check-circle"></i> {activeBrand.isVerified ? 'Unverify' : 'Verify'} Page
+                                                        </div>
+                                                    )}
+                                                    <div onClick={() => { onDeleteBrand(activeBrand.id); setShowOptionsMenu(false); }} className="px-4 py-2 hover:bg-[#3A3B3C] text-red-500 cursor-pointer flex items-center gap-2">
+                                                        <i className="fas fa-trash-alt"></i> Delete Page
+                                                    </div>
+                                                </>
+                                            )}
+                                            {canManage && (
+                                                <div onClick={() => { setShowEditBrandModal(true); setShowOptionsMenu(false); }} className="px-4 py-2 hover:bg-[#3A3B3C] text-[#E4E6EB] cursor-pointer flex items-center gap-2">
+                                                    <i className="fas fa-cog"></i> Page Settings
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </button>
-                                {showOptionsMenu && isPlatformAdmin && (
-                                    <div className="absolute top-full right-0 mt-2 w-48 bg-[#242526] border border-[#3E4042] rounded-lg shadow-xl z-20 py-1">
-                                         <div onClick={() => { onDeleteBrand(activeBrand.id); setShowOptionsMenu(false); }} className="px-4 py-2 hover:bg-[#3A3B3C] text-red-500 cursor-pointer flex items-center gap-2"><i className="fas fa-trash-alt"></i> Delete Page</div>
-                                    </div>
-                                )}
                             </div>
                         </div>
 
@@ -430,7 +473,7 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
                             <div className="flex items-center gap-3 text-[#B0B3B8]"><i className="fas fa-map-marker-alt w-5 text-center"></i><span>{activeBrand.location || 'Location not added'}</span></div>
                             {activeBrand.website && <div className="flex items-center gap-3 text-[#B0B3B8]"><i className="fas fa-globe w-5 text-center"></i><a href={activeBrand.website.startsWith('http') ? activeBrand.website : `https://${activeBrand.website}`} target="_blank" rel="noreferrer" className="text-[#1877F2] hover:underline truncate">{activeBrand.website}</a></div>}
                             {activeBrand.contactEmail && <div className="flex items-center gap-3 text-[#B0B3B8]"><i className="fas fa-envelope w-5 text-center"></i><span>{activeBrand.contactEmail}</span></div>}
-                            {canManage && <button className="w-full bg-[#3A3B3C] hover:bg-[#4E4F50] text-[#E4E6EB] font-semibold py-2 rounded-md transition-colors text-sm mt-2" onClick={() => setShowEditBrandModal(true)}>Edit Details</button>}
+                            {(canManage || isPlatformAdmin) && <button className="w-full bg-[#3A3B3C] hover:bg-[#4E4F50] text-[#E4E6EB] font-semibold py-2 rounded-md transition-colors text-sm mt-2" onClick={() => setShowEditBrandModal(true)}>Edit Details</button>}
                         </div>
                     </div>
                 </div>
@@ -438,7 +481,7 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
                 <div className="flex-1 min-w-0">
                     {activeTab === 'Posts' && (
                         <>
-                            {canManage && currentUser && (
+                            {(canManage || isPlatformAdmin) && currentUser && (
                                 <>
                                     <div className="bg-[#242526] rounded-xl p-3 md:p-4 mb-4 shadow-sm border border-[#3E4042]">
                                         <div className="flex gap-2 mb-3">
@@ -465,7 +508,18 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
 
                                     {showCreatePostModal && (
                                         <CreatePostModal 
-                                            currentUser={{...currentUser, name: activeBrand.name, profileImage: activeBrand.profileImage} as User} 
+                                            currentUser={{
+                                                id: activeBrand.id,
+                                                name: activeBrand.name,
+                                                profileImage: activeBrand.profileImage,
+                                                email: "", // Required by User type
+                                                password: "", // Required by User type
+                                                role: "user", // Required by User type
+                                                followers: [], // Required by User type
+                                                following: [], // Required by User type
+                                                isVerified: activeBrand.isVerified,
+                                                joinedDate: new Date().toISOString()
+                                            } as User} 
                                             users={users} 
                                             onClose={() => setShowCreatePostModal(false)}
                                             onCreatePost={handleCreatePost}
@@ -488,6 +542,8 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
                                         onVideoClick={() => {}}
                                         onViewImage={() => {}}
                                         onPlayAudioTrack={onPlayAudioTrack}
+                                        onDeletePost={onDeletePost}
+                                        isAdmin={isPlatformAdmin}
                                     />
                                 )) : (
                                     <div className="bg-[#242526] rounded-xl p-8 text-center border border-[#3E4042] mx-4 md:mx-0">
