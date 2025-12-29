@@ -139,6 +139,33 @@ const getSongForPost = (post: PostType, songs: Song[], episodes: Episode[]) => {
     };
 };
 
+// Helper function to get author (user or brand) for a post
+const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
+    // First check if it's a brand post
+    const brand = brands.find(b => b.id === post.authorId);
+    if (brand) {
+        return {
+            ...brand,
+            type: 'brand' as const,
+            name: brand.name,
+            profileImage: brand.profileImage,
+            isVerified: brand.isVerified,
+            id: brand.id
+        };
+    }
+    
+    // Otherwise it's a user post
+    const user = users.find(u => u.id === post.authorId);
+    if (user) {
+        return {
+            ...user,
+            type: 'user' as const
+        };
+    }
+    
+    return null;
+};
+
 export default function App({ initialData, initialPath }: { initialData?: any, initialPath?: string }) {
     const { t } = useLanguage();
 
@@ -268,9 +295,17 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             type: 'video', 
             visibility: 'Public' 
         }));
+        
+        // Combine all posts including brand posts
         const allContent = [...posts, ...productPosts, ...reelPosts];
+        
+        // Log for debugging
+        console.log("All posts for ranking:", allContent.length);
+        console.log("Regular posts:", posts.length);
+        console.log("Brand posts:", posts.filter(p => brands.find(b => b.id === p.authorId)).length);
+        
         return rankFeed(allContent, currentUser, users);
-    }, [posts, reels, products, currentUser, users]);
+    }, [posts, reels, products, currentUser, users, brands]);
 
     // Load data from localStorage
     useEffect(() => {
@@ -282,6 +317,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             const storedLikedTracks = localStorage.getItem('universeLikedTracks');
             const storedProducts = localStorage.getItem('marketplaceProducts');
             const storedBrands = localStorage.getItem('universeBrands');
+            const storedPosts = localStorage.getItem('universePosts');
             
             if (storedUsers) setUsers(JSON.parse(storedUsers));
             if (storedSongs) setSongs(JSON.parse(storedSongs));
@@ -289,6 +325,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             if (storedLikedTracks) setLikedTracks(JSON.parse(storedLikedTracks));
             if (storedProducts) setProducts(JSON.parse(storedProducts));
             if (storedBrands) setBrands(JSON.parse(storedBrands));
+            if (storedPosts) setPosts(JSON.parse(storedPosts));
             
             if (storedUser) {
                 const user = JSON.parse(storedUser);
@@ -341,6 +378,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             localStorage.setItem('universeBrands', JSON.stringify(brands));
         }
     }, [brands, isClient]);
+
+    useEffect(() => {
+        if (isClient) {
+            localStorage.setItem('universePosts', JSON.stringify(posts));
+        }
+    }, [posts, isClient]);
 
     const handleLogin = (email: string, pass: string) => {
         const user = users.find(u => u.email === email && u.password === pass);
@@ -640,7 +683,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             shares: 0, 
             views: 0, 
             type: content.type || 'text', 
-            visibility: 'Public', 
+            visibility: content.visibility || 'Public', 
             location: content.location,
             feeling: content.feeling,
             taggedUsers: content.taggedUsers,
@@ -648,7 +691,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             linkPreview: content.linkPreview 
         };
         
-        console.log("New post created:", newPost);
+        console.log("New brand post created:", newPost);
         setPosts(prev => [newPost, ...prev]);
     };
 
@@ -829,9 +872,22 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleComment = (itemId: number, text: string, attachment?: any, parentId?: number) => {
         if (!currentUser) return;
-        const newComment: Comment = { id: Date.now(), userId: currentUser.id, text, timestamp: 'Just now', likes: 0, attachment };
+        const newComment: Comment = { 
+            id: Date.now(), 
+            userId: currentUser.id, 
+            text, 
+            timestamp: 'Just now', 
+            likes: 0, 
+            attachment,
+            authorName: currentUser.name,
+            authorImage: currentUser.profileImage
+        };
+        
         setPosts(prev => prev.map(p => {
-            if (p.id === itemId) return { ...p, comments: [...p.comments, newComment] };
+            if (p.id === itemId) {
+                const updatedComments = [...p.comments, newComment];
+                return { ...p, comments: updatedComments };
+            }
             return p;
         }));
 
@@ -1364,9 +1420,15 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                         </>
                                     )}
                                     {rankedPosts.map(post => {
-                                        const author = users.find(u => u.id === post.authorId) || brands.find(b => b.id === post.authorId);
-                                        if (!author) return null;
-                                        const isFollowing = currentUser && author && 'followers' in author ? currentUser.following.includes(author.id) : false;
+                                        const author = getAuthorForPost(post, users, brands);
+                                        if (!author) {
+                                            console.log("No author found for post:", post);
+                                            return null;
+                                        }
+                                        
+                                        const isFollowing = currentUser && 'type' in author && author.type === 'user' 
+                                            ? currentUser.following.includes(author.id)
+                                            : false;
                                         
                                         // Handle music/podcast posts with MusicFeedPost component
                                         if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
@@ -1510,7 +1572,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                         const post = posts.find(p => p.id === activeSinglePostId);
                                         if (!post) return null;
                                         
-                                        const author = users.find(u => u.id === post.authorId);
+                                        const author = getAuthorForPost(post, users, brands);
                                         if (!author) return null;
                                         
                                         // Handle music/podcast posts
@@ -1588,26 +1650,24 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                 <BrandsPage 
                                     currentUser={currentUser}
                                     brands={brands}
-                                    posts={posts}  // ADDED: Pass posts to BrandsPage
+                                    posts={posts}
                                     users={users}
-                                    onCreateBrand={handleCreateBrand}  // ADDED: Create brand function
+                                    onCreateBrand={handleCreateBrand}
                                     onFollowBrand={handleFollowBrand}
                                     onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
                                     onPostAsBrand={handlePostAsBrand}
-                                    onReact={handleReact}  // ADDED: React function
-                                    onShare={(id) => setActiveSharePostId(id)}  // ADDED: Share function
-                                    onOpenComments={(postId) => setActiveCommentsPostId(postId)}  // ADDED: Comments function
-                                    onUpdateBrand={handleUpdateBrand}  // ADDED: Update brand function
+                                    onReact={handleReact}
+                                    onShare={(id) => setActiveSharePostId(id)}
+                                    onOpenComments={(postId) => setActiveCommentsPostId(postId)}
+                                    onUpdateBrand={handleUpdateBrand}
                                     onDeleteBrand={handleDeleteBrand}
                                     onMessage={(brandId) => {
-                                        // Optional: Handle brand messaging
                                         const brand = brands.find(b => b.id === brandId);
                                         if (brand && currentUser) {
                                             alert(`Messaging ${brand.name} - Feature coming soon!`);
                                         }
                                     }}
                                     onCreateEvent={(brandId, eventData) => {
-                                        // Handle brand event creation
                                         if (currentUser) {
                                             const eventWithBrand = {
                                                 ...eventData,
@@ -1755,7 +1815,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     )}
                     {activeCommentsPostId && (
                         <CommentsSheet 
-                            post={rankedPosts.find(p => p.id === activeCommentsPostId)!} 
+                            post={posts.find(p => p.id === activeCommentsPostId)!} 
                             currentUser={currentUser || INITIAL_USERS[0]} 
                             users={users} 
                             onClose={() => setActiveCommentsPostId(null)} 
