@@ -1,3 +1,60 @@
+Am getting an error in deployment
+
+Am getting an error in deployment 
+
+2025-12-29T21:39:58.464134Z	Cloning repository...
+2025-12-29T21:39:59.109077Z	From https://github.com/Jastin123423/UNERA3-
+2025-12-29T21:39:59.109743Z	 * branch            5d2edc968f32ad6ce8c3c80044bd6ce69674e056 -> FETCH_HEAD
+2025-12-29T21:39:59.109884Z	
+2025-12-29T21:39:59.145941Z	HEAD is now at 5d2edc9 Update Brands.tsx
+2025-12-29T21:39:59.146305Z	
+2025-12-29T21:39:59.220504Z	
+2025-12-29T21:39:59.220988Z	Using v2 root directory strategy
+2025-12-29T21:39:59.241718Z	Success: Finished cloning repository files
+2025-12-29T21:40:00.913543Z	Checking for configuration in a Wrangler configuration file (BETA)
+2025-12-29T21:40:00.914157Z	
+2025-12-29T21:40:02.013108Z	No wrangler.toml file found. Continuing.
+2025-12-29T21:40:02.082984Z	Detected the following tools from environment: npm@10.9.2, nodejs@22.16.0
+2025-12-29T21:40:02.08377Z	Installing project dependencies: npm install --progress=false
+2025-12-29T21:40:10.471017Z	
+2025-12-29T21:40:10.471301Z	added 71 packages, and audited 72 packages in 8s
+2025-12-29T21:40:10.471446Z	
+2025-12-29T21:40:10.471592Z	10 packages are looking for funding
+2025-12-29T21:40:10.471715Z	  run `npm fund` for details
+2025-12-29T21:40:10.472813Z	
+2025-12-29T21:40:10.473014Z	found 0 vulnerabilities
+2025-12-29T21:40:10.50532Z	Executing user command: npm run build
+2025-12-29T21:40:10.844436Z	
+2025-12-29T21:40:10.844709Z	> unera-social-poa99.5%@0.0.0 build
+2025-12-29T21:40:10.844839Z	> vite build
+2025-12-29T21:40:10.844927Z	
+2025-12-29T21:40:11.120549Z	[36mvite v6.4.1 [32mbuilding for production...[36m[39m
+2025-12-29T21:40:11.199468Z	transforming...
+2025-12-29T21:40:11.617621Z	[32m✓[39m 43 modules transformed.
+2025-12-29T21:40:11.618997Z	[31m✗[39m Build failed in 465ms
+2025-12-29T21:40:11.619231Z	[31merror during build:
+2025-12-29T21:40:11.619363Z	[31mCould not resolve "./Feed/Post" from "components/Brands.tsx"[31m
+2025-12-29T21:40:11.619437Z	file: [36m/opt/buildhome/repo/components/Brands.tsx[31m
+2025-12-29T21:40:11.619537Z	    at getRollupError (file:///opt/buildhome/repo/node_modules/rollup/dist/es/shared/parseAst.js:401:41)
+2025-12-29T21:40:11.619888Z	    at error (file:///opt/buildhome/repo/node_modules/rollup/dist/es/shared/parseAst.js:397:42)
+2025-12-29T21:40:11.61999Z	    at ModuleLoader.handleInvalidResolvedId (file:///opt/buildhome/repo/node_modules/rollup/dist/es/shared/node-entry.js:21661:24)
+2025-12-29T21:40:11.620067Z	    at file:///opt/buildhome/repo/node_modules/rollup/dist/es/shared/node-entry.js:21621:26[39m
+2025-12-29T21:40:11.651509Z	Failed: Error while executing user command. Exited with error code: 1
+2025-12-29T21:40:11.662126Z	Failed: build command exited with code: 1
+2025-12-29T21:40:12.820731Z	Failed: error occurred while running build command
+
+The error is that Vite can't find the import "./Feed/Post" in Brands.tsx file. The issue is likely that the import path is incorrect or the file doesn't exist at that location.
+
+Looking at code, I see you're trying to import Post from ./Feed/Post.
+
+ Can you fix the import paths in Brands.tsx, with only Brands.tsx?
+
+
+
+
+
+
+
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Post as PostType, Brand, Comment, ReactionType } from '../types';
 import { Post } from './Feed/Post';
