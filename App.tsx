@@ -316,6 +316,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             const storedProducts = localStorage.getItem('marketplaceProducts');
             const storedBrands = localStorage.getItem('universeBrands');
             const storedPosts = localStorage.getItem('universePosts');
+            const storedGroups = localStorage.getItem('universeGroups');
             
             if (storedUsers) setUsers(JSON.parse(storedUsers));
             if (storedSongs) setSongs(JSON.parse(storedSongs));
@@ -324,6 +325,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             if (storedProducts) setProducts(JSON.parse(storedProducts));
             if (storedBrands) setBrands(JSON.parse(storedBrands));
             if (storedPosts) setPosts(JSON.parse(storedPosts));
+            if (storedGroups) setGroups(JSON.parse(storedGroups));
             
             if (storedUser) {
                 const user = JSON.parse(storedUser);
@@ -382,6 +384,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             localStorage.setItem('universePosts', JSON.stringify(posts));
         }
     }, [posts, isClient]);
+
+    useEffect(() => {
+        if (isClient) {
+            localStorage.setItem('universeGroups', JSON.stringify(groups));
+        }
+    }, [groups, isClient]);
 
     const handleLogin = (email: string, pass: string) => {
         const user = users.find(u => u.email === email && u.password === pass);
@@ -1351,18 +1359,262 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     
     const handleCreateGroup = (groupData: Partial<Group>) => {
         if (!currentUser) return;
-        const newGroup: Group = { ...groupData, id: `g${Date.now()}`, adminId: currentUser.id, members: [currentUser.id], posts: [], createdDate: Date.now() } as Group;
+        const newGroup: Group = { 
+            ...groupData, 
+            id: `g${Date.now()}`, 
+            adminId: currentUser.id, 
+            members: [currentUser.id], 
+            posts: [], 
+            createdDate: Date.now(),
+            image: groupData.image || `https://ui-avatars.com/api/?name=${groupData.name}&background=random&size=150`,
+            coverImage: groupData.coverImage || 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-1.2.1&auto=format&fit=crop&w=1500&q=80',
+            events: [],
+            memberPostingAllowed: true
+        } as Group;
         setGroups(prev => [newGroup, ...prev]);
     };
-    const handleJoinGroup = (groupId: string) => { if (!currentUser) return; setGroups(prev => prev.map(g => (g.id === groupId && !g.members.includes(currentUser.id)) ? { ...g, members: [...g.members, currentUser.id] } : g)); };
-    const handleLeaveGroup = (groupId: string) => { if (!currentUser) return; setGroups(prev => prev.map(g => (g.id === groupId) ? { ...g, members: g.members.filter(id => id !== currentUser!.id) } : g)); };
-    const handleDeleteGroup = (groupId: string) => { if (!currentUser) return; const group = groups.find(g => g.id === groupId); if (group && (group.adminId === currentUser.id || isAdmin)) { if (window.confirm("Are you sure you want to permanently delete this group?")) { setGroups(prev => prev.filter(g => g.id !== groupId)); } } };
-    const handleUpdateGroupImage = (groupId: string, type: 'cover' | 'profile', file: File) => { const url = URL.createObjectURL(file); setGroups(prev => prev.map(g => g.id === groupId ? (type === 'cover' ? { ...g, coverImage: url } : { ...g, image: url }) : g)); };
-    const handlePostToGroup = (groupId: string, content: string, file: File | null, type: any) => { if (!currentUser) return; const newPost: GroupPost = { id: Date.now(), authorId: currentUser.id, content, image: file && type === 'image' ? URL.createObjectURL(file) : undefined, video: file && type === 'video' ? URL.createObjectURL(file) : undefined, timestamp: Date.now(), reactions: [], comments: [], shares: 0 }; setGroups(prev => prev.map(g => g.id === groupId ? { ...g, posts: [newPost, ...g.posts] } : g)); const newFeedPost: PostType = { ...newPost, type, visibility: 'Public', timestamp: 'Just now', createdAt: newPost.timestamp, groupId, groupName: groups.find(g => g.id === groupId)?.name }; setPosts(prev => [newFeedPost, ...prev]); };
-    const handleReactGroupPost = (groupId: string, postId: number, type: ReactionType) => { if (!currentUser) return; setGroups(prev => prev.map(g => { if (g.id === groupId) { const updatedPosts = g.posts.map(p => { if (p.id === postId) { const reactions = p.reactions; const existing = reactions.find(r => r.userId === currentUser.id); let newReactions = [...reactions]; if (existing) { if (existing.type === type) newReactions = newReactions.filter(r => r.userId !== currentUser!.id); else newReactions = newReactions.map(r => r.userId === currentUser!.id ? { ...r, type } : r); } else { newReactions.push({ userId: currentUser!.id, type }); } return { ...p, reactions: newReactions }; } return p; }); return { ...g, posts: updatedPosts }; } return g; })); };
-    const handleUpdateGroupSettings = (groupId: string, settings: Partial<Group>) => { setGroups(prev => prev.map(g => g.id === groupId ? { ...g, ...settings } : g)); };
-    const handleRemoveMember = (groupId: string, memberId: number) => { const group = groups.find(g => g.id === groupId); if (currentUser && group && (group.adminId === currentUser.id || isAdmin)) { setGroups(prev => prev.map(g => g.id === groupId ? { ...g, members: g.members.filter(id => id !== memberId) } : g)); } };
-    const handleDeleteGroupPost = (groupId: string, postId: number) => { const group = groups.find(g => g.id === groupId); const post = group?.posts.find(p => p.id === postId); if (currentUser && group && post && (group.adminId === currentUser.id || isAdmin || post.authorId === currentUser.id)) { setGroups(prev => prev.map(g => (g.id === groupId) ? { ...g, posts: g.posts.filter(p => p.id !== postId) } : g)); } };
+    
+    const handleJoinGroup = (groupId: string) => { 
+        if (!currentUser) return; 
+        setGroups(prev => prev.map(g => 
+            (g.id === groupId && !g.members.includes(currentUser.id)) 
+                ? { ...g, members: [...g.members, currentUser.id] } 
+                : g
+        )); 
+    };
+    
+    const handleLeaveGroup = (groupId: string) => { 
+        if (!currentUser) return; 
+        setGroups(prev => prev.map(g => 
+            (g.id === groupId) 
+                ? { ...g, members: g.members.filter(id => id !== currentUser!.id) } 
+                : g
+        )); 
+    };
+    
+    const handleDeleteGroup = (groupId: string) => { 
+        if (!currentUser) return; 
+        const group = groups.find(g => g.id === groupId); 
+        if (group && (group.adminId === currentUser.id || isAdmin)) { 
+            if (window.confirm("Are you sure you want to permanently delete this group?")) { 
+                setGroups(prev => prev.filter(g => g.id !== groupId)); 
+            } 
+        } 
+    };
+    
+    const handleUpdateGroupImage = (groupId: string, type: 'cover' | 'profile', file: File) => { 
+        const url = URL.createObjectURL(file); 
+        setGroups(prev => prev.map(g => 
+            g.id === groupId 
+                ? (type === 'cover' 
+                    ? { ...g, coverImage: url } 
+                    : { ...g, image: url }) 
+                : g
+        )); 
+    };
+    
+    const handlePostToGroup = (groupId: string, content: string, file: File | null, type: any, background?: string) => { 
+        if (!currentUser) return; 
+        const newPost: GroupPost = { 
+            id: Date.now(), 
+            authorId: currentUser.id, 
+            content, 
+            image: file && type === 'image' ? URL.createObjectURL(file) : undefined, 
+            video: file && type === 'video' ? URL.createObjectURL(file) : undefined, 
+            timestamp: Date.now(), 
+            reactions: [], 
+            comments: [], 
+            shares: 0,
+            background: background
+        }; 
+        setGroups(prev => prev.map(g => 
+            g.id === groupId 
+                ? { ...g, posts: [newPost, ...g.posts] } 
+                : g
+        )); 
+        const newFeedPost: PostType = { 
+            ...newPost, 
+            type, 
+            visibility: 'Public', 
+            timestamp: 'Just now', 
+            createdAt: newPost.timestamp, 
+            groupId, 
+            groupName: groups.find(g => g.id === groupId)?.name 
+        }; 
+        setPosts(prev => [newFeedPost, ...prev]); 
+    };
+    
+    const handleCreateGroupEvent = (groupId: string, eventData: Partial<Event>) => {
+        if (!currentUser) return;
+        const newEvent: Event = { 
+            ...eventData, 
+            id: Date.now(), 
+            attendees: [currentUser.id], 
+            interestedIds: [],
+            groupId: groupId,
+            groupName: groups.find(g => g.id === groupId)?.name
+        } as Event;
+        
+        // Add event to the group
+        setGroups(prev => prev.map(g => 
+            g.id === groupId 
+                ? { ...g, events: [...(g.events || []), newEvent] } 
+                : g
+        ));
+        
+        // Also add to global events
+        setEvents(prev => [newEvent, ...prev]);
+        
+        // Create a post about the event
+        const eventPost: PostType = { 
+            id: Date.now() + 1, 
+            authorId: currentUser.id, 
+            content: `is hosting a new event in ${groups.find(g => g.id === groupId)?.name}: ${newEvent.title}`, 
+            timestamp: 'Just now', 
+            createdAt: Date.now(), 
+            reactions: [], 
+            comments: [], 
+            shares: 0, 
+            type: 'event', 
+            visibility: 'Public', 
+            event: newEvent, 
+            eventId: newEvent.id,
+            groupId: groupId,
+            groupName: groups.find(g => g.id === groupId)?.name
+        };
+        setPosts(prev => [eventPost, ...prev]);
+    };
+    
+    const handleInviteToGroup = (groupId: string, userIds: number[]) => {
+        if (!currentUser) return;
+        setGroups(prev => prev.map(g => 
+            g.id === groupId 
+                ? { 
+                    ...g, 
+                    members: [...new Set([...g.members, ...userIds])] 
+                } 
+                : g
+        ));
+        
+        // Send notifications to invited users
+        const newNotifications: Notification[] = userIds.map(userId => ({
+            id: Date.now() + userId,
+            userId: userId,
+            senderId: currentUser.id,
+            type: 'group_invite',
+            content: `invited you to join ${groups.find(g => g.id === groupId)?.name}`,
+            groupId: groupId,
+            timestamp: Date.now(),
+            read: false,
+        }));
+        setNotifications(prev => [...newNotifications, ...prev]);
+        
+        alert(`Invited ${userIds.length} user(s) to the group!`);
+    };
+    
+    const handleReactGroupPost = (groupId: string, postId: number, type: ReactionType) => { 
+        if (!currentUser) return; 
+        setGroups(prev => prev.map(g => {
+            if (g.id === groupId) {
+                const updatedPosts = g.posts.map(p => {
+                    if (p.id === postId) {
+                        const reactions = p.reactions || [];
+                        const existing = reactions.find(r => r.userId === currentUser.id);
+                        let newReactions = [...reactions];
+                        if (existing) {
+                            if (existing.type === type) {
+                                newReactions = newReactions.filter(r => r.userId !== currentUser!.id);
+                            } else {
+                                newReactions = newReactions.map(r => 
+                                    r.userId === currentUser!.id ? { ...r, type } : r
+                                );
+                            }
+                        } else {
+                            newReactions.push({ userId: currentUser!.id, type });
+                        }
+                        return { ...p, reactions: newReactions };
+                    }
+                    return p;
+                });
+                return { ...g, posts: updatedPosts };
+            }
+            return g;
+        }));
+    };
+    
+    const handleOpenGroupComments = (groupId: string, postId: number) => {
+        // For now, we'll use the existing comments system with a modified post
+        const group = groups.find(g => g.id === groupId);
+        if (group) {
+            const groupPost = group.posts.find(p => p.id === postId);
+            if (groupPost) {
+                // Convert GroupPost to PostType for CommentsSheet
+                const postForComments: PostType = {
+                    ...groupPost,
+                    type: groupPost.video ? 'video' : (groupPost.image ? 'image' : 'text'),
+                    visibility: 'Public',
+                    groupId: groupId,
+                    groupName: group.name
+                };
+                // We need to store this temporary post for comments
+                // For simplicity, we'll use a temporary ID
+                const tempPostId = `group_${groupId}_${postId}`;
+                // You might need to implement a separate group comments system
+                console.log("Opening comments for group post:", postForComments);
+                alert("Group comments feature coming soon!");
+            }
+        }
+    };
+    
+    const handleShareGroupPost = (groupId: string, postId: number) => {
+        const group = groups.find(g => g.id === groupId);
+        if (group) {
+            const groupPost = group.posts.find(p => p.id === postId);
+            if (groupPost) {
+                // Create a shareable post
+                const shareablePost: PostType = {
+                    ...groupPost,
+                    type: groupPost.video ? 'video' : (groupPost.image ? 'image' : 'text'),
+                    visibility: 'Public',
+                    timestamp: 'Just now',
+                    createdAt: Date.now(),
+                    groupId: groupId,
+                    groupName: group.name
+                };
+                setPosts(prev => [shareablePost, ...prev]);
+                alert("Group post shared to your feed!");
+            }
+        }
+    };
+    
+    const handleUpdateGroupSettings = (groupId: string, settings: Partial<Group>) => { 
+        setGroups(prev => prev.map(g => 
+            g.id === groupId ? { ...g, ...settings } : g
+        )); 
+    };
+    
+    const handleRemoveMember = (groupId: string, memberId: number) => { 
+        const group = groups.find(g => g.id === groupId); 
+        if (currentUser && group && (group.adminId === currentUser.id || isAdmin)) { 
+            setGroups(prev => prev.map(g => 
+                g.id === groupId 
+                    ? { ...g, members: g.members.filter(id => id !== memberId) } 
+                    : g
+            )); 
+        } 
+    };
+    
+    const handleDeleteGroupPost = (groupId: string, postId: number) => { 
+        const group = groups.find(g => g.id === groupId); 
+        const post = group?.posts.find(p => p.id === postId); 
+        if (currentUser && group && post && (group.adminId === currentUser.id || isAdmin || post.authorId === currentUser.id)) { 
+            setGroups(prev => prev.map(g => 
+                (g.id === groupId) 
+                    ? { ...g, posts: g.posts.filter(p => p.id !== postId) } 
+                    : g
+            )); 
+        } 
+    };
 
     const effectiveView = isClient ? view : (initialData?.view || parsedPath.view);
     
@@ -1743,19 +1995,24 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                 <GroupsPage 
                                     groups={groups} 
                                     currentUser={currentUser} 
+                                    users={users} 
                                     initialGroupId={initialGroupIdToView} 
-                                    onGroupClick={(groupId) => { setInitialGroupIdToView(groupId); }} 
-                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
                                     onCreateGroup={handleCreateGroup} 
                                     onJoinGroup={handleJoinGroup} 
                                     onLeaveGroup={handleLeaveGroup} 
                                     onDeleteGroup={handleDeleteGroup} 
                                     onUpdateGroupImage={handleUpdateGroupImage} 
                                     onPostToGroup={handlePostToGroup} 
-                                    onReactGroupPost={handleReactGroupPost} 
-                                    onUpdateGroupSettings={handleUpdateGroupSettings} 
-                                    onRemoveMember={handleRemoveMember} 
+                                    onCreateGroupEvent={handleCreateGroupEvent} 
+                                    onInviteToGroup={handleInviteToGroup} 
+                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                    onLikePost={handleReactGroupPost} 
+                                    onOpenComments={handleOpenGroupComments} 
+                                    onSharePost={handleShareGroupPost} 
                                     onDeleteGroupPost={handleDeleteGroupPost} 
+                                    onRemoveMember={handleRemoveMember} 
+                                    onUpdateGroupSettings={handleUpdateGroupSettings} 
+                                    onPlayAudioTrack={handlePlayAudioTrack} 
                                 />
                             )}
                             
