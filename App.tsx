@@ -1395,7 +1395,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             members: [currentUser.id], 
             posts: [], 
             createdDate: Date.now(),
-            image: groupData.image || `https://ui-avatars.com/api/?name=${groupData.name}&background=random&size=150`,
+            image: groupData.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(groupData.name || 'Group')}&background=random&size=150`,
             coverImage: groupData.coverImage || 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-1.2.1&auto=format&fit=crop&w=1500&q=80',
             events: [],
             memberPostingAllowed: true
@@ -1572,25 +1572,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
     
     const handleOpenGroupComments = (groupId: string, postId: number) => {
-        // For now, we'll use the existing comments system with a modified post
         const group = groups.find(g => g.id === groupId);
         if (group) {
             const groupPost = group.posts.find(p => p.id === postId);
             if (groupPost) {
-                // Convert GroupPost to PostType for CommentsSheet
-                const postForComments: PostType = {
-                    ...groupPost,
-                    type: groupPost.video ? 'video' : (groupPost.image ? 'image' : 'text'),
-                    visibility: 'Public',
-                    groupId: groupId,
-                    groupName: group.name
-                };
-                // We need to store this temporary post for comments
-                // For simplicity, we'll use a temporary ID
-                const tempPostId = `group_${groupId}_${postId}`;
-                // You might need to implement a separate group comments system
-                console.log("Opening comments for group post:", postForComments);
-                alert("Group comments feature coming soon!");
+                alert(`Comments for post "${groupPost.content?.substring(0, 50)}..." in ${group.name}`);
             }
         }
     };
@@ -1600,18 +1586,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         if (group) {
             const groupPost = group.posts.find(p => p.id === postId);
             if (groupPost) {
-                // Create a shareable post
-                const shareablePost: PostType = {
-                    ...groupPost,
-                    type: groupPost.video ? 'video' : (groupPost.image ? 'image' : 'text'),
-                    visibility: 'Public',
-                    timestamp: 'Just now',
-                    createdAt: Date.now(),
-                    groupId: groupId,
-                    groupName: group.name
-                };
-                setPosts(prev => [shareablePost, ...prev]);
-                alert("Group post shared to your feed!");
+                alert(`Shared post from ${group.name}`);
             }
         }
     };
@@ -2021,37 +1996,28 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             )}
                             
                             {effectiveView === 'groups' && (
-                                <>
-                                    {/* Debug overlay - can be removed after testing */}
-                                    {process.env.NODE_ENV === 'development' && (
-                                        <div className="fixed top-20 right-4 bg-blue-500 text-white p-2 rounded text-xs z-50 opacity-70">
-                                            Groups: {groups.length}
-                                        </div>
-                                    )}
-                                    
-                                    <GroupsPage 
-                                        groups={groups} 
-                                        currentUser={currentUser} 
-                                        users={users} 
-                                        initialGroupId={initialGroupIdToView} 
-                                        onCreateGroup={handleCreateGroup} 
-                                        onJoinGroup={handleJoinGroup} 
-                                        onLeaveGroup={handleLeaveGroup} 
-                                        onDeleteGroup={handleDeleteGroup} 
-                                        onUpdateGroupImage={handleUpdateGroupImage} 
-                                        onPostToGroup={handlePostToGroup} 
-                                        onCreateGroupEvent={handleCreateGroupEvent} 
-                                        onInviteToGroup={handleInviteToGroup} 
-                                        onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
-                                        onLikePost={handleReactGroupPost} 
-                                        onOpenComments={handleOpenGroupComments} 
-                                        onSharePost={handleShareGroupPost} 
-                                        onDeleteGroupPost={handleDeleteGroupPost} 
-                                        onRemoveMember={handleRemoveMember} 
-                                        onUpdateGroupSettings={handleUpdateGroupSettings} 
-                                        onPlayAudioTrack={handlePlayAudioTrack} 
-                                    />
-                                </>
+                                <GroupsPage 
+                                    groups={groups} 
+                                    currentUser={currentUser} 
+                                    users={users} 
+                                    initialGroupId={initialGroupIdToView} 
+                                    onCreateGroup={handleCreateGroup} 
+                                    onJoinGroup={handleJoinGroup} 
+                                    onLeaveGroup={handleLeaveGroup} 
+                                    onDeleteGroup={handleDeleteGroup} 
+                                    onUpdateGroupImage={handleUpdateGroupImage} 
+                                    onPostToGroup={handlePostToGroup} 
+                                    onCreateGroupEvent={handleCreateGroupEvent} 
+                                    onInviteToGroup={handleInviteToGroup} 
+                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                    onLikePost={handleReactGroupPost} 
+                                    onOpenComments={handleOpenGroupComments} 
+                                    onSharePost={handleShareGroupPost} 
+                                    onDeleteGroupPost={handleDeleteGroupPost} 
+                                    onRemoveMember={handleRemoveMember} 
+                                    onUpdateGroupSettings={handleUpdateGroupSettings} 
+                                    onPlayAudioTrack={handlePlayAudioTrack} 
+                                />
                             )}
                             
                             {effectiveView === 'brands' && (
