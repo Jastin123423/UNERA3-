@@ -1352,6 +1352,35 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
+    // ========== MISSING FUNCTIONS ADDED ==========
+    const handleDeleteSong = (songId: string) => {
+        if (!currentUser || !isAdmin) {
+            alert("Only admins can delete songs");
+            return;
+        }
+        
+        if (window.confirm("Are you sure you want to delete this song?")) {
+            setSongs(prev => prev.filter(s => s.id !== songId));
+            // Also delete any posts with this audioTrack
+            setPosts(prev => prev.filter(p => !p.audioTrack || p.audioTrack.id !== songId));
+            alert("Song deleted successfully");
+        }
+    };
+
+    const handleDeleteEpisode = (episodeId: string) => {
+        if (!currentUser || !isAdmin) {
+            alert("Only admins can delete episodes");
+            return;
+        }
+        
+        if (window.confirm("Are you sure you want to delete this episode?")) {
+            setEpisodes(prev => prev.filter(e => e.id !== episodeId));
+            // Also delete any posts with this audioTrack
+            setPosts(prev => prev.filter(p => !p.audioTrack || p.audioTrack.id !== episodeId));
+            alert("Episode deleted successfully");
+        }
+    };
+
     const handleVerifyUser = (userId: number) => { if (isAdmin) setUsers(users.map(u => u.id === userId ? { ...u, isVerified: !u.isVerified } : u)); };
     const handleRestrictUser = (userId: number) => { if (isAdmin) setUsers(users.map(u => u.id === userId ? { ...u, isRestricted: true, restrictedUntil: Date.now() + 24 * 60 * 60 * 1000 } : u)); };
     const handleDeleteUser = (userId: number) => { if (isAdmin && window.confirm("Delete this user and all their content? This is irreversible.")) { setUsers(users.filter(u => u.id !== userId)); setPosts(posts.filter(p => p.authorId !== userId)); setReels(reels.filter(r => r.userId !== userId)); setStories(stories.filter(s => s.userId !== userId)); } };
@@ -1992,28 +2021,37 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             )}
                             
                             {effectiveView === 'groups' && (
-                                <GroupsPage 
-                                    groups={groups} 
-                                    currentUser={currentUser} 
-                                    users={users} 
-                                    initialGroupId={initialGroupIdToView} 
-                                    onCreateGroup={handleCreateGroup} 
-                                    onJoinGroup={handleJoinGroup} 
-                                    onLeaveGroup={handleLeaveGroup} 
-                                    onDeleteGroup={handleDeleteGroup} 
-                                    onUpdateGroupImage={handleUpdateGroupImage} 
-                                    onPostToGroup={handlePostToGroup} 
-                                    onCreateGroupEvent={handleCreateGroupEvent} 
-                                    onInviteToGroup={handleInviteToGroup} 
-                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
-                                    onLikePost={handleReactGroupPost} 
-                                    onOpenComments={handleOpenGroupComments} 
-                                    onSharePost={handleShareGroupPost} 
-                                    onDeleteGroupPost={handleDeleteGroupPost} 
-                                    onRemoveMember={handleRemoveMember} 
-                                    onUpdateGroupSettings={handleUpdateGroupSettings} 
-                                    onPlayAudioTrack={handlePlayAudioTrack} 
-                                />
+                                <>
+                                    {/* Debug overlay - can be removed after testing */}
+                                    {process.env.NODE_ENV === 'development' && (
+                                        <div className="fixed top-20 right-4 bg-blue-500 text-white p-2 rounded text-xs z-50 opacity-70">
+                                            Groups: {groups.length}
+                                        </div>
+                                    )}
+                                    
+                                    <GroupsPage 
+                                        groups={groups} 
+                                        currentUser={currentUser} 
+                                        users={users} 
+                                        initialGroupId={initialGroupIdToView} 
+                                        onCreateGroup={handleCreateGroup} 
+                                        onJoinGroup={handleJoinGroup} 
+                                        onLeaveGroup={handleLeaveGroup} 
+                                        onDeleteGroup={handleDeleteGroup} 
+                                        onUpdateGroupImage={handleUpdateGroupImage} 
+                                        onPostToGroup={handlePostToGroup} 
+                                        onCreateGroupEvent={handleCreateGroupEvent} 
+                                        onInviteToGroup={handleInviteToGroup} 
+                                        onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                        onLikePost={handleReactGroupPost} 
+                                        onOpenComments={handleOpenGroupComments} 
+                                        onSharePost={handleShareGroupPost} 
+                                        onDeleteGroupPost={handleDeleteGroupPost} 
+                                        onRemoveMember={handleRemoveMember} 
+                                        onUpdateGroupSettings={handleUpdateGroupSettings} 
+                                        onPlayAudioTrack={handlePlayAudioTrack} 
+                                    />
+                                </>
                             )}
                             
                             {effectiveView === 'brands' && (
