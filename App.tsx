@@ -22,6 +22,65 @@ import { User, Post as PostType, Story, Reel, Notification, Message, Event, Prod
 import { INITIAL_USERS, INITIAL_POSTS, INITIAL_STORIES, INITIAL_REELS, INITIAL_EVENTS, INITIAL_GROUPS, INITIAL_BRANDS, MOCK_SONGS, MOCK_EPISODES } from './constants';
 import { rankFeed } from './utils/ranking'; 
 
+// ========== UTILITY FUNCTIONS ==========
+const formatRelativeTime = (timestamp: number): string => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    const weeks = Math.floor(days / 7);
+    const months = Math.floor(days / 30);
+    const years = Math.floor(days / 365);
+
+    if (seconds < 60) {
+        return 'Just now';
+    } else if (minutes < 60) {
+        return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
+    } else if (hours < 24) {
+        return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+    } else if (days < 7) {
+        return `${days} ${days === 1 ? 'day' : 'days'} ago`;
+    } else if (weeks < 4) {
+        return `${weeks} ${weeks === 1 ? 'week' : 'weeks'} ago`;
+    } else if (months < 12) {
+        return `${months} ${months === 1 ? 'month' : 'months'} ago`;
+    } else {
+        return `${years} ${years === 1 ? 'year' : 'years'} ago`;
+    }
+};
+
+// Format date for detailed timestamp (e.g., "Monday at 3:45 PM")
+const formatDetailedTime = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const isToday = date.getDate() === now.getDate() && 
+                    date.getMonth() === now.getMonth() && 
+                    date.getFullYear() === now.getFullYear();
+    const isYesterday = date.getDate() === yesterday.getDate() && 
+                       date.getMonth() === yesterday.getMonth() && 
+                       date.getFullYear() === yesterday.getFullYear();
+    
+    const timeString = date.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+    });
+    
+    if (isToday) {
+        return `Today at ${timeString}`;
+    } else if (isYesterday) {
+        return `Yesterday at ${timeString}`;
+    } else {
+        const day = date.toLocaleDateString('en-US', { weekday: 'long' });
+        return `${day} at ${timeString}`;
+    }
+};
+
 const getPath = () => {
     if (typeof window !== 'undefined') {
         return window.location.pathname;
@@ -176,7 +235,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     }, []);
 
     const [users, setUsers] = useState<User[]>(initialData?.users || INITIAL_USERS);
-    const [posts, setPosts] = useState<PostType[]>(initialData?.posts || INITIAL_POSTS);
+    const [posts, setPosts] = useState<PostType[]>(initialData?.posts || INITIAL_POSTS.map(post => ({
+        ...post,
+        timestamp: formatRelativeTime(post.createdAt),
+        detailedTimestamp: formatDetailedTime(post.createdAt)
+    })));
     const [stories, setStories] = useState<Story[]>(INITIAL_STORIES.map(s => ({...s, createdAt: Date.now(), user: (initialData?.users || INITIAL_USERS).find((u: User) => u.id === s.userId)}))); 
     const [reels, setReels] = useState<Reel[]>(INITIAL_REELS);
     const [events, setEvents] = useState<Event[]>(INITIAL_EVENTS);
@@ -272,7 +335,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: p.id + 100000, 
             authorId: p.sellerId, 
             content: `Just listed a new item: ${p.title}`, 
-            timestamp: 'Just now', 
+            timestamp: formatRelativeTime(p.date), 
+            detailedTimestamp: formatDetailedTime(p.date),
             createdAt: p.date, 
             reactions: [], 
             comments: [], 
@@ -288,7 +352,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             authorId: reel.userId, 
             content: reel.caption, 
             video: reel.videoUrl, 
-            timestamp: 'Recently', 
+            timestamp: formatRelativeTime(reel.createdAt), 
+            detailedTimestamp: formatDetailedTime(reel.createdAt),
             createdAt: reel.createdAt, 
             reactions: reel.reactions, 
             comments: reel.comments, 
@@ -324,7 +389,16 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             if (storedLikedTracks) setLikedTracks(JSON.parse(storedLikedTracks));
             if (storedProducts) setProducts(JSON.parse(storedProducts));
             if (storedBrands) setBrands(JSON.parse(storedBrands));
-            if (storedPosts) setPosts(JSON.parse(storedPosts));
+            if (storedPosts) {
+                const parsedPosts = JSON.parse(storedPosts);
+                // Update timestamps for loaded posts
+                const updatedPosts = parsedPosts.map((post: PostType) => ({
+                    ...post,
+                    timestamp: formatRelativeTime(post.createdAt),
+                    detailedTimestamp: formatDetailedTime(post.createdAt)
+                }));
+                setPosts(updatedPosts);
+            }
             if (storedGroups) setGroups(JSON.parse(storedGroups));
             
             if (storedUser) {
@@ -390,6 +464,27 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             localStorage.setItem('universeGroups', JSON.stringify(groups));
         }
     }, [groups, isClient]);
+
+    // Update post timestamps periodically (every minute)
+    useEffect(() => {
+        if (!isClient) return;
+        
+        const updateTimestamps = () => {
+            setPosts(prev => prev.map(post => ({
+                ...post,
+                timestamp: formatRelativeTime(post.createdAt),
+                detailedTimestamp: formatDetailedTime(post.createdAt)
+            })));
+        };
+        
+        // Update initially
+        updateTimestamps();
+        
+        // Update every minute to keep timestamps accurate
+        const interval = setInterval(updateTimestamps, 60000);
+        
+        return () => clearInterval(interval);
+    }, [isClient]);
 
     const handleLogin = (email: string, pass: string) => {
         const user = users.find(u => u.email === email && u.password === pass);
@@ -616,14 +711,16 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleCreatePost = (text: string, file: File | null, type: any, visibility: any, location?: string, feeling?: string, taggedUsers?: number[], background?: string, linkPreview?: LinkPreview) => {
         if (!currentUser) return;
+        const createdAt = Date.now();
         const newPost: PostType = { 
-            id: Date.now(), 
+            id: createdAt, 
             authorId: currentUser.id, 
             content: text, 
             image: file && type === 'image' ? URL.createObjectURL(file) : undefined, 
             video: file && type === 'video' ? URL.createObjectURL(file) : undefined, 
-            timestamp: 'Just now', 
-            createdAt: Date.now(), 
+            timestamp: formatRelativeTime(createdAt),
+            detailedTimestamp: formatDetailedTime(createdAt),
+            createdAt, 
             reactions: [], 
             comments: [], 
             shares: 0, 
@@ -714,14 +811,16 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const handlePostAsBrand = (brandId: number, content: any) => {
         console.log("Creating post as brand:", { brandId, content });
         
+        const createdAt = Date.now();
         const newPost: PostType = { 
-            id: Date.now(), 
+            id: createdAt, 
             authorId: brandId,  // CRITICAL: This must be the brand ID, not user ID
             content: content.text || content.content || '', 
             image: content.file && content.type === 'image' ? URL.createObjectURL(content.file) : undefined, 
             video: content.file && content.type === 'video' ? URL.createObjectURL(content.file) : undefined, 
-            timestamp: 'Just now', 
-            createdAt: Date.now(), 
+            timestamp: formatRelativeTime(createdAt),
+            detailedTimestamp: formatDetailedTime(createdAt),
+            createdAt, 
             reactions: [], 
             comments: [], 
             shares: 0, 
@@ -860,7 +959,19 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleCreateReel = (videoFile: File, caption: string, song?: Song | { name: string, url: string }, effectName?: string) => {
         if (!currentUser) return;
-        const newReel: Reel = { id: Date.now(), userId: currentUser.id, videoUrl: URL.createObjectURL(videoFile), caption, songName: song ? (song as Song).title || (song as {name: string}).name : 'Original Audio', effectName: effectName, createdAt: Date.now(), reactions: [], comments: [], shares: 0, };
+        const createdAt = Date.now();
+        const newReel: Reel = { 
+            id: createdAt, 
+            userId: currentUser.id, 
+            videoUrl: URL.createObjectURL(videoFile), 
+            caption, 
+            songName: song ? (song as Song).title || (song as {name: string}).name : 'Original Audio', 
+            effectName: effectName, 
+            createdAt, 
+            reactions: [], 
+            comments: [], 
+            shares: 0 
+        };
         setReels(prev => [newReel, ...prev]);
     };
 
@@ -894,9 +1005,24 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleCreateEvent = (eventData: Partial<Event>) => {
         if (!currentUser) return;
-        const newEvent: Event = { ...eventData, id: Date.now(), attendees: [currentUser.id], interestedIds: [] } as Event;
+        const createdAt = Date.now();
+        const newEvent: Event = { ...eventData, id: createdAt, attendees: [currentUser.id], interestedIds: [] } as Event;
         setEvents(prev => [newEvent, ...prev]);
-        const eventPost: PostType = { id: Date.now() + 1, authorId: currentUser.id, content: `is hosting a new event: ${newEvent.title}`, timestamp: 'Just now', createdAt: Date.now(), reactions: [], comments: [], shares: 0, type: 'event', visibility: 'Public', event: newEvent, eventId: newEvent.id };
+        const eventPost: PostType = { 
+            id: createdAt + 1, 
+            authorId: currentUser.id, 
+            content: `is hosting a new event: ${newEvent.title}`, 
+            timestamp: formatRelativeTime(createdAt),
+            detailedTimestamp: formatDetailedTime(createdAt),
+            createdAt, 
+            reactions: [], 
+            comments: [], 
+            shares: 0, 
+            type: 'event', 
+            visibility: 'Public', 
+            event: newEvent, 
+            eventId: newEvent.id 
+        };
         setPosts(prev => [eventPost, ...prev]);
     };
 
@@ -959,7 +1085,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: Date.now(), 
             userId: currentUser.id, 
             text, 
-            timestamp: 'Just now', 
+            timestamp: formatRelativeTime(Date.now()),
+            detailedTimestamp: formatDetailedTime(Date.now()),
             likes: 0, 
             attachment,
             authorName: currentUser.name,
@@ -1017,13 +1144,15 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             }
         }
         
+        const createdAt = Date.now();
         const newSharedPost: PostType = { 
             ...sourcePost, 
-            id: Date.now(), 
+            id: createdAt, 
             authorId: currentUser.id, 
             content: extraCaption ? `${extraCaption}\n\n${sourcePost.content || ''}` : sourcePost.content, 
-            timestamp: 'Just now', 
-            createdAt: Date.now(), 
+            timestamp: formatRelativeTime(createdAt),
+            detailedTimestamp: formatDetailedTime(createdAt),
+            createdAt, 
             reactions: [], 
             comments: [], 
             shares: 0, 
@@ -1048,7 +1177,22 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleFeedPost = (data: any) => {
         if (!currentUser) return;
-        const newPost: PostType = { id: Date.now(), authorId: currentUser.id, content: data.content, timestamp: 'Just now', createdAt: Date.now(), reactions: [], comments: [], shares: 0, views: 0, type: data.type || 'text', visibility: 'Public', audioTrack: data.audioTrack };
+        const createdAt = Date.now();
+        const newPost: PostType = { 
+            id: createdAt, 
+            authorId: currentUser.id, 
+            content: data.content, 
+            timestamp: formatRelativeTime(createdAt),
+            detailedTimestamp: formatDetailedTime(createdAt),
+            createdAt, 
+            reactions: [], 
+            comments: [], 
+            shares: 0, 
+            views: 0, 
+            type: data.type || 'text', 
+            visibility: 'Public', 
+            audioTrack: data.audioTrack 
+        };
         setPosts([newPost, ...posts]);
     };
 
@@ -1102,12 +1246,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 shares: song.shares || 0
             };
             
+            const createdAt = Date.now();
             const newPost: PostType = {
-                id: Date.now(),
+                id: createdAt,
                 authorId: currentUser.id,
                 content: `🎵 Just released new music: "${song.title}" by ${song.artist}`,
-                timestamp: 'Just now',
-                createdAt: Date.now(),
+                timestamp: formatRelativeTime(createdAt),
+                detailedTimestamp: formatDetailedTime(createdAt),
+                createdAt,
                 reactions: [],
                 comments: [],
                 shares: 0,
@@ -1168,12 +1314,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 shares: episode.shares || 0
             };
             
+            const createdAt = Date.now();
             const newPost: PostType = {
-                id: Date.now(),
+                id: createdAt,
                 authorId: currentUser.id,
                 content: `🎙️ New podcast episode: "${episode.title}" with ${episode.host || 'Podcast Host'}`,
-                timestamp: 'Just now',
-                createdAt: Date.now(),
+                timestamp: formatRelativeTime(createdAt),
+                detailedTimestamp: formatDetailedTime(createdAt),
+                createdAt,
                 reactions: [],
                 comments: [],
                 shares: 0,
@@ -1444,13 +1592,16 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     
     const handlePostToGroup = (groupId: string, content: string, file: File | null, type: any, background?: string) => { 
         if (!currentUser) return; 
+        const createdAt = Date.now();
         const newPost: GroupPost = { 
-            id: Date.now(), 
+            id: createdAt, 
             authorId: currentUser.id, 
             content, 
             image: file && type === 'image' ? URL.createObjectURL(file) : undefined, 
             video: file && type === 'video' ? URL.createObjectURL(file) : undefined, 
-            timestamp: Date.now(), 
+            timestamp: formatRelativeTime(createdAt),
+            detailedTimestamp: formatDetailedTime(createdAt),
+            createdAt, 
             reactions: [], 
             comments: [], 
             shares: 0,
@@ -1465,8 +1616,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             ...newPost, 
             type, 
             visibility: 'Public', 
-            timestamp: 'Just now', 
-            createdAt: newPost.timestamp, 
+            timestamp: formatRelativeTime(newPost.createdAt),
+            detailedTimestamp: formatDetailedTime(newPost.createdAt),
+            createdAt: newPost.createdAt, 
             groupId, 
             groupName: groups.find(g => g.id === groupId)?.name 
         }; 
@@ -1475,9 +1627,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     
     const handleCreateGroupEvent = (groupId: string, eventData: Partial<Event>) => {
         if (!currentUser) return;
+        const createdAt = Date.now();
         const newEvent: Event = { 
             ...eventData, 
-            id: Date.now(), 
+            id: createdAt, 
             attendees: [currentUser.id], 
             interestedIds: [],
             groupId: groupId,
@@ -1496,11 +1649,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         
         // Create a post about the event
         const eventPost: PostType = { 
-            id: Date.now() + 1, 
+            id: createdAt + 1, 
             authorId: currentUser.id, 
             content: `is hosting a new event in ${groups.find(g => g.id === groupId)?.name}: ${newEvent.title}`, 
-            timestamp: 'Just now', 
-            createdAt: Date.now(), 
+            timestamp: formatRelativeTime(createdAt),
+            detailedTimestamp: formatDetailedTime(createdAt),
+            createdAt, 
             reactions: [], 
             comments: [], 
             shares: 0, 
@@ -1639,6 +1793,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 onTrackComment={handleTrackComment}
                 onTrackShare={handleTrackShare}
                 isLiked={likedTracks.includes(song.id)}
+                timestamp={post.timestamp}
+                detailedTimestamp={post.detailedTimestamp}
             />
         );
     };
@@ -1684,6 +1840,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 onHashtagClick={handleTagClick} 
                 onDeletePost={isAdmin ? handleDeletePost : undefined}
                 isAdmin={isAdmin}
+                timestamp={post.timestamp}
+                detailedTimestamp={post.detailedTimestamp}
             />
         );
     };
@@ -1834,7 +1992,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                     id: p.id + 100000,
                                                     authorId: p.sellerId,
                                                     content: `Just listed a new item: ${p.title}`,
-                                                    timestamp: 'Just now',
+                                                    timestamp: formatRelativeTime(p.date),
+                                                    detailedTimestamp: formatDetailedTime(p.date),
                                                     createdAt: p.date,
                                                     reactions: [],
                                                     comments: [],
@@ -1912,6 +2071,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 onTrackComment={handleTrackComment}
                                                 onTrackShare={handleTrackShare}
                                                 isLiked={likedTracks.includes(song.id)}
+                                                timestamp={post.timestamp}
+                                                detailedTimestamp={post.detailedTimestamp}
                                             />
                                         );
                                     }}
@@ -1964,6 +2125,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 onHashtagClick={handleTagClick}
                                                 onDeletePost={isAdmin ? handleDeletePost : undefined}
                                                 isAdmin={isAdmin}
+                                                timestamp={post.timestamp}
+                                                detailedTimestamp={post.detailedTimestamp}
                                             />
                                         );
                                     })()}
