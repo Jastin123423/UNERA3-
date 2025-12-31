@@ -83,7 +83,7 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
     initialGroupId, 
     onPlayAudioTrack 
 }) => {
-    const [view, setView] = useState<'feed' | 'detail'>('feed');
+    // SIMPLIFY: Remove view state, just use activeGroupId to determine what to show
     const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
     const [groupTab, setGroupTab] = useState<'Discussion' | 'Events' | 'Members' | 'About'>('Discussion');
     const [searchQuery, setSearchQuery] = useState('');
@@ -101,76 +101,38 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
     const [postContent, setPostContent] = useState('');
     const [postFile, setPostFile] = useState<File | null>(null);
 
-    // FIX 1: Better initialization with loading state
-    useEffect(() => { 
-        console.log("GroupsPage: initialGroupId =", initialGroupId, "groups count =", groups.length);
-        if (initialGroupId) { 
-            const group = groups.find(g => g.id === initialGroupId); 
-            if (group) { 
-                console.log("Found group, setting detail view:", group.name);
-                setActiveGroupId(group.id); 
-                setView('detail'); 
-                setGroupTab('Discussion'); 
-            } else {
-                console.warn("Group not found with ID:", initialGroupId);
-                // Stay in feed view if group not found
-                setView('feed');
+    // FIX 1: SIMPLIFIED initialization - just set activeGroupId if initialGroupId is provided
+    useEffect(() => {
+        console.log("GroupsPage - initialGroupId:", initialGroupId, "groups count:", groups.length);
+        if (initialGroupId) {
+            const groupExists = groups.some(g => g.id === initialGroupId);
+            console.log("Group exists:", groupExists);
+            if (groupExists) {
+                setActiveGroupId(initialGroupId);
             }
-        } else {
-            // Default to feed view if no initial group
-            setView('feed');
         }
     }, [initialGroupId, groups]);
 
     const activeGroup = useMemo(() => {
-        console.log("Finding active group for ID:", activeGroupId);
-        const group = groups.find(g => g.id === activeGroupId) || null;
-        console.log("Active group found:", group?.name || "null");
-        return group;
+        return activeGroupId ? groups.find(g => g.id === activeGroupId) || null : null;
     }, [groups, activeGroupId]);
+
+    // Debug log
+    useEffect(() => {
+        console.log("Active Group State:", { activeGroupId, activeGroup: activeGroup?.name });
+    }, [activeGroupId, activeGroup]);
 
     const mergedPosts = useMemo(() => {
         if (!activeGroup) return [];
-        const p = activeGroup.posts.map(gp => ({ 
-            ...gp, 
-            type: gp.video ? 'video' : (gp.image ? 'image' : 'text'), 
-            visibility: 'Public', 
-            reactions: gp.reactions || [], 
-            comments: gp.comments || [], 
-            shares: gp.shares || 0, 
-            timestamp: 'Recently', 
-            groupId: activeGroup.id, 
-            groupName: activeGroup.name, 
-            createdAt: gp.timestamp 
-        }));
-        const e = (activeGroup.events || []).map(ev => ({ 
-            id: ev.id + 5000, 
-            authorId: ev.organizerId, 
-            type: 'event', 
-            event: ev, 
-            timestamp: 'Upcoming', 
-            groupId: activeGroup.id, 
-            groupName: activeGroup.name, 
-            reactions: [], 
-            comments: [], 
-            shares: 0, 
-            createdAt: new Date(ev.date).getTime(), 
-            visibility: 'Public' 
-        }));
+        const p = activeGroup.posts.map(gp => ({ ...gp, type: gp.video ? 'video' : (gp.image ? 'image' : 'text'), visibility: 'Public', reactions: gp.reactions || [], comments: gp.comments || [], shares: gp.shares || 0, timestamp: 'Recently', groupId: activeGroup.id, groupName: activeGroup.name, createdAt: gp.timestamp }));
+        const e = (activeGroup.events || []).map(ev => ({ id: ev.id + 5000, authorId: ev.organizerId, type: 'event', event: ev, timestamp: 'Upcoming', groupId: activeGroup.id, groupName: activeGroup.name, reactions: [], comments: [], shares: 0, createdAt: new Date(ev.date).getTime(), visibility: 'Public' }));
         return [...p, ...e].sort((a,b) => b.createdAt - a.createdAt);
     }, [activeGroup]);
     
-    useEffect(() => { 
-        if (!showGroupPostModal) { 
-            setPostContent(''); 
-            setPostFile(null); 
-        } 
-    }, [showGroupPostModal]);
+    useEffect(() => { if (!showGroupPostModal) { setPostContent(''); setPostFile(null); } }, [showGroupPostModal]);
     
     const handleGroupClick = (group: Group) => { 
-        console.log("Group clicked:", group.name);
         setActiveGroupId(group.id); 
-        setView('detail'); 
         setGroupTab('Discussion'); 
         window.scrollTo(0, 0); 
     };
@@ -203,32 +165,54 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
         onUpdateGroupImage(activeGroup.id, type, e.target.files[0]); 
     };
 
-    // FIX 2: Change the conditional logic
-    // Only show feed view if view is explicitly 'feed'
-    if (view === 'feed') {
-        console.log("Rendering FEED view");
+    // FIX 2: SIMPLIFIED conditional rendering
+    // If no activeGroup is selected, show the feed (list of groups)
+    if (!activeGroup) {
+        console.log("Rendering FEED view - no active group");
         const myGroups = currentUser ? groups.filter(g => g.members.includes(currentUser!.id) || g.adminId === currentUser!.id) : [];
         let suggestedGroups = currentUser ? groups.filter(g => !g.members.includes(currentUser!.id) && g.adminId !== currentUser!.id) : groups;
         if (searchQuery.trim()) suggestedGroups = suggestedGroups.filter(g => g.name.toLowerCase().includes(searchQuery.toLowerCase()));
+        
         return (
             <div className="w-full max-w-[1000px] mx-auto p-4 font-sans pb-20">
-                {/* Feed view JSX - same as before */}
                 <div className="flex flex-col gap-4 mb-6 bg-[#242526] p-4 rounded-xl border border-[#3E4042]">
                     <div className="flex justify-between items-center">
-                        <div><h2 className="text-2xl font-bold text-[#E4E6EB]">Groups</h2><p className="text-[#B0B3B8] text-sm">Discover and join communities.</p></div>
-                        {currentUser && (<button onClick={() => setShowCreateModal(true)} className="bg-[#263951] text-[#2D88FF] hover:bg-[#2A3F5A] px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors"><i className="fas fa-plus-circle"></i> <span>Create New Group</span></button>)}
+                        <div>
+                            <h2 className="text-2xl font-bold text-[#E4E6EB]">Groups</h2>
+                            <p className="text-[#B0B3B8] text-sm">Discover and join communities.</p>
+                        </div>
+                        {currentUser && (
+                            <button onClick={() => setShowCreateModal(true)} className="bg-[#263951] text-[#2D88FF] hover:bg-[#2A3F5A] px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors">
+                                <i className="fas fa-plus-circle"></i> 
+                                <span>Create New Group</span>
+                            </button>
+                        )}
                     </div>
-                    <div className="relative"><input type="text" className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2.5 pl-10 text-[#E4E6EB] outline-none focus:border-[#1877F2]" placeholder="Search Groups..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} /><i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-[#B0B3B8]"></i></div>
+                    <div className="relative">
+                        <input 
+                            type="text" 
+                            className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2.5 pl-10 text-[#E4E6EB] outline-none focus:border-[#1877F2]" 
+                            placeholder="Search Groups..." 
+                            value={searchQuery} 
+                            onChange={(e) => setSearchQuery(e.target.value)} 
+                        />
+                        <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-[#B0B3B8]"></i>
+                    </div>
                 </div>
+                
                 {myGroups.length > 0 && !searchQuery && (
                     <div className="mb-8">
                         <h3 className="text-xl font-bold text-[#E4E6EB] mb-3">Your Groups</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {myGroups.map(group => (
                                 <div key={group.id} className="bg-[#242526] rounded-xl overflow-hidden border border-[#3E4042] cursor-pointer hover:shadow-lg transition-all" onClick={() => handleGroupClick(group)}>
-                                    <div className="h-24 relative"><img src={group.coverImage} className="w-full h-full object-cover opacity-80" alt="" /></div>
+                                    <div className="h-24 relative">
+                                        <img src={group.coverImage} className="w-full h-full object-cover opacity-80" alt="" />
+                                    </div>
                                     <div className="px-4 pb-4 -mt-8 relative">
-                                        <div className="flex justify-between items-end"><img src={group.image} className="w-16 h-16 rounded-xl border-4 border-[#242526] object-cover bg-[#242526]" alt="" /></div>
+                                        <div className="flex justify-between items-end">
+                                            <img src={group.image} className="w-16 h-16 rounded-xl border-4 border-[#242526] object-cover bg-[#242526]" alt="" />
+                                        </div>
                                         <h4 className="font-bold text-lg text-[#E4E6EB] mt-2 leading-tight">{group.name}</h4>
                                         <p className="text-[#B0B3B8] text-xs mt-1">{group.members.length} members • {group.posts.length} posts</p>
                                     </div>
@@ -237,6 +221,7 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                         </div>
                     </div>
                 )}
+                
                 <div>
                     <h3 className="text-xl font-bold text-[#E4E6EB] mb-3">{searchQuery ? 'Search Results' : 'All Groups'}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -244,32 +229,74 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                             <div key={group.id} className="bg-[#242526] rounded-xl overflow-hidden border border-[#3E4042] flex flex-col">
                                 <div className="h-32 relative cursor-pointer" onClick={() => handleGroupClick(group)}>
                                     <img src={group.coverImage} className="w-full h-full object-cover" alt="" />
-                                    <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-xs text-white font-bold uppercase">{group.type}</div>
+                                    <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-xs text-white font-bold uppercase">
+                                        {group.type}
+                                    </div>
                                 </div>
                                 <div className="p-4 flex-1 flex flex-col">
                                     <h4 className="font-bold text-lg text-[#E4E6EB] mb-1 cursor-pointer hover:underline" onClick={() => handleGroupClick(group)}>{group.name}</h4>
                                     <p className="text-[#B0B3B8] text-sm mb-4 line-clamp-2">{group.description}</p>
                                     <div className="mt-auto">
-                                        <div className="flex items-center gap-2 mb-3 text-xs text-[#B0B3B8]"><span>{group.members.length} members</span></div>
-                                        <button onClick={() => currentUser ? onJoinGroup(group.id) : alert("Login first")} className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white py-2 rounded-lg font-semibold transition-colors">Join Group</button>
+                                        <div className="flex items-center gap-2 mb-3 text-xs text-[#B0B3B8]">
+                                            <span>{group.members.length} members</span>
+                                        </div>
+                                        <button onClick={() => currentUser ? onJoinGroup(group.id) : alert("Login first")} className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white py-2 rounded-lg font-semibold transition-colors">
+                                            Join Group
+                                        </button>
                                     </div>
                                 </div>
                             </div>
                         ))}
                     </div>
                 </div>
+                
                 {showCreateModal && (
                     <div className="fixed inset-0 z-[150] bg-black/80 flex items-center justify-center p-4 animate-fade-in">
                         <div className="bg-[#242526] w-full max-w-[500px] rounded-xl border border-[#3E4042] shadow-2xl overflow-hidden animate-slide-up">
                             <div className="p-4 border-b border-[#3E4042] flex justify-between items-center">
                                 <h3 className="text-xl font-bold text-[#E4E6EB]">Create Group</h3>
-                                <div onClick={() => setShowCreateModal(false)} className="w-8 h-8 rounded-full bg-[#3A3B3C] flex items-center justify-center cursor-pointer hover:bg-[#4E4F50]"><i className="fas fa-times text-[#B0B3B8]"></i></div>
+                                <div onClick={() => setShowCreateModal(false)} className="w-8 h-8 rounded-full bg-[#3A3B3C] flex items-center justify-center cursor-pointer hover:bg-[#4E4F50]">
+                                    <i className="fas fa-times text-[#B0B3B8]"></i>
+                                </div>
                             </div>
                             <div className="p-4 space-y-4">
-                                <div><label className="block text-[#B0B3B8] text-sm font-bold mb-1">Name</label><input type="text" className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2 text-[#E4E6EB] outline-none" placeholder="Name your group" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} /></div>
-                                <div><label className="block text-[#B0B3B8] text-sm font-bold mb-1">Description</label><textarea className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2 text-[#E4E6EB] outline-none h-24" placeholder="What is this group about?" value={newGroupDesc} onChange={e => setNewGroupDesc(e.target.value)} /></div>
-                                <div><label className="block text-[#B0B3B8] text-sm font-bold mb-1">Privacy</label><select className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2 text-[#E4E6EB] outline-none" value={newGroupType} onChange={(e) => setNewGroupType(e.target.value as any)}><option value="public">Public</option><option value="private">Private</option></select></div>
-                                <button onClick={handleCreateSubmit} disabled={!newGroupName.trim()} className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white py-2.5 rounded-lg font-bold transition-colors disabled:opacity-50">Create</button>
+                                <div>
+                                    <label className="block text-[#B0B3B8] text-sm font-bold mb-1">Name</label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2 text-[#E4E6EB] outline-none" 
+                                        placeholder="Name your group" 
+                                        value={newGroupName} 
+                                        onChange={e => setNewGroupName(e.target.value)} 
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[#B0B3B8] text-sm font-bold mb-1">Description</label>
+                                    <textarea 
+                                        className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2 text-[#E4E6EB] outline-none h-24" 
+                                        placeholder="What is this group about?" 
+                                        value={newGroupDesc} 
+                                        onChange={e => setNewGroupDesc(e.target.value)} 
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[#B0B3B8] text-sm font-bold mb-1">Privacy</label>
+                                    <select 
+                                        className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2 text-[#E4E6EB] outline-none" 
+                                        value={newGroupType} 
+                                        onChange={(e) => setNewGroupType(e.target.value as any)}
+                                    >
+                                        <option value="public">Public</option>
+                                        <option value="private">Private</option>
+                                    </select>
+                                </div>
+                                <button 
+                                    onClick={handleCreateSubmit} 
+                                    disabled={!newGroupName.trim()} 
+                                    className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white py-2.5 rounded-lg font-bold transition-colors disabled:opacity-50"
+                                >
+                                    Create
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -278,40 +305,25 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
         );
     }
 
-    // FIX 3: If view is 'detail' but no activeGroup, show loading or error
-    if (view === 'detail' && !activeGroup) {
-        console.log("View is 'detail' but no activeGroup found");
-        return (
-            <div className="w-full max-w-[1000px] mx-auto p-4 font-sans">
-                <div className="text-white text-center py-10">
-                    <div className="text-2xl mb-4">Loading group...</div>
-                    <button 
-                        onClick={() => setView('feed')} 
-                        className="bg-[#1877F2] text-white px-6 py-2 rounded-lg hover:bg-[#166FE5]"
-                    >
-                        Back to Groups
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
-    // Now we know view === 'detail' AND activeGroup exists
-    console.log("Rendering DETAIL view for group:", activeGroup!.name);
+    // If we have an activeGroup, show the detail view
+    console.log("Rendering DETAIL view for group:", activeGroup.name);
     
-    const isMember = currentUser ? (activeGroup!.members.includes(currentUser.id) || activeGroup!.adminId === currentUser.id) : false;
-    const isAdmin = currentUser && activeGroup!.adminId === currentUser.id;
-    const canPost = isAdmin || (activeGroup!.memberPostingAllowed ?? true);
+    const isMember = currentUser ? (activeGroup.members.includes(currentUser.id) || activeGroup.adminId === currentUser.id) : false;
+    const isAdmin = currentUser && activeGroup.adminId === currentUser.id;
+    const canPost = isAdmin || (activeGroup.memberPostingAllowed ?? true);
 
     return (
         <div className="w-full bg-[#18191A] min-h-screen pb-10">
-            {/* Group header - SAME AS BEFORE */}
+            {/* Group header */}
             <div className="bg-[#242526] border-b border-[#3E4042] shadow-sm mb-4 animate-fade-in">
                 <div className="max-w-[1100px] mx-auto">
                     <div className="h-[200px] md:h-[350px] relative group bg-[#3A3B3C] md:rounded-b-xl overflow-hidden">
-                        <img src={activeGroup!.coverImage} className="w-full h-full object-cover" alt="Cover" />
+                        <img src={activeGroup.coverImage} className="w-full h-full object-cover" alt="Cover" />
                         {isAdmin && (
-                            <div className="absolute bottom-4 right-4 bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-lg cursor-pointer hover:bg-white/20 font-bold text-white text-sm flex items-center gap-2 transition-all" onClick={() => groupCoverInputRef.current?.click()}>
+                            <div 
+                                className="absolute bottom-4 right-4 bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-lg cursor-pointer hover:bg-white/20 font-bold text-white text-sm flex items-center gap-2 transition-all" 
+                                onClick={() => groupCoverInputRef.current?.click()}
+                            >
                                 <i className="fas fa-camera"></i> Edit Cover
                             </div>
                         )}
@@ -322,10 +334,13 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                         <div className="flex flex-col md:flex-row items-start md:items-end -mt-[40px] md:-mt-[30px] relative z-10 gap-4 mb-4">
                             <div className="relative">
                                 <div className="w-[100px] h-[100px] md:w-[140px] md:h-[140px] rounded-xl border-4 border-[#242526] overflow-hidden bg-[#242526] shadow-xl">
-                                    <img src={activeGroup!.image} className="w-full h-full object-cover" alt="" />
+                                    <img src={activeGroup.image} className="w-full h-full object-cover" alt="" />
                                 </div>
                                 {isAdmin && (
-                                    <div className="absolute bottom-2 right-2 bg-[#3A3B3C] p-2 rounded-full cursor-pointer hover:bg-[#4E4F50] shadow-md transition-colors" onClick={() => groupProfileInputRef.current?.click()}>
+                                    <div 
+                                        className="absolute bottom-2 right-2 bg-[#3A3B3C] p-2 rounded-full cursor-pointer hover:bg-[#4E4F50] shadow-md transition-colors" 
+                                        onClick={() => groupProfileInputRef.current?.click()}
+                                    >
                                         <i className="fas fa-camera text-white text-xs"></i>
                                     </div>
                                 )}
@@ -333,12 +348,12 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                             </div>
                             
                             <div className="flex-1 mt-2">
-                                <h1 className="text-2xl md:text-4xl font-bold text-[#E4E6EB] leading-tight mb-1">{activeGroup!.name}</h1>
+                                <h1 className="text-2xl md:text-4xl font-bold text-[#E4E6EB] leading-tight mb-1">{activeGroup.name}</h1>
                                 <div className="flex items-center gap-2 text-[#B0B3B8] text-sm font-semibold">
-                                    <i className={`fas ${activeGroup!.type === 'public' ? 'fa-globe-americas' : 'fa-lock'} text-xs`}></i>
-                                    <span className="capitalize">{activeGroup!.type} group</span>
+                                    <i className={`fas ${activeGroup.type === 'public' ? 'fa-globe-americas' : 'fa-lock'} text-xs`}></i>
+                                    <span className="capitalize">{activeGroup.type} group</span>
                                     <span>•</span>
-                                    <span>{activeGroup!.members.length} members</span>
+                                    <span>{activeGroup.members.length} members</span>
                                 </div>
                             </div>
                             
@@ -348,8 +363,14 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                                         <button onClick={() => setShowInviteModal(true)} className="bg-[#1877F2] text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 hover:bg-[#166FE5] flex-1 md:flex-none transition-all">
                                             <i className="fas fa-plus"></i> Invite
                                         </button>
-                                        <button className="bg-[#3A3B3C] text-[#E4E6EB] px-4 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 hover:bg-[#4E4F50] flex-1 md:flex-none transition-all">
-                                            <i className="fas fa-check"></i> Joined
+                                        <button 
+                                            onClick={() => {
+                                                setActiveGroupId(null); // Go back to feed
+                                                setGroupTab('Discussion');
+                                            }} 
+                                            className="bg-[#3A3B3C] text-[#E4E6EB] px-4 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 hover:bg-[#4E4F50] flex-1 md:flex-none transition-all"
+                                        >
+                                            <i className="fas fa-arrow-left"></i> Back
                                         </button>
                                         {isAdmin && (
                                             <button onClick={() => setShowSettingsModal(true)} className="bg-[#3A3B3C] text-[#E4E6EB] px-3 py-2 rounded-lg font-bold hover:bg-[#4E4F50] transition-all">
@@ -358,9 +379,20 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                                         )}
                                     </>
                                 ) : (
-                                    <button onClick={() => currentUser ? onJoinGroup(activeGroup!.id) : alert("Login first")} className="bg-[#1877F2] text-white px-8 py-2 rounded-lg font-bold text-base hover:bg-[#166FE5] w-full md:w-auto transition-all shadow-lg">
-                                        Join Group
-                                    </button>
+                                    <>
+                                        <button onClick={() => currentUser ? onJoinGroup(activeGroup.id) : alert("Login first")} className="bg-[#1877F2] text-white px-8 py-2 rounded-lg font-bold text-base hover:bg-[#166FE5] w-full md:w-auto transition-all shadow-lg">
+                                            Join Group
+                                        </button>
+                                        <button 
+                                            onClick={() => {
+                                                setActiveGroupId(null); // Go back to feed
+                                                setGroupTab('Discussion');
+                                            }} 
+                                            className="bg-[#3A3B3C] text-[#E4E6EB] px-4 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 hover:bg-[#4E4F50] flex-1 md:flex-none transition-all"
+                                        >
+                                            <i className="fas fa-arrow-left"></i> Back
+                                        </button>
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -390,7 +422,7 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                             <div className="bg-[#242526] rounded-xl p-3 mb-4 border border-[#3E4042] shadow-sm flex gap-3 items-center cursor-pointer mx-2 md:mx-0 transition-colors hover:bg-[#3A3B3C]" onClick={() => setShowGroupPostModal(true)}>
                                 <img src={currentUser?.profileImage} className="w-10 h-10 rounded-full bg-[#3A3B3C] object-cover" alt="" />
                                 <div className="flex-1 bg-[#3A3B3C] group-hover:bg-[#4E4F50] transition-colors rounded-full px-4 py-2.5">
-                                    <span className="text-[#B0B3B8] text-[17px]">Post something in {activeGroup!.name}...</span>
+                                    <span className="text-[#B0B3B8] text-[17px]">Post something in {activeGroup.name}...</span>
                                 </div>
                                 <div className="text-[#45BD62] hover:bg-[#3A3B3C] p-2 rounded-full transition-colors">
                                     <i className="fas fa-images text-xl"></i>
@@ -399,14 +431,14 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                         )}
                         
                         <div className="space-y-4">
-                            {activeGroup!.type === 'private' && !isMember ? (
+                            {activeGroup.type === 'private' && !isMember ? (
                                 <div className="bg-[#242526] rounded-xl p-12 text-center border border-[#3E4042] mx-4 md:mx-0 shadow-sm">
                                     <div className="w-16 h-16 bg-[#3A3B3C] rounded-full flex items-center justify-center mx-auto mb-4 border border-[#3E4042]">
                                         <i className="fas fa-lock text-[#B0B3B8] text-2xl"></i>
                                     </div>
                                     <h3 className="text-[#E4E6EB] font-bold text-xl mb-2">This Group is Private</h3>
                                     <p className="text-[#B0B3B8] mb-8 max-w-xs mx-auto">Only members of this community can see the discussions and members.</p>
-                                    <button onClick={() => currentUser ? onJoinGroup(activeGroup!.id) : alert("Login first")} className="bg-[#1877F2] text-white px-10 py-2.5 rounded-lg font-black shadow-lg hover:bg-[#166FE5] transition-all active:scale-95">
+                                    <button onClick={() => currentUser ? onJoinGroup(activeGroup.id) : alert("Login first")} className="bg-[#1877F2] text-white px-10 py-2.5 rounded-lg font-black shadow-lg hover:bg-[#166FE5] transition-all active:scale-95">
                                         Join Group
                                     </button>
                                 </div>
@@ -419,11 +451,11 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                                         currentUser={currentUser}
                                         users={users}
                                         onProfileClick={onProfileClick}
-                                        onReact={(pid, type) => onLikePost(activeGroup!.id, pid, type)}
-                                        onShare={(pid) => onSharePost(activeGroup!.id, pid)}
-                                        onDelete={(pid) => onDeleteGroupPost(activeGroup!.id, pid)}
+                                        onReact={(pid, type) => onLikePost(activeGroup.id, pid, type)}
+                                        onShare={(pid) => onSharePost(activeGroup.id, pid)}
+                                        onDelete={(pid) => onDeleteGroupPost(activeGroup.id, pid)}
                                         onViewImage={() => {}}
-                                        onOpenComments={(pid) => onOpenComments(activeGroup!.id, pid)}
+                                        onOpenComments={(pid) => onOpenComments(activeGroup.id, pid)}
                                         onVideoClick={() => {}}
                                         onPlayAudioTrack={onPlayAudioTrack}
                                     />
@@ -444,14 +476,14 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                 {groupTab === 'About' && (
                     <div className="bg-[#242526] rounded-xl p-8 border border-[#3E4042] mx-4 md:mx-0 shadow-sm animate-fade-in">
                         <h3 className="text-xl font-bold text-[#E4E6EB] mb-4">About this group</h3>
-                        <p className="text-[#E4E6EB] text-base mb-8 leading-relaxed">{activeGroup!.description}</p>
+                        <p className="text-[#E4E6EB] text-base mb-8 leading-relaxed">{activeGroup.description}</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="flex items-center gap-4 text-[#E4E6EB]">
                                 <div className="w-12 h-12 bg-[#3A3B3C] rounded-xl flex items-center justify-center">
-                                    <i className={`fas ${activeGroup!.type === 'public' ? 'fa-globe-americas' : 'fa-lock'} text-xl text-[#B0B3B8]`}></i>
+                                    <i className={`fas ${activeGroup.type === 'public' ? 'fa-globe-americas' : 'fa-lock'} text-xl text-[#B0B3B8]`}></i>
                                 </div>
                                 <div>
-                                    <div className="font-bold">{activeGroup!.type === 'public' ? 'Public' : 'Private'}</div>
+                                    <div className="font-bold">{activeGroup.type === 'public' ? 'Public' : 'Private'}</div>
                                     <div className="text-xs text-[#B0B3B8]">Anyone can see who's in the group and what they post.</div>
                                 </div>
                             </div>
@@ -461,7 +493,7 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                                 </div>
                                 <div>
                                     <div className="font-bold">History</div>
-                                    <div className="text-xs text-[#B0B3B8]">Created on {new Date(activeGroup!.createdDate).toLocaleDateString()}</div>
+                                    <div className="text-xs text-[#B0B3B8]">Created on {new Date(activeGroup.createdDate).toLocaleDateString()}</div>
                                 </div>
                             </div>
                         </div>
@@ -470,8 +502,8 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                                 <button 
                                     onClick={() => { 
                                         if(window.confirm("Delete group?")) { 
-                                            onDeleteGroup(activeGroup!.id); 
-                                            setView('feed'); 
+                                            onDeleteGroup(activeGroup.id); 
+                                            setActiveGroupId(null); // Go back to feed
                                         } 
                                     }} 
                                     className="bg-red-500/10 text-red-500 font-bold py-2.5 px-6 rounded-lg transition-all hover:bg-red-500 hover:text-white border border-red-500/20"
@@ -486,10 +518,10 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                 {groupTab === 'Members' && (
                     <div className="bg-[#242526] rounded-xl border border-[#3E4042] mx-4 md:mx-0 overflow-hidden shadow-sm animate-fade-in">
                         <div className="p-5 border-b border-[#3E4042] bg-[#1C1D1E]">
-                            <h3 className="text-[#E4E6EB] font-bold text-lg">Members · {activeGroup!.members.length}</h3>
+                            <h3 className="text-[#E4E6EB] font-bold text-lg">Members · {activeGroup.members.length}</h3>
                         </div>
                         <div className="p-2 space-y-1">
-                            {activeGroup!.members.map(memberId => { 
+                            {activeGroup.members.map(memberId => { 
                                 const member = users.find(u => u.id === memberId); 
                                 if(!member) return null; 
                                 return (
@@ -498,7 +530,7 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                                             <img src={member.profileImage} className="w-12 h-12 rounded-xl object-cover border border-[#3E4042]" alt="" />
                                             <div className="flex flex-col">
                                                 <div className="font-bold text-[#E4E6EB] text-base group-hover:text-[#1877F2] transition-colors">{member.name}</div>
-                                                {memberId === activeGroup!.adminId && (
+                                                {memberId === activeGroup.adminId && (
                                                     <div className="text-[10px] text-[#1877F2] font-black bg-[#1877F2]/10 px-2 py-0.5 rounded-full w-fit uppercase tracking-tighter border border-[#1877F2]/20">
                                                         Group Admin
                                                     </div>
@@ -507,7 +539,7 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                                         </div>
                                         {isAdmin && memberId !== currentUser?.id && (
                                             <button 
-                                                onClick={() => onRemoveMember(activeGroup!.id, memberId)} 
+                                                onClick={() => onRemoveMember(activeGroup.id, memberId)} 
                                                 className="text-[#B0B3B8] hover:text-white px-4 py-1.5 bg-[#3A3B3C] hover:bg-red-500/20 rounded font-bold text-sm transition-all border border-transparent hover:border-red-500/30"
                                             >
                                                 Remove
@@ -521,7 +553,7 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                 )}
             </div>
             
-            {/* Modals - SAME AS BEFORE */}
+            {/* Modals */}
             {showGroupPostModal && (
                 <div className="fixed inset-0 z-[150] bg-[#18191A] flex flex-col animate-slide-up font-sans">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-[#3E4042] bg-[#242526]">
@@ -535,7 +567,7 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                             <img src={currentUser?.profileImage} className="w-14 h-14 rounded-full border-2 border-[#1877F2] object-cover" alt="" />
                             <div>
                                 <div className="font-black text-[#E4E6EB] text-lg">{currentUser?.name}</div>
-                                <div className="text-[#B0B3B8] text-xs font-bold uppercase tracking-widest">{activeGroup!.name}</div>
+                                <div className="text-[#B0B3B8] text-xs font-bold uppercase tracking-widest">{activeGroup.name}</div>
                             </div>
                         </div>
                         <div className="p-6 min-h-[200px] flex-1">
