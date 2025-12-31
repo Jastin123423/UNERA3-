@@ -1997,26 +1997,31 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             
                             {effectiveView === 'groups' && (
                                 <GroupsPage 
-                                    groups={groups} 
-                                    currentUser={currentUser} 
-                                    users={users} 
-                                    initialGroupId={initialGroupIdToView} 
-                                    onCreateGroup={handleCreateGroup} 
-                                    onJoinGroup={handleJoinGroup} 
-                                    onLeaveGroup={handleLeaveGroup} 
-                                    onDeleteGroup={handleDeleteGroup} 
-                                    onUpdateGroupImage={handleUpdateGroupImage} 
-                                    onPostToGroup={handlePostToGroup} 
-                                    onCreateGroupEvent={handleCreateGroupEvent} 
-                                    onInviteToGroup={handleInviteToGroup} 
-                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
-                                    onLikePost={handleReactGroupPost} 
-                                    onOpenComments={handleOpenGroupComments} 
-                                    onSharePost={handleShareGroupPost} 
-                                    onDeleteGroupPost={handleDeleteGroupPost} 
-                                    onRemoveMember={handleRemoveMember} 
-                                    onUpdateGroupSettings={handleUpdateGroupSettings} 
-                                    onPlayAudioTrack={handlePlayAudioTrack} 
+                                    key="groups-page"
+                                    groups={groups}
+                                    currentUser={currentUser}
+                                    users={users}
+                                    initialGroupId={initialGroupIdToView}
+                                    onCreateGroup={handleCreateGroup}
+                                    onJoinGroup={handleJoinGroup}
+                                    onLeaveGroup={handleLeaveGroup}
+                                    onDeleteGroup={handleDeleteGroup}
+                                    onUpdateGroupImage={handleUpdateGroupImage}
+                                    onPostToGroup={handlePostToGroup}
+                                    onCreateGroupEvent={handleCreateGroupEvent}
+                                    onInviteToGroup={handleInviteToGroup}
+                                    onProfileClick={(id) => { 
+                                        setSelectedUserId(id); 
+                                        setView('profile'); 
+                                        setActiveTab('profile');
+                                    }}
+                                    onLikePost={handleReactGroupPost}
+                                    onOpenComments={handleOpenGroupComments}
+                                    onSharePost={handleShareGroupPost}
+                                    onDeleteGroupPost={handleDeleteGroupPost}
+                                    onRemoveMember={handleRemoveMember}
+                                    onUpdateGroupSettings={handleUpdateGroupSettings}
+                                    onPlayAudioTrack={handlePlayTrack}
                                 />
                             )}
                             
