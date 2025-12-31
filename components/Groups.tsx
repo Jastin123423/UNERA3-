@@ -1,7 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { User, Group, Event, GroupPost, Post as PostType, ReactionType, AudioTrack } from '../types';
 import { Post } from './Feed';
-import { LOCATIONS_DATA } from '../constants';
 import { CreateEventModal } from './Events';
 
 interface GroupSettingsModalProps {
@@ -83,7 +82,46 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
     initialGroupId, 
     onPlayAudioTrack 
 }) => {
-    // SIMPLIFY: Remove view state, just use activeGroupId to determine what to show
+    // Add debugging to identify the issue
+    console.log('GroupsPage rendered:', { 
+        groupsCount: groups.length, 
+        currentUser: currentUser?.name, 
+        initialGroupId 
+    });
+    
+    // If there are no groups, show empty state
+    if (groups.length === 0) {
+        return (
+            <div className="w-full max-w-[1000px] mx-auto p-8 font-sans">
+                <div className="bg-[#242526] rounded-xl p-12 text-center border border-[#3E4042]">
+                    <i className="fas fa-users text-[#B0B3B8] text-6xl mb-4"></i>
+                    <h2 className="text-2xl font-bold text-[#E4E6EB] mb-2">No Groups Yet</h2>
+                    <p className="text-[#B0B3B8] mb-6">Create your first group to get started.</p>
+                    {currentUser ? (
+                        <button 
+                            onClick={() => {
+                                // Simple inline create group for debugging
+                                if (currentUser) {
+                                    onCreateGroup({ 
+                                        name: 'My First Group', 
+                                        description: 'Welcome to our new group!',
+                                        type: 'public'
+                                    });
+                                }
+                            }} 
+                            className="bg-[#1877F2] hover:bg-[#166FE5] text-white px-6 py-3 rounded-lg font-bold"
+                        >
+                            <i className="fas fa-plus mr-2"></i>
+                            Create First Group
+                        </button>
+                    ) : (
+                        <p className="text-[#B0B3B8]">Please login to create groups</p>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
     const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
     const [groupTab, setGroupTab] = useState<'Discussion' | 'Events' | 'Members' | 'About'>('Discussion');
     const [searchQuery, setSearchQuery] = useState('');
@@ -101,12 +139,12 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
     const [postContent, setPostContent] = useState('');
     const [postFile, setPostFile] = useState<File | null>(null);
 
-    // FIX 1: SIMPLIFIED initialization - just set activeGroupId if initialGroupId is provided
+    // Initialize active group
     useEffect(() => {
-        console.log("GroupsPage - initialGroupId:", initialGroupId, "groups count:", groups.length);
+        console.log('InitialGroupId changed:', initialGroupId);
         if (initialGroupId) {
             const groupExists = groups.some(g => g.id === initialGroupId);
-            console.log("Group exists:", groupExists);
+            console.log('Group exists:', groupExists);
             if (groupExists) {
                 setActiveGroupId(initialGroupId);
             }
@@ -117,19 +155,43 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
         return activeGroupId ? groups.find(g => g.id === activeGroupId) || null : null;
     }, [groups, activeGroupId]);
 
-    // Debug log
-    useEffect(() => {
-        console.log("Active Group State:", { activeGroupId, activeGroup: activeGroup?.name });
-    }, [activeGroupId, activeGroup]);
-
     const mergedPosts = useMemo(() => {
         if (!activeGroup) return [];
-        const p = activeGroup.posts.map(gp => ({ ...gp, type: gp.video ? 'video' : (gp.image ? 'image' : 'text'), visibility: 'Public', reactions: gp.reactions || [], comments: gp.comments || [], shares: gp.shares || 0, timestamp: 'Recently', groupId: activeGroup.id, groupName: activeGroup.name, createdAt: gp.timestamp }));
-        const e = (activeGroup.events || []).map(ev => ({ id: ev.id + 5000, authorId: ev.organizerId, type: 'event', event: ev, timestamp: 'Upcoming', groupId: activeGroup.id, groupName: activeGroup.name, reactions: [], comments: [], shares: 0, createdAt: new Date(ev.date).getTime(), visibility: 'Public' }));
+        const p = activeGroup.posts.map(gp => ({ 
+            ...gp, 
+            type: gp.video ? 'video' : (gp.image ? 'image' : 'text'), 
+            visibility: 'Public', 
+            reactions: gp.reactions || [], 
+            comments: gp.comments || [], 
+            shares: gp.shares || 0, 
+            timestamp: 'Recently', 
+            groupId: activeGroup.id, 
+            groupName: activeGroup.name, 
+            createdAt: gp.timestamp 
+        }));
+        const e = (activeGroup.events || []).map(ev => ({ 
+            id: ev.id + 5000, 
+            authorId: ev.organizerId, 
+            type: 'event', 
+            event: ev, 
+            timestamp: 'Upcoming', 
+            groupId: activeGroup.id, 
+            groupName: activeGroup.name, 
+            reactions: [], 
+            comments: [], 
+            shares: 0, 
+            createdAt: new Date(ev.date).getTime(), 
+            visibility: 'Public' 
+        }));
         return [...p, ...e].sort((a,b) => b.createdAt - a.createdAt);
     }, [activeGroup]);
     
-    useEffect(() => { if (!showGroupPostModal) { setPostContent(''); setPostFile(null); } }, [showGroupPostModal]);
+    useEffect(() => { 
+        if (!showGroupPostModal) { 
+            setPostContent(''); 
+            setPostFile(null); 
+        } 
+    }, [showGroupPostModal]);
     
     const handleGroupClick = (group: Group) => { 
         setActiveGroupId(group.id); 
@@ -165,10 +227,9 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
         onUpdateGroupImage(activeGroup.id, type, e.target.files[0]); 
     };
 
-    // FIX 2: SIMPLIFIED conditional rendering
     // If no activeGroup is selected, show the feed (list of groups)
     if (!activeGroup) {
-        console.log("Rendering FEED view - no active group");
+        console.log('Rendering feed view (no active group)');
         const myGroups = currentUser ? groups.filter(g => g.members.includes(currentUser!.id) || g.adminId === currentUser!.id) : [];
         let suggestedGroups = currentUser ? groups.filter(g => !g.members.includes(currentUser!.id) && g.adminId !== currentUser!.id) : groups;
         if (searchQuery.trim()) suggestedGroups = suggestedGroups.filter(g => g.name.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -306,7 +367,7 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
     }
 
     // If we have an activeGroup, show the detail view
-    console.log("Rendering DETAIL view for group:", activeGroup.name);
+    console.log('Rendering detail view for group:', activeGroup.name);
     
     const isMember = currentUser ? (activeGroup.members.includes(currentUser.id) || activeGroup.adminId === currentUser.id) : false;
     const isAdmin = currentUser && activeGroup.adminId === currentUser.id;
@@ -443,23 +504,34 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                                     </button>
                                 </div>
                             ) : (
-                                mergedPosts.length > 0 ? mergedPosts.map(post => (
-                                    <Post 
-                                        key={post.id} 
-                                        post={post as PostType}
-                                        author={users.find(u => u.id === post.authorId) || { id: 0, name: 'Guest User', profileImage: 'https://ui-avatars.com/api/?name=User&background=random' } as User}
-                                        currentUser={currentUser}
-                                        users={users}
-                                        onProfileClick={onProfileClick}
-                                        onReact={(pid, type) => onLikePost(activeGroup.id, pid, type)}
-                                        onShare={(pid) => onSharePost(activeGroup.id, pid)}
-                                        onDelete={(pid) => onDeleteGroupPost(activeGroup.id, pid)}
-                                        onViewImage={() => {}}
-                                        onOpenComments={(pid) => onOpenComments(activeGroup.id, pid)}
-                                        onVideoClick={() => {}}
-                                        onPlayAudioTrack={onPlayAudioTrack}
-                                    />
-                                )) : (
+                                mergedPosts.length > 0 ? mergedPosts.map(post => {
+                                    // Use the regular Post component with safe defaults
+                                    const author = users.find(u => u.id === post.authorId) || { 
+                                        id: 0, 
+                                        name: 'Unknown User', 
+                                        profileImage: 'https://ui-avatars.com/api/?name=User&background=random' 
+                                    } as User;
+                                    
+                                    return (
+                                        <div key={post.id} className="mx-2 md:mx-0">
+                                            <Post 
+                                                post={post as PostType}
+                                                author={author}
+                                                currentUser={currentUser}
+                                                users={users}
+                                                onProfileClick={onProfileClick}
+                                                onReact={(pid, type) => onLikePost(activeGroup.id, pid, type)}
+                                                onShare={(pid) => onSharePost(activeGroup.id, pid)}
+                                                onDelete={isAdmin || (currentUser && post.authorId === currentUser.id) ? 
+                                                    (pid) => onDeleteGroupPost(activeGroup.id, pid) : undefined}
+                                                onViewImage={() => {}}
+                                                onOpenComments={(pid) => onOpenComments(activeGroup.id, pid)}
+                                                onVideoClick={() => {}}
+                                                onPlayAudioTrack={onPlayAudioTrack}
+                                            />
+                                        </div>
+                                    );
+                                }) : (
                                     <div className="bg-[#242526] rounded-xl p-16 text-center border border-[#3E4042] mx-4 md:mx-0 shadow-sm">
                                         <div className="w-16 h-16 bg-[#3A3B3C] rounded-full flex items-center justify-center mx-auto mb-4 border border-[#3E4042]">
                                             <i className="fas fa-comments text-[#B0B3B8] text-2xl"></i>
