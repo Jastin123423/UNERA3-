@@ -22,65 +22,6 @@ import { User, Post as PostType, Story, Reel, Notification, Message, Event, Prod
 import { INITIAL_USERS, INITIAL_POSTS, INITIAL_STORIES, INITIAL_REELS, INITIAL_EVENTS, INITIAL_GROUPS, INITIAL_BRANDS, MOCK_SONGS, MOCK_EPISODES } from './constants';
 import { rankFeed } from './utils/ranking'; 
 
-// ========== UTILITY FUNCTIONS ==========
-const formatRelativeTime = (timestamp: number): string => {
-    const now = Date.now();
-    const diff = now - timestamp;
-    const seconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-    const weeks = Math.floor(days / 7);
-    const months = Math.floor(days / 30);
-    const years = Math.floor(days / 365);
-
-    if (seconds < 60) {
-        return 'Just now';
-    } else if (minutes < 60) {
-        return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
-    } else if (hours < 24) {
-        return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
-    } else if (days < 7) {
-        return `${days} ${days === 1 ? 'day' : 'days'} ago`;
-    } else if (weeks < 4) {
-        return `${weeks} ${weeks === 1 ? 'week' : 'weeks'} ago`;
-    } else if (months < 12) {
-        return `${months} ${months === 1 ? 'month' : 'months'} ago`;
-    } else {
-        return `${years} ${years === 1 ? 'year' : 'years'} ago`;
-    }
-};
-
-// Format date for detailed timestamp (e.g., "Monday at 3:45 PM")
-const formatDetailedTime = (timestamp: number): string => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const yesterday = new Date(now);
-    yesterday.setDate(yesterday.getDate() - 1);
-    
-    const isToday = date.getDate() === now.getDate() && 
-                    date.getMonth() === now.getMonth() && 
-                    date.getFullYear() === now.getFullYear();
-    const isYesterday = date.getDate() === yesterday.getDate() && 
-                       date.getMonth() === yesterday.getMonth() && 
-                       date.getFullYear() === yesterday.getFullYear();
-    
-    const timeString = date.toLocaleTimeString('en-US', { 
-        hour: 'numeric', 
-        minute: '2-digit',
-        hour12: true 
-    });
-    
-    if (isToday) {
-        return `Today at ${timeString}`;
-    } else if (isYesterday) {
-        return `Yesterday at ${timeString}`;
-    } else {
-        const day = date.toLocaleDateString('en-US', { weekday: 'long' });
-        return `${day} at ${timeString}`;
-    }
-};
-
 const getPath = () => {
     if (typeof window !== 'undefined') {
         return window.location.pathname;
@@ -235,11 +176,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     }, []);
 
     const [users, setUsers] = useState<User[]>(initialData?.users || INITIAL_USERS);
-    const [posts, setPosts] = useState<PostType[]>(initialData?.posts || INITIAL_POSTS.map(post => ({
-        ...post,
-        timestamp: formatRelativeTime(post.createdAt),
-        detailedTimestamp: formatDetailedTime(post.createdAt)
-    })));
+    const [posts, setPosts] = useState<PostType[]>(initialData?.posts || INITIAL_POSTS);
     const [stories, setStories] = useState<Story[]>(INITIAL_STORIES.map(s => ({...s, createdAt: Date.now(), user: (initialData?.users || INITIAL_USERS).find((u: User) => u.id === s.userId)}))); 
     const [reels, setReels] = useState<Reel[]>(INITIAL_REELS);
     const [events, setEvents] = useState<Event[]>(INITIAL_EVENTS);
@@ -300,6 +237,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const [initialGroupIdToView, setInitialGroupIdToView] = useState<string | null>(null);
     const [activeTag, setActiveTag] = useState<string | null>(null);
     
+    // Group-specific states
+    const [activeGroupComments, setActiveGroupComments] = useState<{groupId: string, postId: number} | null>(null);
+    const [activeGroupShare, setActiveGroupShare] = useState<{groupId: string, postId: number} | null>(null);
+    
     const [currentAudioTrack, setCurrentAudioTrack] = useState<AudioTrack | null>(null);
     const [isAudioPlaying, setIsAudioPlaying] = useState(false);
     const [likedTracks, setLikedTracks] = useState<string[]>([]);
@@ -335,8 +276,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: p.id + 100000, 
             authorId: p.sellerId, 
             content: `Just listed a new item: ${p.title}`, 
-            timestamp: formatRelativeTime(p.date), 
-            detailedTimestamp: formatDetailedTime(p.date),
+            timestamp: 'Just now', 
             createdAt: p.date, 
             reactions: [], 
             comments: [], 
@@ -352,8 +292,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             authorId: reel.userId, 
             content: reel.caption, 
             video: reel.videoUrl, 
-            timestamp: formatRelativeTime(reel.createdAt), 
-            detailedTimestamp: formatDetailedTime(reel.createdAt),
+            timestamp: 'Recently', 
             createdAt: reel.createdAt, 
             reactions: reel.reactions, 
             comments: reel.comments, 
@@ -389,16 +328,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             if (storedLikedTracks) setLikedTracks(JSON.parse(storedLikedTracks));
             if (storedProducts) setProducts(JSON.parse(storedProducts));
             if (storedBrands) setBrands(JSON.parse(storedBrands));
-            if (storedPosts) {
-                const parsedPosts = JSON.parse(storedPosts);
-                // Update timestamps for loaded posts
-                const updatedPosts = parsedPosts.map((post: PostType) => ({
-                    ...post,
-                    timestamp: formatRelativeTime(post.createdAt),
-                    detailedTimestamp: formatDetailedTime(post.createdAt)
-                }));
-                setPosts(updatedPosts);
-            }
+            if (storedPosts) setPosts(JSON.parse(storedPosts));
             if (storedGroups) setGroups(JSON.parse(storedGroups));
             
             if (storedUser) {
@@ -464,27 +394,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             localStorage.setItem('universeGroups', JSON.stringify(groups));
         }
     }, [groups, isClient]);
-
-    // Update post timestamps periodically (every minute)
-    useEffect(() => {
-        if (!isClient) return;
-        
-        const updateTimestamps = () => {
-            setPosts(prev => prev.map(post => ({
-                ...post,
-                timestamp: formatRelativeTime(post.createdAt),
-                detailedTimestamp: formatDetailedTime(post.createdAt)
-            })));
-        };
-        
-        // Update initially
-        updateTimestamps();
-        
-        // Update every minute to keep timestamps accurate
-        const interval = setInterval(updateTimestamps, 60000);
-        
-        return () => clearInterval(interval);
-    }, [isClient]);
 
     const handleLogin = (email: string, pass: string) => {
         const user = users.find(u => u.email === email && u.password === pass);
@@ -565,6 +474,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setActiveReelId(null);
         setActiveBrandId(null);
         setInitialGroupIdToView(null);
+        setActiveGroupComments(null);
+        setActiveGroupShare(null);
 
         // Handle all menu views
         switch(targetView) {
@@ -711,16 +622,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleCreatePost = (text: string, file: File | null, type: any, visibility: any, location?: string, feeling?: string, taggedUsers?: number[], background?: string, linkPreview?: LinkPreview) => {
         if (!currentUser) return;
-        const createdAt = Date.now();
         const newPost: PostType = { 
-            id: createdAt, 
+            id: Date.now(), 
             authorId: currentUser.id, 
             content: text, 
             image: file && type === 'image' ? URL.createObjectURL(file) : undefined, 
             video: file && type === 'video' ? URL.createObjectURL(file) : undefined, 
-            timestamp: formatRelativeTime(createdAt),
-            detailedTimestamp: formatDetailedTime(createdAt),
-            createdAt, 
+            timestamp: 'Just now', 
+            createdAt: Date.now(), 
             reactions: [], 
             comments: [], 
             shares: 0, 
@@ -811,16 +720,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const handlePostAsBrand = (brandId: number, content: any) => {
         console.log("Creating post as brand:", { brandId, content });
         
-        const createdAt = Date.now();
         const newPost: PostType = { 
-            id: createdAt, 
+            id: Date.now(), 
             authorId: brandId,  // CRITICAL: This must be the brand ID, not user ID
             content: content.text || content.content || '', 
             image: content.file && content.type === 'image' ? URL.createObjectURL(content.file) : undefined, 
             video: content.file && content.type === 'video' ? URL.createObjectURL(content.file) : undefined, 
-            timestamp: formatRelativeTime(createdAt),
-            detailedTimestamp: formatDetailedTime(createdAt),
-            createdAt, 
+            timestamp: 'Just now', 
+            createdAt: Date.now(), 
             reactions: [], 
             comments: [], 
             shares: 0, 
@@ -959,19 +866,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleCreateReel = (videoFile: File, caption: string, song?: Song | { name: string, url: string }, effectName?: string) => {
         if (!currentUser) return;
-        const createdAt = Date.now();
-        const newReel: Reel = { 
-            id: createdAt, 
-            userId: currentUser.id, 
-            videoUrl: URL.createObjectURL(videoFile), 
-            caption, 
-            songName: song ? (song as Song).title || (song as {name: string}).name : 'Original Audio', 
-            effectName: effectName, 
-            createdAt, 
-            reactions: [], 
-            comments: [], 
-            shares: 0 
-        };
+        const newReel: Reel = { id: Date.now(), userId: currentUser.id, videoUrl: URL.createObjectURL(videoFile), caption, songName: song ? (song as Song).title || (song as {name: string}).name : 'Original Audio', effectName: effectName, createdAt: Date.now(), reactions: [], comments: [], shares: 0, };
         setReels(prev => [newReel, ...prev]);
     };
 
@@ -1005,24 +900,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleCreateEvent = (eventData: Partial<Event>) => {
         if (!currentUser) return;
-        const createdAt = Date.now();
-        const newEvent: Event = { ...eventData, id: createdAt, attendees: [currentUser.id], interestedIds: [] } as Event;
+        const newEvent: Event = { ...eventData, id: Date.now(), attendees: [currentUser.id], interestedIds: [] } as Event;
         setEvents(prev => [newEvent, ...prev]);
-        const eventPost: PostType = { 
-            id: createdAt + 1, 
-            authorId: currentUser.id, 
-            content: `is hosting a new event: ${newEvent.title}`, 
-            timestamp: formatRelativeTime(createdAt),
-            detailedTimestamp: formatDetailedTime(createdAt),
-            createdAt, 
-            reactions: [], 
-            comments: [], 
-            shares: 0, 
-            type: 'event', 
-            visibility: 'Public', 
-            event: newEvent, 
-            eventId: newEvent.id 
-        };
+        const eventPost: PostType = { id: Date.now() + 1, authorId: currentUser.id, content: `is hosting a new event: ${newEvent.title}`, timestamp: 'Just now', createdAt: Date.now(), reactions: [], comments: [], shares: 0, type: 'event', visibility: 'Public', event: newEvent, eventId: newEvent.id };
         setPosts(prev => [eventPost, ...prev]);
     };
 
@@ -1085,8 +965,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: Date.now(), 
             userId: currentUser.id, 
             text, 
-            timestamp: formatRelativeTime(Date.now()),
-            detailedTimestamp: formatDetailedTime(Date.now()),
+            timestamp: 'Just now', 
             likes: 0, 
             attachment,
             authorName: currentUser.name,
@@ -1144,15 +1023,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             }
         }
         
-        const createdAt = Date.now();
         const newSharedPost: PostType = { 
             ...sourcePost, 
-            id: createdAt, 
+            id: Date.now(), 
             authorId: currentUser.id, 
             content: extraCaption ? `${extraCaption}\n\n${sourcePost.content || ''}` : sourcePost.content, 
-            timestamp: formatRelativeTime(createdAt),
-            detailedTimestamp: formatDetailedTime(createdAt),
-            createdAt, 
+            timestamp: 'Just now', 
+            createdAt: Date.now(), 
             reactions: [], 
             comments: [], 
             shares: 0, 
@@ -1177,22 +1054,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleFeedPost = (data: any) => {
         if (!currentUser) return;
-        const createdAt = Date.now();
-        const newPost: PostType = { 
-            id: createdAt, 
-            authorId: currentUser.id, 
-            content: data.content, 
-            timestamp: formatRelativeTime(createdAt),
-            detailedTimestamp: formatDetailedTime(createdAt),
-            createdAt, 
-            reactions: [], 
-            comments: [], 
-            shares: 0, 
-            views: 0, 
-            type: data.type || 'text', 
-            visibility: 'Public', 
-            audioTrack: data.audioTrack 
-        };
+        const newPost: PostType = { id: Date.now(), authorId: currentUser.id, content: data.content, timestamp: 'Just now', createdAt: Date.now(), reactions: [], comments: [], shares: 0, views: 0, type: data.type || 'text', visibility: 'Public', audioTrack: data.audioTrack };
         setPosts([newPost, ...posts]);
     };
 
@@ -1246,14 +1108,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 shares: song.shares || 0
             };
             
-            const createdAt = Date.now();
             const newPost: PostType = {
-                id: createdAt,
+                id: Date.now(),
                 authorId: currentUser.id,
                 content: `🎵 Just released new music: "${song.title}" by ${song.artist}`,
-                timestamp: formatRelativeTime(createdAt),
-                detailedTimestamp: formatDetailedTime(createdAt),
-                createdAt,
+                timestamp: 'Just now',
+                createdAt: Date.now(),
                 reactions: [],
                 comments: [],
                 shares: 0,
@@ -1314,14 +1174,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 shares: episode.shares || 0
             };
             
-            const createdAt = Date.now();
             const newPost: PostType = {
-                id: createdAt,
+                id: Date.now(),
                 authorId: currentUser.id,
                 content: `🎙️ New podcast episode: "${episode.title}" with ${episode.host || 'Podcast Host'}`,
-                timestamp: formatRelativeTime(createdAt),
-                detailedTimestamp: formatDetailedTime(createdAt),
-                createdAt,
+                timestamp: 'Just now',
+                createdAt: Date.now(),
                 reactions: [],
                 comments: [],
                 shares: 0,
@@ -1534,6 +1392,129 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const handleDeleteUser = (userId: number) => { if (isAdmin && window.confirm("Delete this user and all their content? This is irreversible.")) { setUsers(users.filter(u => u.id !== userId)); setPosts(posts.filter(p => p.authorId !== userId)); setReels(reels.filter(r => r.userId !== userId)); setStories(stories.filter(s => s.userId !== userId)); } };
     const handleMakeModerator = (userId: number) => { if (isAdmin) setUsers(users.map(u => u.id === userId ? { ...u, role: u.role === 'moderator' ? 'user' : 'moderator' } : u)); };
     
+    // ========== GROUP COMMENTING AND SHARING FUNCTIONS ==========
+    const handleGroupComment = (groupId: string, postId: number, text: string, attachment?: any, parentId?: number) => {
+        if (!currentUser) return;
+        
+        const newComment: Comment = { 
+            id: Date.now(), 
+            userId: currentUser.id, 
+            text, 
+            timestamp: 'Just now', 
+            likes: 0, 
+            attachment,
+            authorName: currentUser.name,
+            authorImage: currentUser.profileImage
+        };
+        
+        // Update the group post with new comment
+        setGroups(prev => prev.map(g => {
+            if (g.id === groupId) {
+                const updatedPosts = g.posts.map(p => {
+                    if (p.id === postId) {
+                        const updatedComments = [...(p.comments || []), newComment];
+                        return { ...p, comments: updatedComments };
+                    }
+                    return p;
+                });
+                return { ...g, posts: updatedPosts };
+            }
+            return g;
+        }));
+
+        // Also update the corresponding post in the main feed if it exists
+        const mainPostId = postId; // Assuming same ID system
+        const mainPost = posts.find(p => p.id === mainPostId);
+        if (mainPost && mainPost.groupId === groupId) {
+            setPosts(prev => prev.map(p => {
+                if (p.id === mainPostId) {
+                    const updatedComments = [...(p.comments || []), newComment];
+                    return { ...p, comments: updatedComments };
+                }
+                return p;
+            }));
+        }
+
+        // Handle mentions in comments
+        const mentionRegex = /@(\w+(?:\s\w+)?)/g;
+        const mentions = [...text.matchAll(mentionRegex)];
+        if (mentions.length > 0) {
+            const mentionedUserIds = new Set<number>();
+            mentions.forEach(match => {
+                const userName = match[1];
+                const user = users.find(u => u.name.toLowerCase() === userName.toLowerCase());
+                if (user && user.id !== currentUser.id) {
+                    mentionedUserIds.add(user.id);
+                }
+            });
+
+            if (mentionedUserIds.size > 0) {
+                const newNotifications: Notification[] = Array.from(mentionedUserIds).map(userId => ({ 
+                    id: Date.now() + userId, 
+                    userId: userId, 
+                    senderId: currentUser.id, 
+                    type: 'mention', 
+                    content: `mentioned you in a comment in ${groups.find(g => g.id === groupId)?.name}.`, 
+                    postId: postId, 
+                    timestamp: Date.now(), 
+                    read: false 
+                }));
+                setNotifications(prev => [...newNotifications, ...prev]);
+            }
+        }
+    };
+
+    const handleGroupShare = (groupId: string, postId: number, targetType: 'profile' | 'group' | 'brand', targetId?: string | number, extraCaption?: string) => {
+        if (!currentUser) return;
+        
+        // Find the group post
+        const group = groups.find(g => g.id === groupId);
+        if (!group) return;
+        
+        const groupPost = group.posts.find(p => p.id === postId);
+        if (!groupPost) return;
+        
+        // Create a shared post for the feed
+        const newSharedPost: PostType = {
+            id: Date.now(),
+            authorId: currentUser.id,
+            content: extraCaption ? `${extraCaption}\n\nShared from ${group.name}: ${groupPost.content}` : `Shared from ${group.name}: ${groupPost.content}`,
+            image: groupPost.image,
+            video: groupPost.video,
+            timestamp: 'Just now',
+            createdAt: Date.now(),
+            reactions: [],
+            comments: [],
+            shares: 0,
+            views: 0,
+            type: groupPost.video ? 'video' : (groupPost.image ? 'image' : 'text'),
+            visibility: 'Public',
+            sharedPostId: postId,
+            groupId: groupId,
+            groupName: group.name
+        };
+        
+        // Add to main feed
+        setPosts(prev => [newSharedPost, ...prev]);
+        
+        // Update share count in the group post
+        setGroups(prev => prev.map(g => {
+            if (g.id === groupId) {
+                const updatedPosts = g.posts.map(p => {
+                    if (p.id === postId) {
+                        return { ...p, shares: (p.shares || 0) + 1 };
+                    }
+                    return p;
+                });
+                return { ...g, posts: updatedPosts };
+            }
+            return g;
+        }));
+        
+        setActiveGroupShare(null);
+        alert("Shared successfully from group!");
+    };
+    
     const handleCreateGroup = (groupData: Partial<Group>) => {
         if (!currentUser) return;
         const newGroup: Group = { 
@@ -1592,16 +1573,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     
     const handlePostToGroup = (groupId: string, content: string, file: File | null, type: any, background?: string) => { 
         if (!currentUser) return; 
-        const createdAt = Date.now();
         const newPost: GroupPost = { 
-            id: createdAt, 
+            id: Date.now(), 
             authorId: currentUser.id, 
             content, 
             image: file && type === 'image' ? URL.createObjectURL(file) : undefined, 
             video: file && type === 'video' ? URL.createObjectURL(file) : undefined, 
-            timestamp: formatRelativeTime(createdAt),
-            detailedTimestamp: formatDetailedTime(createdAt),
-            createdAt, 
+            timestamp: Date.now(), 
             reactions: [], 
             comments: [], 
             shares: 0,
@@ -1616,9 +1594,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             ...newPost, 
             type, 
             visibility: 'Public', 
-            timestamp: formatRelativeTime(newPost.createdAt),
-            detailedTimestamp: formatDetailedTime(newPost.createdAt),
-            createdAt: newPost.createdAt, 
+            timestamp: 'Just now', 
+            createdAt: newPost.timestamp, 
             groupId, 
             groupName: groups.find(g => g.id === groupId)?.name 
         }; 
@@ -1627,10 +1604,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     
     const handleCreateGroupEvent = (groupId: string, eventData: Partial<Event>) => {
         if (!currentUser) return;
-        const createdAt = Date.now();
         const newEvent: Event = { 
             ...eventData, 
-            id: createdAt, 
+            id: Date.now(), 
             attendees: [currentUser.id], 
             interestedIds: [],
             groupId: groupId,
@@ -1649,12 +1625,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         
         // Create a post about the event
         const eventPost: PostType = { 
-            id: createdAt + 1, 
+            id: Date.now() + 1, 
             authorId: currentUser.id, 
             content: `is hosting a new event in ${groups.find(g => g.id === groupId)?.name}: ${newEvent.title}`, 
-            timestamp: formatRelativeTime(createdAt),
-            detailedTimestamp: formatDetailedTime(createdAt),
-            createdAt, 
+            timestamp: 'Just now', 
+            createdAt: Date.now(), 
             reactions: [], 
             comments: [], 
             shares: 0, 
@@ -1723,26 +1698,23 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             }
             return g;
         }));
+        
+        // Also update the main feed post if it exists
+        const mainPostId = postId;
+        const mainPost = posts.find(p => p.id === mainPostId && p.groupId === groupId);
+        if (mainPost) {
+            handleReact(mainPostId, type);
+        }
     };
     
     const handleOpenGroupComments = (groupId: string, postId: number) => {
-        const group = groups.find(g => g.id === groupId);
-        if (group) {
-            const groupPost = group.posts.find(p => p.id === postId);
-            if (groupPost) {
-                alert(`Comments for post "${groupPost.content?.substring(0, 50)}..." in ${group.name}`);
-            }
-        }
+        console.log('Opening group comments:', { groupId, postId });
+        setActiveGroupComments({ groupId, postId });
     };
     
     const handleShareGroupPost = (groupId: string, postId: number) => {
-        const group = groups.find(g => g.id === groupId);
-        if (group) {
-            const groupPost = group.posts.find(p => p.id === postId);
-            if (groupPost) {
-                alert(`Shared post from ${group.name}`);
-            }
-        }
+        console.log('Sharing group post:', { groupId, postId });
+        setActiveGroupShare({ groupId, postId });
     };
     
     const handleUpdateGroupSettings = (groupId: string, settings: Partial<Group>) => { 
@@ -1771,6 +1743,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     ? { ...g, posts: g.posts.filter(p => p.id !== postId) } 
                     : g
             )); 
+            
+            // Also delete from main feed if it exists
+            setPosts(prev => prev.filter(p => !(p.id === postId && p.groupId === groupId)));
         } 
     };
 
@@ -1793,8 +1768,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 onTrackComment={handleTrackComment}
                 onTrackShare={handleTrackShare}
                 isLiked={likedTracks.includes(song.id)}
-                timestamp={post.timestamp}
-                detailedTimestamp={post.detailedTimestamp}
             />
         );
     };
@@ -1840,8 +1813,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 onHashtagClick={handleTagClick} 
                 onDeletePost={isAdmin ? handleDeletePost : undefined}
                 isAdmin={isAdmin}
-                timestamp={post.timestamp}
-                detailedTimestamp={post.detailedTimestamp}
             />
         );
     };
@@ -1992,8 +1963,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                     id: p.id + 100000,
                                                     authorId: p.sellerId,
                                                     content: `Just listed a new item: ${p.title}`,
-                                                    timestamp: formatRelativeTime(p.date),
-                                                    detailedTimestamp: formatDetailedTime(p.date),
+                                                    timestamp: 'Just now',
                                                     createdAt: p.date,
                                                     reactions: [],
                                                     comments: [],
@@ -2071,8 +2041,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 onTrackComment={handleTrackComment}
                                                 onTrackShare={handleTrackShare}
                                                 isLiked={likedTracks.includes(song.id)}
-                                                timestamp={post.timestamp}
-                                                detailedTimestamp={post.detailedTimestamp}
                                             />
                                         );
                                     }}
@@ -2125,8 +2093,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 onHashtagClick={handleTagClick}
                                                 onDeletePost={isAdmin ? handleDeletePost : undefined}
                                                 isAdmin={isAdmin}
-                                                timestamp={post.timestamp}
-                                                detailedTimestamp={post.detailedTimestamp}
                                             />
                                         );
                                     })()}
@@ -2359,6 +2325,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             onCreate={handleCreateEvent} 
                         />
                     )}
+                    
+                    {/* Regular Post Comments Modal */}
                     {activeCommentsPostId && (
                         <CommentsSheet 
                             post={posts.find(p => p.id === activeCommentsPostId)!} 
@@ -2371,6 +2339,53 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); setActiveCommentsPostId(null); }} 
                         />
                     )}
+                    
+                    {/* Group Post Comments Modal */}
+                    {activeGroupComments && (
+                        (() => {
+                            const { groupId, postId } = activeGroupComments;
+                            const group = groups.find(g => g.id === groupId);
+                            const groupPost = group?.posts.find(p => p.id === postId);
+                            
+                            if (group && groupPost) {
+                                // Convert group post to regular post format for CommentsSheet
+                                const postForComments: PostType = {
+                                    id: groupPost.id,
+                                    authorId: groupPost.authorId,
+                                    content: groupPost.content || '',
+                                    image: groupPost.image,
+                                    video: groupPost.video,
+                                    timestamp: 'Recently',
+                                    createdAt: groupPost.timestamp,
+                                    reactions: groupPost.reactions || [],
+                                    comments: groupPost.comments || [],
+                                    shares: groupPost.shares || 0,
+                                    views: 0,
+                                    type: groupPost.video ? 'video' : (groupPost.image ? 'image' : 'text'),
+                                    visibility: 'Public',
+                                    groupId: groupId,
+                                    groupName: group.name
+                                };
+                                
+                                return (
+                                    <CommentsSheet 
+                                        post={postForComments}
+                                        currentUser={currentUser || INITIAL_USERS[0]}
+                                        users={users}
+                                        onClose={() => setActiveGroupComments(null)}
+                                        onComment={(postId, text, attachment) => handleGroupComment(groupId, postId, text, attachment)}
+                                        onLikeComment={() => {}}
+                                        getCommentAuthor={(id) => users.find(u => u.id === id)}
+                                        onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); setActiveGroupComments(null); }}
+                                        title={`Comments from ${group.name}`}
+                                    />
+                                );
+                            }
+                            return null;
+                        })()
+                    )}
+                    
+                    {/* Regular Post Share Modal */}
                     {activeSharePostId && (
                         <ShareSheet 
                             currentUser={currentUser} 
@@ -2382,6 +2397,36 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             onCopyLink={() => { if(isClient) { navigator.clipboard.writeText(`https://unera.social/posts/${activeSharePostId}`); alert("Link copied!"); } }} 
                         />
                     )}
+                    
+                    {/* Group Post Share Modal */}
+                    {activeGroupShare && (
+                        (() => {
+                            const { groupId, postId } = activeGroupShare;
+                            const group = groups.find(g => g.id === groupId);
+                            
+                            if (group) {
+                                return (
+                                    <ShareSheet 
+                                        currentUser={currentUser} 
+                                        groups={groups.filter(g => g.id !== groupId)} // Don't show current group
+                                        brands={brands} 
+                                        postId={postId} 
+                                        onClose={() => setActiveGroupShare(null)} 
+                                        onShare={(type, id, caption) => handleGroupShare(groupId, postId, type, id, caption)} 
+                                        onCopyLink={() => { 
+                                            if(isClient) { 
+                                                navigator.clipboard.writeText(`https://unera.social/groups/${groupId}/posts/${postId}`); 
+                                                alert("Link copied!"); 
+                                            } 
+                                        }}
+                                        title={`Share post from ${group.name}`}
+                                    />
+                                );
+                            }
+                            return null;
+                        })()
+                    )}
+                    
                     {activeStory && (
                         <StoryViewer 
                             story={activeStory} 
