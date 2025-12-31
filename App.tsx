@@ -241,6 +241,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const [activeGroupComments, setActiveGroupComments] = useState<{groupId: string, postId: number} | null>(null);
     const [activeGroupShare, setActiveGroupShare] = useState<{groupId: string, postId: number} | null>(null);
     
+    // Reel modal state
+    const [showCreateReelModal, setShowCreateReelModal] = useState(false);
+    
     const [currentAudioTrack, setCurrentAudioTrack] = useState<AudioTrack | null>(null);
     const [isAudioPlaying, setIsAudioPlaying] = useState(false);
     const [likedTracks, setLikedTracks] = useState<string[]>([]);
@@ -248,7 +251,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const [showCreatePostModal, setShowCreatePostModal] = useState(false);
     const [showCreateStoryModal, setShowCreateStoryModal] = useState(false);
-    const [showCreateReelModal, setShowCreateReelModal] = useState(false);
     const [showCreateEventModal, setShowCreateEventModal] = useState(false);
     const [activeStory, setActiveStory] = useState<Story | null>(null);
     const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
@@ -866,8 +868,20 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleCreateReel = (videoFile: File, caption: string, song?: Song | { name: string, url: string }, effectName?: string) => {
         if (!currentUser) return;
-        const newReel: Reel = { id: Date.now(), userId: currentUser.id, videoUrl: URL.createObjectURL(videoFile), caption, songName: song ? (song as Song).title || (song as {name: string}).name : 'Original Audio', effectName: effectName, createdAt: Date.now(), reactions: [], comments: [], shares: 0, };
+        const newReel: Reel = { 
+            id: Date.now(), 
+            userId: currentUser.id, 
+            videoUrl: URL.createObjectURL(videoFile), 
+            caption, 
+            songName: song ? (song as Song).title || (song as {name: string}).name : 'Original Audio', 
+            effectName: effectName, 
+            createdAt: Date.now(), 
+            reactions: [], 
+            comments: [], 
+            shares: 0 
+        };
         setReels(prev => [newReel, ...prev]);
+        setShowCreateReelModal(false); // Close modal after creating
     };
 
     const handleLikeStory = (storyId: number) => {
@@ -2118,9 +2132,59 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onReelClick={setActiveReelId} 
                                     onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
                                     onNavigate={handleNavigate} 
-                                    onReact={handleReelReact} 
-                                    onShare={(reelId) => {}} 
-                                    onComment={(reelId) => {}} 
+                                    onReact={handleReelReact}
+                                    onShare={(reelId, type) => {
+                                        if (type === 'feed') {
+                                            // Share to feed logic
+                                            const reel = reels.find(r => r.id === reelId);
+                                            if (reel && currentUser) {
+                                                const newPost: PostType = { 
+                                                    id: Date.now(), 
+                                                    authorId: currentUser.id, 
+                                                    content: `Shared a reel: ${reel.caption}`, 
+                                                    video: reel.videoUrl,
+                                                    timestamp: 'Just now', 
+                                                    createdAt: Date.now(), 
+                                                    reactions: [], 
+                                                    comments: [], 
+                                                    shares: 0, 
+                                                    views: 0, 
+                                                    type: 'video', 
+                                                    visibility: 'Public' 
+                                                };
+                                                setPosts([newPost, ...posts]);
+                                                setReels(prev => prev.map(r => 
+                                                    r.id === reelId 
+                                                        ? { ...r, shares: (r.shares || 0) + 1 }
+                                                        : r
+                                                ));
+                                                alert("Reel shared to your feed!");
+                                            }
+                                        } else if (type === 'copy' && isClient) {
+                                            navigator.clipboard.writeText(`https://unera.social/reels/${reelId}`);
+                                            alert("Link copied to clipboard!");
+                                        }
+                                    }}
+                                    onComment={(reelId, text) => {
+                                        if (!currentUser) return;
+                                        const newComment = { 
+                                            id: Date.now(), 
+                                            userId: currentUser.id, 
+                                            text, 
+                                            timestamp: 'Just now', 
+                                            likes: 0,
+                                            authorName: currentUser.name,
+                                            authorImage: currentUser.profileImage
+                                        };
+                                        setReels(prev => prev.map(reel => 
+                                            reel.id === reelId 
+                                                ? { ...reel, comments: [...reel.comments, newComment] }
+                                                : reel
+                                        ));
+                                    }}
+                                    onCreateReelClick={() => setShowCreateReelModal(true)}
+                                    onFollow={handleFollowUser}
+                                    getCommentAuthor={(id) => users.find(u => u.id === id)}
                                 />
                             )}
                             
@@ -2302,6 +2366,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             onCreatePost={handleCreatePost} 
                         />
                     )}
+                    
                     {showCreateStoryModal && currentUser && (
                         <CreateStoryModal 
                             currentUser={currentUser} 
@@ -2310,6 +2375,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             onCreate={handleCreateStory} 
                         />
                     )}
+                    
+                    {/* FIXED: Added CreateReelModal */}
                     {showCreateReelModal && currentUser && (
                         <CreateReelModal 
                             currentUser={currentUser} 
@@ -2318,6 +2385,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             onSubmit={handleCreateReel} 
                         />
                     )}
+                    
                     {showCreateEventModal && currentUser && (
                         <CreateEventModal 
                             currentUser={currentUser} 
