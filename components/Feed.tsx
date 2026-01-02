@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { User, Post as PostType, ReactionType, Comment, Product, LinkPreview, Group, Brand, AudioTrack } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -34,6 +33,69 @@ const RichText = ({ text, users, onProfileClick, onHashtagClick }: { text: strin
                 return <span key={index}>{part}</span>;
             })}
         </span>
+    );
+};
+
+// --- IMAGE GRID COMPONENT (Facebook-style) ---
+const ImageGrid = ({ images, onImageClick }: { images: string[], onImageClick: (url: string, index: number) => void }) => {
+    if (!images || images.length === 0) return null;
+    
+    const displayedImages = images.slice(0, 9);
+    const remainingCount = images.length - displayedImages.length;
+    
+    const getGridClass = () => {
+        const count = displayedImages.length;
+        if (count === 1) return "grid-cols-1";
+        if (count === 2) return "grid-cols-2 gap-1";
+        if (count === 3) return "grid-cols-2";
+        if (count === 4) return "grid-cols-2 gap-1";
+        return "grid-cols-3 gap-1";
+    };
+
+    const getImageClass = (index: number) => {
+        const count = displayedImages.length;
+        if (count === 1) return "row-span-2 col-span-2";
+        if (count === 2) return "col-span-1 row-span-2";
+        if (count === 3) {
+            if (index === 0) return "row-span-2 col-span-1";
+            return "row-span-1 col-span-1";
+        }
+        if (count === 4) return "row-span-1 col-span-1";
+        return "row-span-1 col-span-1";
+    };
+
+    return (
+        <div className={`grid ${getGridClass()} rounded-lg overflow-hidden mt-2`}>
+            {displayedImages.map((image, index) => (
+                <div 
+                    key={index} 
+                    className={`relative ${getImageClass(index)} cursor-pointer overflow-hidden bg-black`}
+                    onClick={() => onImageClick(image, index)}
+                >
+                    <img 
+                        src={image} 
+                        alt={`Post image ${index + 1}`}
+                        className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                    />
+                    
+                    {/* Overlay for remaining count */}
+                    {index === displayedImages.length - 1 && remainingCount > 0 && (
+                        <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
+                            <span className="text-white text-2xl md:text-3xl font-bold">
+                                +{remainingCount}
+                            </span>
+                        </div>
+                    )}
+                    
+                    {/* Multi-image indicator for first image */}
+                    {images.length > 1 && index === 0 && (
+                        <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm rounded-full w-8 h-8 flex items-center justify-center">
+                            <i className="fas fa-layer-group text-white text-sm"></i>
+                        </div>
+                    )}
+                </div>
+            ))}
+        </div>
     );
 };
 
@@ -259,9 +321,9 @@ interface CreatePostModalProps {
 export const CreatePostModal: React.FC<CreatePostModalProps> = ({ currentUser, users, onClose, onCreatePost, onCreateEventClick }) => {
     const [view, setView] = useState<'main' | 'tag' | 'feeling' | 'location' | 'gif' | 'camera'>('main');
     const [text, setText] = useState('');
-    const [file, setFile] = useState<File | null>(null);
-    const [preview, setPreview] = useState<string | null>(null);
-    const [type, setType] = useState('text');
+    const [files, setFiles] = useState<File[]>([]);
+    const [previews, setPreviews] = useState<string[]>([]);
+    const [type, setType] = useState<'text' | 'image' | 'video'>('text');
     const [visibility, setVisibility] = useState('Public');
     const [activeBackground, setActiveBackground] = useState('');
     const [linkPreview, setLinkPreview] = useState<LinkPreview | null>(null);
@@ -297,7 +359,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ currentUser, u
             } finally {
                 setIsLocationLoading(false);
             }
-        }, 500); // 500ms debounce
+        }, 500);
     };
 
     const handleGetCurrentLocation = () => {
@@ -334,16 +396,161 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ currentUser, u
       };
 
     useEffect(() => { const preview = getLinkPreview(text); setLinkPreview(preview); }, [text]);
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) { const f = e.target.files[0]; setFile(f); setPreview(URL.createObjectURL(f)); setType(f.type.startsWith('image') ? 'image' : 'video'); setActiveBackground(''); setView('main'); } };
-    const handleSubmit = () => { if (!text && !file && !activeBackground) return; onCreatePost(text, file, file ? type : (activeBackground ? 'text' : type), visibility, location, feeling, taggedUsers, activeBackground, linkPreview || undefined); onClose(); };
-    const OptionsItem = ({ icon, color, label, onClick }: { icon: string, color: string, label: string, onClick?: () => void }) => (<div className="flex items-center gap-3 p-3 hover:bg-[#3A3B3C] active:bg-[#3A3B3C] cursor-pointer transition-colors" onClick={onClick}><i className={`${icon} text-[24px] w-8 text-center`} style={{ color }}></i><span className="text-[#E4E6EB] text-[17px] font-medium">{label}</span></div>);
+    
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            const newFiles = Array.from(e.target.files);
+            
+            // Check if total files exceed limit (9 max like Facebook)
+            const totalFiles = files.length + newFiles.length;
+            if (totalFiles > 9) {
+                alert("You can only upload up to 9 images.");
+                return;
+            }
+            
+            // Filter to only allow images
+            const imageFiles = newFiles.filter(file => file.type.startsWith('image/'));
+            
+            setFiles(prev => [...prev, ...imageFiles]);
+            
+            // Create previews
+            const newPreviews = imageFiles.map(file => URL.createObjectURL(file));
+            setPreviews(prev => [...prev, ...newPreviews]);
+            
+            setType('image');
+            setActiveBackground('');
+            setView('main');
+        }
+    };
+
+    const removeFile = (index: number) => {
+        setFiles(prev => prev.filter((_, i) => i !== index));
+        setPreviews(prev => prev.filter((_, i) => i !== index));
+        
+        if (files.length === 1) {
+            setType('text');
+        }
+    };
+
+    const handleSubmit = () => { 
+        if (!text && files.length === 0 && !activeBackground) return; 
+        
+        // For backward compatibility, pass the first file if exists
+        const firstFile = files.length > 0 ? files[0] : null;
+        
+        onCreatePost(text, firstFile, files.length > 0 ? 'image' : type, visibility, location, feeling, taggedUsers, activeBackground, linkPreview || undefined); 
+        onClose(); 
+    };
+    
+    const OptionsItem = ({ icon, color, label, onClick }: { icon: string, color: string, label: string, onClick?: () => void }) => (
+        <div className="flex items-center gap-3 p-3 hover:bg-[#3A3B3C] active:bg-[#3A3B3C] cursor-pointer transition-colors" onClick={onClick}>
+            <i className={`${icon} text-[24px] w-8 text-center`} style={{ color }}></i>
+            <span className="text-[#E4E6EB] text-[17px] font-medium">{label}</span>
+        </div>
+    );
+
+    // Render Image Grid for previews
+    const renderImageGrid = (images: string[]) => {
+        if (images.length === 0) return null;
+        
+        const displayedImages = images.slice(0, 9);
+        const remainingCount = images.length - displayedImages.length;
+        
+        const getGridClass = () => {
+            const count = displayedImages.length;
+            if (count === 1) return "grid-cols-1";
+            if (count === 2) return "grid-cols-2 gap-1";
+            if (count === 3) return "grid-cols-2";
+            if (count === 4) return "grid-cols-2 gap-1";
+            return "grid-cols-3 gap-1";
+        };
+
+        const getImageClass = (index: number) => {
+            const count = displayedImages.length;
+            if (count === 1) return "row-span-2 col-span-2";
+            if (count === 2) return "col-span-1 row-span-2";
+            if (count === 3) {
+                if (index === 0) return "row-span-2 col-span-1";
+                return "row-span-1 col-span-1";
+            }
+            if (count === 4) return "row-span-1 col-span-1";
+            return "row-span-1 col-span-1";
+        };
+
+        return (
+            <div className={`grid ${getGridClass()} rounded-lg overflow-hidden mt-2`}>
+                {displayedImages.map((image, index) => (
+                    <div 
+                        key={index} 
+                        className={`relative ${getImageClass(index)} overflow-hidden bg-black`}
+                    >
+                        <img 
+                            src={image} 
+                            alt={`Preview ${index + 1}`}
+                            className="w-full h-full object-cover"
+                        />
+                        
+                        {/* Remove button */}
+                        <div 
+                            onClick={() => removeFile(index)}
+                            className="absolute top-2 right-2 w-6 h-6 bg-black/80 rounded-full flex items-center justify-center cursor-pointer hover:bg-black"
+                        >
+                            <i className="fas fa-times text-white text-xs"></i>
+                        </div>
+                        
+                        {/* Overlay for remaining count */}
+                        {index === displayedImages.length - 1 && remainingCount > 0 && (
+                            <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
+                                <span className="text-white text-xl font-bold">
+                                    +{remainingCount}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
+        );
+    };
 
     if (view === 'tag') {
         return (
-            <div className="fixed inset-0 z-[150] bg-[#18191A] flex flex-col animate-slide-up font-sans"><div className="flex items-center p-4 border-b border-[#3E4042] gap-4"><i className="fas fa-arrow-left text-[#E4E6EB] text-xl cursor-pointer" onClick={() => setView('main')}></i><h3 className="text-[#E4E6EB] text-lg font-bold">Tag People</h3><button onClick={() => setView('main')} className="ml-auto text-[#1877F2] font-bold">Done</button></div><div className="flex-1 overflow-y-auto p-4">{users.filter(u => u.id !== currentUser.id).map(u => (<div key={u.id} className="flex items-center justify-between p-2 hover:bg-[#3A3B3C] rounded-lg cursor-pointer" onClick={() => setTaggedUsers(prev => prev.includes(u.id) ? prev.filter(uid => uid !== u.id) : [...prev, u.id])}><div className="flex items-center gap-3"><img src={u.profileImage} className="w-10 h-10 rounded-full object-cover" alt="" /><span className="text-[#E4E6EB] font-semibold">{u.name}</span></div>{taggedUsers.includes(u.id) && <i className="fas fa-check-circle text-[#1877F2] text-xl"></i>}</div>))}</div></div>
+            <div className="fixed inset-0 z-[150] bg-[#18191A] flex flex-col animate-slide-up font-sans">
+                <div className="flex items-center p-4 border-b border-[#3E4042] gap-4">
+                    <i className="fas fa-arrow-left text-[#E4E6EB] text-xl cursor-pointer" onClick={() => setView('main')}></i>
+                    <h3 className="text-[#E4E6EB] text-lg font-bold">Tag People</h3>
+                    <button onClick={() => setView('main')} className="ml-auto text-[#1877F2] font-bold">Done</button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4">
+                    {users.filter(u => u.id !== currentUser.id).map(u => (
+                        <div key={u.id} className="flex items-center justify-between p-2 hover:bg-[#3A3B3C] rounded-lg cursor-pointer" onClick={() => setTaggedUsers(prev => prev.includes(u.id) ? prev.filter(uid => uid !== u.id) : [...prev, u.id])}>
+                            <div className="flex items-center gap-3">
+                                <img src={u.profileImage} className="w-10 h-10 rounded-full object-cover" alt="" />
+                                <span className="text-[#E4E6EB] font-semibold">{u.name}</span>
+                            </div>
+                            {taggedUsers.includes(u.id) && <i className="fas fa-check-circle text-[#1877F2] text-xl"></i>}
+                        </div>
+                    ))}
+                </div>
+            </div>
         );
     }
-    if (view === 'feeling') return (<div className="fixed inset-0 z-[150] bg-[#18191A] flex flex-col animate-slide-up font-sans"><div className="flex items-center p-4 border-b border-[#3E4042] gap-4"><i className="fas fa-arrow-left text-[#E4E6EB] text-xl cursor-pointer" onClick={() => setView('main')}></i><h3 className="text-[#E4E6EB] text-lg font-bold">How are you feeling?</h3></div><div className="flex-1 overflow-y-auto p-4 grid grid-cols-2 gap-2">{FEELINGS.map(f => (<div key={f} className="p-3 bg-[#242526] rounded-lg text-center cursor-pointer hover:bg-[#3A3B3C] text-[#E4E6EB]" onClick={() => { setFeeling(f); setView('main'); }}>{f}</div>))}</div></div>);
+    
+    if (view === 'feeling') return (
+        <div className="fixed inset-0 z-[150] bg-[#18191A] flex flex-col animate-slide-up font-sans">
+            <div className="flex items-center p-4 border-b border-[#3E4042] gap-4">
+                <i className="fas fa-arrow-left text-[#E4E6EB] text-xl cursor-pointer" onClick={() => setView('main')}></i>
+                <h3 className="text-[#E4E6EB] text-lg font-bold">How are you feeling?</h3>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 grid grid-cols-2 gap-2">
+                {FEELINGS.map(f => (
+                    <div key={f} className="p-3 bg-[#242526] rounded-lg text-center cursor-pointer hover:bg-[#3A3B3C] text-[#E4E6EB]" onClick={() => { setFeeling(f); setView('main'); }}>
+                        {f}
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+    
     if (view === 'location') {
         return (
             <div className="fixed inset-0 z-[150] bg-[#18191A] flex flex-col animate-slide-up font-sans">
@@ -377,7 +584,109 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ currentUser, u
     }
 
     return (
-        <div className="fixed inset-0 z-[150] bg-[#18191A] flex flex-col animate-slide-up font-sans"><div className="flex items-center justify-between p-4 border-b border-[#3E4042]"><div className="flex items-center gap-4"><i className="fas fa-arrow-left text-[#E4E6EB] text-xl cursor-pointer" onClick={onClose}></i><h3 className="text-[#E4E6EB] text-[20px] font-medium">Create Post</h3></div><button onClick={handleSubmit} disabled={!text && !file && !activeBackground} className="text-[#E4E6EB] font-bold text-[17px] disabled:text-[#B0B3B8]">POST</button></div><div className="flex-1 overflow-y-auto"><div className="p-4"><div className="flex items-center gap-3 mb-4"><img src={currentUser.profileImage} alt="" className="w-12 h-12 rounded-full object-cover" /><div><div className="flex items-center gap-1 flex-wrap"><h4 className="font-bold text-[#E4E6EB] text-[17px]">{currentUser.name}</h4>{feeling && <span className="text-[#E4E6EB] text-[15px]"> is feeling {feeling}</span>}{location && <span className="text-[#E4E6EB] text-[15px]"> in <strong>{location}</strong></span>}{taggedUsers.length > 0 && <span className="text-[#E4E6EB] text-[15px]"> with {taggedUsers.length} others</span>}</div><div className="flex items-center gap-2 mt-0.5"><div className="bg-[#3A3B3C] rounded-md px-2 py-1 inline-flex items-center gap-1 text-[13px] font-semibold text-[#E4E6EB] border border-[#3E4042]"><i className={`fas ${visibility === 'Public' ? 'fa-globe-americas' : 'fa-lock'} text-[12px]`}></i><span>{visibility}</span><i className="fas fa-caret-down"></i></div></div></div></div><div className={`relative min-h-[150px] mb-4 transition-all ${activeBackground ? 'flex items-center justify-center p-8 rounded-lg text-center min-h-[300px]' : ''}`} style={{ background: activeBackground, backgroundSize: 'cover' }}><textarea className={`w-full bg-transparent outline-none text-[#E4E6EB] placeholder-[#B0B3B8] resize-none ${activeBackground ? 'text-center font-bold text-3xl drop-shadow-md placeholder-white/70' : 'text-[24px]'}`} placeholder="What's on your mind?" value={text} onChange={e => setText(e.target.value)} rows={activeBackground ? 4 : 5} /></div>{linkPreview && !file && !activeBackground && (<div className="mb-4 bg-[#242526] border border-[#3E4042] rounded-lg overflow-hidden cursor-pointer hover:bg-[#3A3B3C] transition-colors"><img src={linkPreview.image} alt="Preview" className="w-full h-48 object-cover" /><div className="p-3 bg-[#3A3B3C]"><div className="text-[#B0B3B8] text-xs uppercase font-bold mb-1">{linkPreview.domain}</div><div className="text-[#E4E6EB] font-bold text-[17px] mb-1 line-clamp-1">{linkPreview.title}</div><div className="text-[#B0B3B8] text-[14px] line-clamp-2">{linkPreview.description}</div></div></div>)}{!preview && (<div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2 scrollbar-hide"><div className={`w-8 h-8 rounded-lg cursor-pointer border-2 bg-[#3A3B3C] flex items-center justify-center flex-shrink-0 ${!activeBackground ? 'border-white' : 'border-[#3E4042]'}`} onClick={() => setActiveBackground('')}><div className="w-6 h-6 bg-white rounded flex items-center justify-center"><i className="fas fa-font text-black text-xs"></i></div></div>{BACKGROUNDS.filter(b => b.id !== 'none').map(bg => (<div key={bg.id} className={`w-8 h-8 rounded-lg cursor-pointer border-2 flex-shrink-0 ${activeBackground === bg.value ? 'border-white' : 'border-transparent'}`} style={{ background: bg.value, backgroundSize: 'cover' }} onClick={() => setActiveBackground(bg.value)}></div>))}</div>)}{preview && (<div className="relative rounded-lg overflow-hidden border border-[#3E4042] mb-4"><div onClick={() => { setFile(null); setPreview(null); setType('text'); }} className="absolute top-2 right-2 w-8 h-8 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center cursor-pointer hover:bg-black/80 z-10"><i className="fas fa-times text-white"></i></div>{type === 'image' ? <img src={preview} alt="preview" className="w-full h-auto max-h-[400px] object-contain bg-black" /> : <video src={preview} controls className="w-full h-auto max-h-[400px] bg-black" />}</div>)}</div><div className="border-t border-[#3E4042]"><OptionsItem icon="fas fa-images" color="#45BD62" label="Photo/video" onClick={() => fileInputRef.current?.click()} /><OptionsItem icon="fas fa-user-tag" color="#1877F2" label="Tag people" onClick={() => setView('tag')} /><OptionsItem icon="far fa-smile" color="#F7B928" label="Feeling/activity" onClick={() => setView('feeling')} /><OptionsItem icon="fas fa-map-marker-alt" color="#F02849" label="Check in" onClick={() => setView('location')} /></div></div><div className="p-4 border-t border-[#3E4042]"><button onClick={handleSubmit} disabled={!text && !file && !activeBackground} className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold py-3 rounded-lg transition-colors disabled:bg-[#3A3B3C] text-lg shadow-sm">POST</button></div><input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*" onChange={handleFileChange} /><input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleFileChange} /></div>
+        <div className="fixed inset-0 z-[150] bg-[#18191A] flex flex-col animate-slide-up font-sans">
+            <div className="flex items-center justify-between p-4 border-b border-[#3E4042]">
+                <div className="flex items-center gap-4">
+                    <i className="fas fa-arrow-left text-[#E4E6EB] text-xl cursor-pointer" onClick={onClose}></i>
+                    <h3 className="text-[#E4E6EB] text-[20px] font-medium">Create Post</h3>
+                </div>
+                <button onClick={handleSubmit} disabled={!text && files.length === 0 && !activeBackground} className="text-[#E4E6EB] font-bold text-[17px] disabled:text-[#B0B3B8]">POST</button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto">
+                <div className="p-4">
+                    <div className="flex items-center gap-3 mb-4">
+                        <img src={currentUser.profileImage} alt="" className="w-12 h-12 rounded-full object-cover" />
+                        <div>
+                            <div className="flex items-center gap-1 flex-wrap">
+                                <h4 className="font-bold text-[#E4E6EB] text-[17px]">{currentUser.name}</h4>
+                                {feeling && <span className="text-[#E4E6EB] text-[15px]"> is feeling {feeling}</span>}
+                                {location && <span className="text-[#E4E6EB] text-[15px]"> in <strong>{location}</strong></span>}
+                                {taggedUsers.length > 0 && <span className="text-[#E4E6EB] text-[15px]"> with {taggedUsers.length} others</span>}
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                                <div className="bg-[#3A3B3C] rounded-md px-2 py-1 inline-flex items-center gap-1 text-[13px] font-semibold text-[#E4E6EB] border border-[#3E4042]">
+                                    <i className={`fas ${visibility === 'Public' ? 'fa-globe-americas' : 'fa-lock'} text-[12px]`}></i>
+                                    <span>{visibility}</span>
+                                    <i className="fas fa-caret-down"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div className={`relative min-h-[150px] mb-4 transition-all ${activeBackground ? 'flex items-center justify-center p-8 rounded-lg text-center min-h-[300px]' : ''}`} style={{ background: activeBackground, backgroundSize: 'cover' }}>
+                        <textarea 
+                            className={`w-full bg-transparent outline-none text-[#E4E6EB] placeholder-[#B0B3B8] resize-none ${activeBackground ? 'text-center font-bold text-3xl drop-shadow-md placeholder-white/70' : 'text-[24px]'}`} 
+                            placeholder="What's on your mind?" 
+                            value={text} 
+                            onChange={e => setText(e.target.value)} 
+                            rows={activeBackground ? 4 : 5} 
+                        />
+                    </div>
+                    
+                    {linkPreview && files.length === 0 && !activeBackground && (
+                        <div className="mb-4 bg-[#242526] border border-[#3E4042] rounded-lg overflow-hidden cursor-pointer hover:bg-[#3A3B3C] transition-colors">
+                            <img src={linkPreview.image} alt="Preview" className="w-full h-48 object-cover" />
+                            <div className="p-3 bg-[#3A3B3C]">
+                                <div className="text-[#B0B3B8] text-xs uppercase font-bold mb-1">{linkPreview.domain}</div>
+                                <div className="text-[#E4E6EB] font-bold text-[17px] mb-1 line-clamp-1">{linkPreview.title}</div>
+                                <div className="text-[#B0B3B8] text-[14px] line-clamp-2">{linkPreview.description}</div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {previews.length > 0 && (
+                        <div className="mb-4">
+                            {renderImageGrid(previews)}
+                            
+                            {/* Add more images button */}
+                            {previews.length < 9 && (
+                                <div className="flex gap-2 mt-2">
+                                    <div 
+                                        className="w-16 h-16 rounded-lg border-2 border-dashed border-[#3E4042] flex items-center justify-center cursor-pointer hover:bg-[#3A3B3C]"
+                                        onClick={() => fileInputRef.current?.click()}
+                                    >
+                                        <i className="fas fa-plus text-[#B0B3B8]"></i>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    
+                    {!previews.length && (
+                        <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2 scrollbar-hide">
+                            <div className={`w-8 h-8 rounded-lg cursor-pointer border-2 bg-[#3A3B3C] flex items-center justify-center flex-shrink-0 ${!activeBackground ? 'border-white' : 'border-[#3E4042]'}`} onClick={() => setActiveBackground('')}>
+                                <div className="w-6 h-6 bg-white rounded flex items-center justify-center">
+                                    <i className="fas fa-font text-black text-xs"></i>
+                                </div>
+                            </div>
+                            {BACKGROUNDS.filter(bg => bg.id !== 'none').map(bg => (
+                                <div 
+                                    key={bg.id} 
+                                    className={`w-8 h-8 rounded-lg cursor-pointer border-2 flex-shrink-0 ${activeBackground === bg.value ? 'border-white' : 'border-transparent'}`} 
+                                    style={{ background: bg.value, backgroundSize: 'cover' }} 
+                                    onClick={() => setActiveBackground(bg.value)}
+                                ></div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+                
+                <div className="border-t border-[#3E4042]">
+                    <OptionsItem icon="fas fa-images" color="#45BD62" label="Photo/video" onClick={() => fileInputRef.current?.click()} />
+                    <OptionsItem icon="fas fa-user-tag" color="#1877F2" label="Tag people" onClick={() => setView('tag')} />
+                    <OptionsItem icon="far fa-smile" color="#F7B928" label="Feeling/activity" onClick={() => setView('feeling')} />
+                    <OptionsItem icon="fas fa-map-marker-alt" color="#F02849" label="Check in" onClick={() => setView('location')} />
+                </div>
+            </div>
+            
+            <div className="p-4 border-t border-[#3E4042]">
+                <button onClick={handleSubmit} disabled={!text && files.length === 0 && !activeBackground} className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold py-3 rounded-lg transition-colors disabled:bg-[#3A3B3C] text-lg shadow-sm">POST</button>
+            </div>
+            
+            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" multiple onChange={handleFileChange} />
+            <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleFileChange} />
+        </div>
     );
 };
 
@@ -399,7 +708,96 @@ export const CommentsSheet: React.FC<CommentsSheetProps> = ({ post, currentUser,
     const inputRef = useRef<HTMLInputElement>(null);
     const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); if(text.trim()) { onComment(post.id, text, undefined, replyingTo?.id); setText(''); setShowPicker(null); setReplyingTo(null); } };
     return (
-        <div className="fixed inset-0 z-[120] flex flex-col justify-end md:items-center md:justify-center"><div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose}></div><div className="bg-[#242526] w-full md:w-[600px] md:h-[80vh] md:rounded-xl z-20 animate-slide-up flex flex-col h-[70vh] shadow-2xl overflow-hidden border border-[#3E4042]"><div className="p-3 border-b border-[#3E4042] flex justify-between items-center bg-[#242526]"><div className="flex items-center gap-2"><div className="bg-[#1877F2] p-1.5 rounded-full"><i className="fas fa-thumbs-up text-white text-xs"></i></div><span className="text-[#B0B3B8] text-[15px] hover:underline cursor-pointer">{post.reactions.length}</span><i className="fas fa-chevron-right text-[#B0B3B8] text-xs"></i></div><div onClick={onClose} className="w-8 h-8 rounded-full bg-[#3A3B3C] flex items-center justify-center cursor-pointer"><i className="fas fa-times text-[#B0B3B8]"></i></div></div><div className="flex-1 overflow-y-auto p-4">{post.comments.length === 0 ? (<div className="flex flex-col items-center justify-center h-full text-[#B0B3B8] gap-2"><div className="w-16 h-16 bg-[#3A3B3C] rounded-full flex items-center justify-center"><i className="far fa-comments text-3xl"></i></div><p className="font-semibold text-[#E4E6EB]">No comments yet</p><p className="text-[15px]">Be the first to share your thoughts.</p></div>) : (<div className="flex flex-col gap-4">{post.comments.map(comment => { const author = getCommentAuthor(comment.userId); if (!author) return null; return (<div key={comment.id} className="flex flex-col gap-2"><div className="flex gap-2"><img src={author.profileImage} alt="" className="w-10 h-10 rounded-full object-cover cursor-pointer" onClick={() => onProfileClick(author.id)} /><div className="flex flex-col max-w-[85%]"><div className="bg-[#3A3B3C] px-4 py-3 rounded-2xl relative"><span className="font-bold text-[15px] text-[#E4E6EB] cursor-pointer hover:underline block mb-1 hover:text-[#1877F2]" onClick={() => onProfileClick(author.id)}>{author.name}</span><div className="text-[16px] text-[#E4E6EB] break-words"><RichText text={comment.text} users={users} onProfileClick={onProfileClick} /></div>{comment.attachment && <img src={comment.attachment.url} className="mt-2 rounded-lg max-h-[150px] w-auto" alt="" />}{comment.likes > 0 && (<div className="absolute -bottom-2 -right-1 bg-[#242526] rounded-full px-1.5 py-0.5 flex items-center shadow-sm border border-[#3E4042] gap-1"><div className="bg-[#1877F2] rounded-full p-[2px]"><i className="fas fa-thumbs-up text-white text-[8px]"></i></div><span className="text-[12px] text-[#B0B3B8]">{comment.likes}</span></div>)}</div><div className="flex gap-4 ml-3 mt-1 text-[13px] font-bold text-[#B0B3B8]"><span className="font-normal">{comment.timestamp}</span><span className={`cursor-pointer hover:underline ${comment.hasLiked ? 'text-[#1877F2]' : ''}`} onClick={() => onLikeComment(comment.id)}>Like</span><span className="cursor-pointer hover:underline" onClick={() => { setReplyingTo({ id: comment.id, name: author.name }); setText(`@${author.name} `); setTimeout(() => inputRef.current?.focus(), 0); }}>Reply</span></div></div></div></div>); })}</div>)}</div>{showPicker === 'sticker' && <StickerPicker onSelect={(url) => { onComment(post.id, '', { type: 'image', url }); setShowPicker(null); }} />}{showPicker === 'emoji' && <EmojiPicker onSelect={(emoji) => setText(prev => prev + emoji)} />}<div className="p-3 border-t border-[#3E4042] bg-[#242526]">{replyingTo && (<div className="flex items-center justify-between bg-[#3A3B3C] p-2 rounded-t-lg mb-1 text-sm text-[#B0B3B8]"><span>Replying to <b>{replyingTo.name}</b></span><i className="fas fa-times cursor-pointer p-1" onClick={() => setReplyingTo(null)}></i></div>)}<div className="flex items-end gap-2"><div className="flex items-center gap-2 mb-2"><i className="fas fa-camera text-[#B0B3B8] text-xl cursor-pointer hover:bg-[#3A3B3C] p-1.5 rounded-full"></i><i className={`fas fa-sticky-note text-xl cursor-pointer hover:bg-[#3A3B3C] p-1.5 rounded-full ${showPicker === 'sticker' ? 'text-[#1877F2]' : 'text-[#B0B3B8]'}`} onClick={() => setShowPicker(showPicker === 'sticker' ? null : 'sticker')}></i></div><form className="flex-1 bg-[#3A3B3C] rounded-2xl flex items-center" onSubmit={handleSubmit}><input ref={inputRef} type="text" className="bg-transparent w-full px-4 py-2.5 text-[#E4E6EB] outline-none placeholder-[#B0B3B8] text-[16px]" placeholder={replyingTo ? `Reply to ${replyingTo.name}...` : "Write a comment..."} value={text} onChange={e => setText(e.target.value)} onFocus={() => setShowPicker(null)} /><i className={`far fa-smile text-xl cursor-pointer mr-3 ${showPicker === 'emoji' ? 'text-[#1877F2]' : 'text-[#B0B3B8]'}`} onClick={() => setShowPicker(showPicker === 'emoji' ? null : 'emoji')}></i></form><button type="submit" onClick={handleSubmit} disabled={!text.trim()} className="mb-2 text-[#1877F2] hover:bg-[#3A3B3C] p-2 rounded-full disabled:opacity-50"><i className="fas fa-paper-plane text-lg"></i></button></div></div></div></div>
+        <div className="fixed inset-0 z-[120] flex flex-col justify-end md:items-center md:justify-center">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
+            <div className="bg-[#242526] w-full md:w-[600px] md:h-[80vh] md:rounded-xl z-20 animate-slide-up flex flex-col h-[70vh] shadow-2xl overflow-hidden border border-[#3E4042]">
+                <div className="p-3 border-b border-[#3E4042] flex justify-between items-center bg-[#242526]">
+                    <div className="flex items-center gap-2">
+                        <div className="bg-[#1877F2] p-1.5 rounded-full">
+                            <i className="fas fa-thumbs-up text-white text-xs"></i>
+                        </div>
+                        <span className="text-[#B0B3B8] text-[15px] hover:underline cursor-pointer">{post.reactions.length}</span>
+                        <i className="fas fa-chevron-right text-[#B0B3B8] text-xs"></i>
+                    </div>
+                    <div onClick={onClose} className="w-8 h-8 rounded-full bg-[#3A3B3C] flex items-center justify-center cursor-pointer">
+                        <i className="fas fa-times text-[#B0B3B8]"></i>
+                    </div>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-4">
+                    {post.comments.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-full text-[#B0B3B8] gap-2">
+                            <div className="w-16 h-16 bg-[#3A3B3C] rounded-full flex items-center justify-center">
+                                <i className="far fa-comments text-3xl"></i>
+                            </div>
+                            <p className="font-semibold text-[#E4E6EB]">No comments yet</p>
+                            <p className="text-[15px]">Be the first to share your thoughts.</p>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col gap-4">
+                            {post.comments.map(comment => { 
+                                const author = getCommentAuthor(comment.userId); 
+                                if (!author) return null; 
+                                return (
+                                    <div key={comment.id} className="flex flex-col gap-2">
+                                        <div className="flex gap-2">
+                                            <img src={author.profileImage} alt="" className="w-10 h-10 rounded-full object-cover cursor-pointer" onClick={() => onProfileClick(author.id)} />
+                                            <div className="flex flex-col max-w-[85%]">
+                                                <div className="bg-[#3A3B3C] px-4 py-3 rounded-2xl relative">
+                                                    <span className="font-bold text-[15px] text-[#E4E6EB] cursor-pointer hover:underline block mb-1 hover:text-[#1877F2]" onClick={() => onProfileClick(author.id)}>{author.name}</span>
+                                                    <div className="text-[16px] text-[#E4E6EB] break-words">
+                                                        <RichText text={comment.text} users={users} onProfileClick={onProfileClick} />
+                                                    </div>
+                                                    {comment.attachment && <img src={comment.attachment.url} className="mt-2 rounded-lg max-h-[150px] w-auto" alt="" />}
+                                                    {comment.likes > 0 && (
+                                                        <div className="absolute -bottom-2 -right-1 bg-[#242526] rounded-full px-1.5 py-0.5 flex items-center shadow-sm border border-[#3E4042] gap-1">
+                                                            <div className="bg-[#1877F2] rounded-full p-[2px]">
+                                                                <i className="fas fa-thumbs-up text-white text-[8px]"></i>
+                                                            </div>
+                                                            <span className="text-[12px] text-[#B0B3B8]">{comment.likes}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex gap-4 ml-3 mt-1 text-[13px] font-bold text-[#B0B3B8]">
+                                                    <span className="font-normal">{comment.timestamp}</span>
+                                                    <span className={`cursor-pointer hover:underline ${comment.hasLiked ? 'text-[#1877F2]' : ''}`} onClick={() => onLikeComment(comment.id)}>Like</span>
+                                                    <span className="cursor-pointer hover:underline" onClick={() => { setReplyingTo({ id: comment.id, name: author.name }); setText(`@${author.name} `); setTimeout(() => inputRef.current?.focus(), 0); }}>Reply</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+                
+                {showPicker === 'sticker' && <StickerPicker onSelect={(url) => { onComment(post.id, '', { type: 'image', url }); setShowPicker(null); }} />}
+                {showPicker === 'emoji' && <EmojiPicker onSelect={(emoji) => setText(prev => prev + emoji)} />}
+                
+                <div className="p-3 border-t border-[#3E4042] bg-[#242526]">
+                    {replyingTo && (
+                        <div className="flex items-center justify-between bg-[#3A3B3C] p-2 rounded-t-lg mb-1 text-sm text-[#B0B3B8]">
+                            <span>Replying to <b>{replyingTo.name}</b></span>
+                            <i className="fas fa-times cursor-pointer p-1" onClick={() => setReplyingTo(null)}></i>
+                        </div>
+                    )}
+                    <div className="flex items-end gap-2">
+                        <div className="flex items-center gap-2 mb-2">
+                            <i className="fas fa-camera text-[#B0B3B8] text-xl cursor-pointer hover:bg-[#3A3B3C] p-1.5 rounded-full"></i>
+                            <i className={`fas fa-sticky-note text-xl cursor-pointer hover:bg-[#3A3B3C] p-1.5 rounded-full ${showPicker === 'sticker' ? 'text-[#1877F2]' : 'text-[#B0B3B8]'}`} onClick={() => setShowPicker(showPicker === 'sticker' ? null : 'sticker')}></i>
+                        </div>
+                        <form className="flex-1 bg-[#3A3B3C] rounded-2xl flex items-center" onSubmit={handleSubmit}>
+                            <input ref={inputRef} type="text" className="bg-transparent w-full px-4 py-2.5 text-[#E4E6EB] outline-none placeholder-[#B0B3B8] text-[16px]" placeholder={replyingTo ? `Reply to ${replyingTo.name}...` : "Write a comment..."} value={text} onChange={e => setText(e.target.value)} onFocus={() => setShowPicker(null)} />
+                            <i className={`far fa-smile text-xl cursor-pointer mr-3 ${showPicker === 'emoji' ? 'text-[#1877F2]' : 'text-[#B0B3B8]'}`} onClick={() => setShowPicker(showPicker === 'emoji' ? null : 'emoji')}></i>
+                        </form>
+                        <button type="submit" onClick={handleSubmit} disabled={!text.trim()} className="mb-2 text-[#1877F2] hover:bg-[#3A3B3C] p-2 rounded-full disabled:opacity-50">
+                            <i className="fas fa-paper-plane text-lg"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     );
 };
 
@@ -415,7 +813,7 @@ interface PostProps {
     onDelete?: (postId: number) => void;
     onEdit?: (postId: number, content: string) => void;
     onHashtagClick?: (tag: string) => void;
-    onViewImage: (url: string) => void;
+    onViewImage: (url: string, index: number) => void; // UPDATED: Now includes index
     onOpenComments: (postId: number) => void;
     onViewProduct?: (product: Product) => void;
     onVideoClick: (post: PostType) => void;
@@ -437,7 +835,7 @@ export const Post: React.FC<PostProps> = ({ post, author, currentUser, users, on
         if (!content) return null;
         const words = content.split(/\s+/);
         const isLong = words.length > 250;
-        const isShortText = content.length < 150 && post.type === 'text' && !post.image && !post.video && !post.background && !post.event && !post.product && !sharedPost;
+        const isShortText = content.length < 150 && post.type === 'text' && !post.images && !post.video && !post.background && !post.event && !post.product && !sharedPost;
         const textSizeClass = isShortText ? 'text-[24px] leading-tight font-normal' : 'text-[22px] leading-relaxed';
         let displayContent = content;
         if (isLong && !isExpanded) displayContent = words.slice(0, 250).join(' ') + '...';
@@ -445,6 +843,69 @@ export const Post: React.FC<PostProps> = ({ post, author, currentUser, users, on
             <div className={`px-3 md:px-4 pb-2 text-[#E4E6EB] ${textSizeClass}`}>
                 <RichText text={displayContent} users={users} onProfileClick={onProfileClick} onHashtagClick={onHashtagClick} />
                 {isLong && !isExpanded && (<span className="text-[#B0B3B8] font-semibold cursor-pointer hover:underline ml-1" onClick={() => setIsExpanded(true)}>See more</span>)}
+            </div>
+        );
+    };
+
+    // Image Grid function for multi-image posts
+    const renderImageGrid = (images: string[]) => {
+        if (!images || images.length === 0) return null;
+        
+        const displayedImages = images.slice(0, 9);
+        const remainingCount = images.length - displayedImages.length;
+        
+        const getGridClass = () => {
+            const count = displayedImages.length;
+            if (count === 1) return "grid-cols-1";
+            if (count === 2) return "grid-cols-2 gap-1";
+            if (count === 3) return "grid-cols-2";
+            if (count === 4) return "grid-cols-2 gap-1";
+            return "grid-cols-3 gap-1";
+        };
+
+        const getImageClass = (index: number) => {
+            const count = displayedImages.length;
+            if (count === 1) return "row-span-2 col-span-2";
+            if (count === 2) return "col-span-1 row-span-2";
+            if (count === 3) {
+                if (index === 0) return "row-span-2 col-span-1";
+                return "row-span-1 col-span-1";
+            }
+            if (count === 4) return "row-span-1 col-span-1";
+            return "row-span-1 col-span-1";
+        };
+
+        return (
+            <div className={`grid ${getGridClass()} rounded-lg overflow-hidden mt-2 mx-3 md:mx-4 cursor-pointer`}>
+                {displayedImages.map((image, index) => (
+                    <div 
+                        key={index} 
+                        className={`relative ${getImageClass(index)} overflow-hidden bg-black`}
+                        onClick={() => onViewImage(image, index)}
+                    >
+                        <img 
+                            src={image} 
+                            alt={`Post image ${index + 1}`}
+                            className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                        />
+                        
+                        {/* Overlay for remaining count */}
+                        {index === displayedImages.length - 1 && remainingCount > 0 && (
+                            <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
+                                <span className="text-white text-2xl md:text-3xl font-bold">
+                                    +{remainingCount}
+                                </span>
+                            </div>
+                        )}
+                        
+                        {/* Multi-image indicator for first image */}
+                        {images.length > 1 && index === 0 && (
+                            <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm rounded-full w-8 h-8 flex items-center justify-center">
+                                <i className="fas fa-layer-group text-white text-sm"></i>
+                            </div>
+                        )}
+                    </div>
+                ))}
             </div>
         );
     };
@@ -475,19 +936,158 @@ export const Post: React.FC<PostProps> = ({ post, author, currentUser, users, on
                             {isFollowing ? (<><i className="fas fa-user-check text-xs"></i><span>Following</span></>) : (<><i className="fas fa-user-plus text-xs"></i><span>Follow</span></>)}
                         </button>
                     )}
-                    <div className="relative"><div className="w-9 h-9 hover:bg-[#3A3B3C] rounded-full flex items-center justify-center cursor-pointer" onClick={() => setShowMenu(!showMenu)}><i className="fas fa-ellipsis-h text-[#B0B3B8]"></i></div>{showMenu && (<div className="absolute right-0 top-10 bg-[#242526] rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.5)] border border-[#3E4042] w-[200px] z-10 py-2"><div className="px-3 py-2 hover:bg-[#3A3B3C] cursor-pointer flex items-center gap-3 text-[#E4E6EB]"><i className="far fa-bookmark w-5"></i> Save Post</div>{(isOwner || isAdmin) && (<><div className="px-3 py-2 hover:bg-[#3A3B3C] cursor-pointer flex items-center gap-3 text-[#E4E6EB]"><i className="fas fa-pen w-5"></i> Edit Post</div><div className="px-3 py-2 hover:bg-[#3A3B3C] cursor-pointer flex items-center gap-3 text-[#E4E6EB]" onClick={() => onDelete && onDelete(post.id)}><i className="fas fa-trash w-5"></i> Move to trash</div></>)}</div>)}</div>
+                    <div className="relative">
+                        <div className="w-9 h-9 hover:bg-[#3A3B3C] rounded-full flex items-center justify-center cursor-pointer" onClick={() => setShowMenu(!showMenu)}>
+                            <i className="fas fa-ellipsis-h text-[#B0B3B8]"></i>
+                        </div>
+                        {showMenu && (
+                            <div className="absolute right-0 top-10 bg-[#242526] rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.5)] border border-[#3E4042] w-[200px] z-10 py-2">
+                                <div className="px-3 py-2 hover:bg-[#3A3B3C] cursor-pointer flex items-center gap-3 text-[#E4E6EB]">
+                                    <i className="far fa-bookmark w-5"></i> Save Post
+                                </div>
+                                {(isOwner || isAdmin) && (
+                                    <>
+                                        <div className="px-3 py-2 hover:bg-[#3A3B3C] cursor-pointer flex items-center gap-3 text-[#E4E6EB]">
+                                            <i className="fas fa-pen w-5"></i> Edit Post
+                                        </div>
+                                        <div className="px-3 py-2 hover:bg-[#3A3B3C] cursor-pointer flex items-center gap-3 text-[#E4E6EB]" onClick={() => onDelete && onDelete(post.id)}>
+                                            <i className="fas fa-trash w-5"></i> Move to trash
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
+            
             {renderContent(post.content || '')}
-            {post.type === 'audio' && post.audioTrack && (<div className="mx-3 md:mx-4 mb-2 rounded-xl overflow-hidden cursor-pointer relative group border border-[#3E4042] shadow-lg" onClick={() => onPlayAudioTrack && onPlayAudioTrack(post.audioTrack!)}><img src={post.audioTrack.cover} alt="album cover" className="w-full h-full object-cover absolute inset-0 blur-md opacity-30 group-hover:opacity-50 transition-all" /><div className="relative p-6 bg-black/40 backdrop-blur-sm flex items-center gap-6"><div className="w-24 h-24 md:w-32 md:h-32 flex-shrink-0 relative"><img src={post.audioTrack.cover} alt="album cover" className="w-full h-full object-cover rounded-lg shadow-2xl" /><div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg"><div className="w-12 h-12 bg-[#1877F2]/80 rounded-full flex items-center justify-center border-2 border-white/50"><i className="fas fa-play text-white text-xl pl-1"></i></div></div></div><div className="flex-1 min-w-0"><span className="text-xs font-bold uppercase tracking-wider text-[#B0B3B8]">{post.audioTrack.type}</span><h3 className="text-xl md:text-2xl font-bold text-white truncate my-1">{post.audioTrack.title}</h3><p className="text-md text-[#B0B3B8] truncate">{post.audioTrack.artist}</p></div></div></div>)}
-            {post.type === 'product' && post.product && (<div className="mx-3 md:mx-4 mb-2 border border-[#3E4042] rounded-lg overflow-hidden cursor-pointer" onClick={() => onViewProduct && onViewProduct(post.product!)}><div className="aspect-video bg-black"><img src={post.product.images[0]} alt={post.product.title} className="w-full h-full object-cover" /></div><div className="p-3 bg-[#3A3B3C]"><div className="text-[#B0B3B8] text-xs uppercase font-bold">{MARKETPLACE_CATEGORIES.find(c => c.id === post.product?.category)?.name}</div><div className="text-[#E4E6EB] font-bold text-lg truncate">{post.product.title}</div><div className="flex items-center justify-between mt-1"><span className="text-[#F02849] font-bold text-xl">{MARKETPLACE_COUNTRIES.find(c => c.code === post.product!.country)?.symbol || '$'}{post.product.mainPrice}</span><button className="bg-[#1877F2] text-white px-4 py-1.5 rounded-md font-semibold text-sm">View Item</button></div></div></div>)}
-            {post.linkPreview && !post.image && !post.video && (<div className="mx-3 md:mx-4 mb-2 bg-[#242526] border border-[#3E4042] rounded-lg overflow-hidden cursor-pointer hover:bg-[#3A3B3C] transition-colors" onClick={() => window.open(post.linkPreview!.url, '_blank')}><img src={post.linkPreview.image} alt="Preview" className="w-full h-48 md:h-64 object-cover" /><div className="p-3 bg-[#3A3B3C]"><div className="text-[#B0B3B8] text-xs uppercase font-bold mb-1">{post.linkPreview.domain}</div><div className="text-[#E4E6EB] font-bold text-[17px] mb-1 line-clamp-1">{post.linkPreview.title}</div><div className="text-[#B0B3B8] text-[14px] line-clamp-2">{post.linkPreview.description}</div></div></div>)}
-            {post.background && <div className="h-[300px] flex items-center justify-center p-8 text-center text-white font-bold text-2xl" style={{ background: post.background, backgroundSize: 'cover' }}>{post.content}</div>}
-            {post.type === 'event' && post.event && (<div className="mx-4 mb-4 rounded-xl overflow-hidden border border-[#3E4042]"><img src={post.event.image} className="w-full h-40 object-cover" alt="" /><div className="bg-[#3A3B3C] p-3 flex justify-between items-center"><div><div className="text-red-500 text-xs font-bold uppercase">{new Date(post.event.date).toLocaleString('default', { month: 'short' })} {new Date(post.event.date).getDate()}</div><div className="text-[#E4E6EB] font-bold">{post.event.title}</div><div className="text-[#B0B3B8] text-sm">{post.event.location}</div></div><button className="border border-[#B0B3B8] text-[#E4E6EB] px-4 py-1.5 rounded-lg font-bold text-sm hover:bg-[#4E4F50]">Interested</button></div></div>)}
-            {post.type === 'image' && post.image && !post.background && (<div className="mt-1 cursor-pointer bg-black flex items-center justify-center max-h-[600px] overflow-hidden" onClick={() => onViewImage(post.image!)}><img src={post.image} alt="Content" className="w-full h-auto object-contain max-h-[600px]" /></div>)}
-            {post.type === 'video' && post.video && (<div className="mt-1 bg-black w-full cursor-pointer relative h-[500px] md:h-[600px]" onClick={() => onVideoClick(post)}><video src={post.video} className="w-full h-full object-cover" /><div className="absolute top-3 right-3 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-2 border border-white/10 z-10"><i className="fas fa-eye text-white text-xs animate-pulse"></i><span className="text-white font-bold text-xs">{post.views || 0}</span></div><div className="absolute inset-0 flex items-center justify-center pointer-events-none"><div className="w-16 h-16 bg-black/40 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/20"><i className="fas fa-play text-white text-2xl pl-1"></i></div></div></div>)}
-            {!isVideo && (<div className="px-3 md:px-4 py-2.5 flex items-center justify-between text-[#B0B3B8] text-[14px]"><div className="flex items-center gap-1.5 cursor-pointer">{post.reactions.length > 0 && (<div className="flex -space-x-1"><div className="bg-[#1877F2] rounded-full p-[2px] z-10"><i className="fas fa-thumbs-up text-white text-[10px]"></i></div>{post.reactions.some(r => r.type === 'love') && <div className="bg-[#F3425F] rounded-full p-[2px]"><i className="fas fa-heart text-white text-[10px]"></i></div>}</div>)}<span className="hover:underline">{post.reactions.length > 0 ? post.reactions.length : ''}</span></div><div className="flex gap-4"><span className="hover:underline cursor-pointer" onClick={() => onOpenComments(post.id)}>{post.comments.length} comments</span><span className="hover:underline cursor-pointer">{post.shares} shares</span></div></div>)}
-            {!isVideo && (<div className="px-2 py-1 border-t border-[#3E4042] mx-2 mb-1 flex items-center justify-between"><ReactionButton currentUserReactions={myReaction} reactionCount={post.reactions.length} onReact={(type) => onReact(post.id, type)} isGuest={!currentUser} /><button className="flex-1 flex items-center justify-center gap-2 h-10 rounded hover:bg-[#3A3B3C] transition-colors group text-[#B0B3B8]" onClick={() => currentUser ? onOpenComments(post.id) : alert("Login first")}><i className="far fa-comment-alt text-[20px] group-hover:text-[#E4E6EB]"></i><span className="text-[17px] font-medium group-hover:text-[#E4E6EB]">Comment</span></button><button className="flex-1 flex items-center justify-center gap-2 h-10 rounded hover:bg-[#3A3B3C] transition-colors group text-[#B0B3B8]" onClick={() => onShare(post.id)}><i className="fas fa-share text-[20px] group-hover:text-[#E4E6EB]"></i><span className="text-[17px] font-medium group-hover:text-[#E4E6EB]">Share</span></button></div>)}
+            
+            {post.type === 'audio' && post.audioTrack && (
+                <div className="mx-3 md:mx-4 mb-2 rounded-xl overflow-hidden cursor-pointer relative group border border-[#3E4042] shadow-lg" onClick={() => onPlayAudioTrack && onPlayAudioTrack(post.audioTrack!)}>
+                    <img src={post.audioTrack.cover} alt="album cover" className="w-full h-full object-cover absolute inset-0 blur-md opacity-30 group-hover:opacity-50 transition-all" />
+                    <div className="relative p-6 bg-black/40 backdrop-blur-sm flex items-center gap-6">
+                        <div className="w-24 h-24 md:w-32 md:h-32 flex-shrink-0 relative">
+                            <img src={post.audioTrack.cover} alt="album cover" className="w-full h-full object-cover rounded-lg shadow-2xl" />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
+                                <div className="w-12 h-12 bg-[#1877F2]/80 rounded-full flex items-center justify-center border-2 border-white/50">
+                                    <i className="fas fa-play text-white text-xl pl-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <span className="text-xs font-bold uppercase tracking-wider text-[#B0B3B8]">{post.audioTrack.type}</span>
+                            <h3 className="text-xl md:text-2xl font-bold text-white truncate my-1">{post.audioTrack.title}</h3>
+                            <p className="text-md text-[#B0B3B8] truncate">{post.audioTrack.artist}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {post.type === 'product' && post.product && (
+                <div className="mx-3 md:mx-4 mb-2 border border-[#3E4042] rounded-lg overflow-hidden cursor-pointer" onClick={() => onViewProduct && onViewProduct(post.product!)}>
+                    <div className="aspect-video bg-black">
+                        <img src={post.product.images[0]} alt={post.product.title} className="w-full h-full object-cover" />
+                    </div>
+                    <div className="p-3 bg-[#3A3B3C]">
+                        <div className="text-[#B0B3B8] text-xs uppercase font-bold">{MARKETPLACE_CATEGORIES.find(c => c.id === post.product?.category)?.name}</div>
+                        <div className="text-[#E4E6EB] font-bold text-lg truncate">{post.product.title}</div>
+                        <div className="flex items-center justify-between mt-1">
+                            <span className="text-[#F02849] font-bold text-xl">{MARKETPLACE_COUNTRIES.find(c => c.code === post.product!.country)?.symbol || '$'}{post.product.mainPrice}</span>
+                            <button className="bg-[#1877F2] text-white px-4 py-1.5 rounded-md font-semibold text-sm">View Item</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {post.linkPreview && !post.images && !post.video && (
+                <div className="mx-3 md:mx-4 mb-2 bg-[#242526] border border-[#3E4042] rounded-lg overflow-hidden cursor-pointer hover:bg-[#3A3B3C] transition-colors" onClick={() => window.open(post.linkPreview!.url, '_blank')}>
+                    <img src={post.linkPreview.image} alt="Preview" className="w-full h-48 md:h-64 object-cover" />
+                    <div className="p-3 bg-[#3A3B3C]">
+                        <div className="text-[#B0B3B8] text-xs uppercase font-bold mb-1">{post.linkPreview.domain}</div>
+                        <div className="text-[#E4E6EB] font-bold text-[17px] mb-1 line-clamp-1">{post.linkPreview.title}</div>
+                        <div className="text-[#B0B3B8] text-[14px] line-clamp-2">{post.linkPreview.description}</div>
+                    </div>
+                </div>
+            )}
+            
+            {post.background && (
+                <div className="h-[300px] flex items-center justify-center p-8 text-center text-white font-bold text-2xl" style={{ background: post.background, backgroundSize: 'cover' }}>
+                    {post.content}
+                </div>
+            )}
+            
+            {post.type === 'event' && post.event && (
+                <div className="mx-4 mb-4 rounded-xl overflow-hidden border border-[#3E4042]">
+                    <img src={post.event.image} className="w-full h-40 object-cover" alt="" />
+                    <div className="bg-[#3A3B3C] p-3 flex justify-between items-center">
+                        <div>
+                            <div className="text-red-500 text-xs font-bold uppercase">{new Date(post.event.date).toLocaleString('default', { month: 'short' })} {new Date(post.event.date).getDate()}</div>
+                            <div className="text-[#E4E6EB] font-bold">{post.event.title}</div>
+                            <div className="text-[#B0B3B8] text-sm">{post.event.location}</div>
+                        </div>
+                        <button className="border border-[#B0B3B8] text-[#E4E6EB] px-4 py-1.5 rounded-lg font-bold text-sm hover:bg-[#4E4F50]">Interested</button>
+                    </div>
+                </div>
+            )}
+            
+            {/* MULTI-IMAGE SUPPORT - Updated to use images array */}
+            {post.type === 'image' && post.images && post.images.length > 0 && !post.background && (
+                renderImageGrid(post.images)
+            )}
+            
+            {post.type === 'video' && post.video && (
+                <div className="mt-1 bg-black w-full cursor-pointer relative h-[500px] md:h-[600px]" onClick={() => onVideoClick(post)}>
+                    <video src={post.video} className="w-full h-full object-cover" />
+                    <div className="absolute top-3 right-3 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-2 border border-white/10 z-10">
+                        <i className="fas fa-eye text-white text-xs animate-pulse"></i>
+                        <span className="text-white font-bold text-xs">{post.views || 0}</span>
+                    </div>
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="w-16 h-16 bg-black/40 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/20">
+                            <i className="fas fa-play text-white text-2xl pl-1"></i>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {!isVideo && (
+                <div className="px-3 md:px-4 py-2.5 flex items-center justify-between text-[#B0B3B8] text-[14px]">
+                    <div className="flex items-center gap-1.5 cursor-pointer">
+                        {post.reactions.length > 0 && (
+                            <div className="flex -space-x-1">
+                                <div className="bg-[#1877F2] rounded-full p-[2px] z-10">
+                                    <i className="fas fa-thumbs-up text-white text-[10px]"></i>
+                                </div>
+                                {post.reactions.some(r => r.type === 'love') && (
+                                    <div className="bg-[#F3425F] rounded-full p-[2px]">
+                                        <i className="fas fa-heart text-white text-[10px]"></i>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        <span className="hover:underline">{post.reactions.length > 0 ? post.reactions.length : ''}</span>
+                    </div>
+                    <div className="flex gap-4">
+                        <span className="hover:underline cursor-pointer" onClick={() => onOpenComments(post.id)}>{post.comments.length} comments</span>
+                        <span className="hover:underline cursor-pointer">{post.shares} shares</span>
+                    </div>
+                </div>
+            )}
+            
+            {!isVideo && (
+                <div className="px-2 py-1 border-t border-[#3E4042] mx-2 mb-1 flex items-center justify-between">
+                    <ReactionButton currentUserReactions={myReaction} reactionCount={post.reactions.length} onReact={(type) => onReact(post.id, type)} isGuest={!currentUser} />
+                    <button className="flex-1 flex items-center justify-center gap-2 h-10 rounded hover:bg-[#3A3B3C] transition-colors group text-[#B0B3B8]" onClick={() => currentUser ? onOpenComments(post.id) : alert("Login first")}>
+                        <i className="far fa-comment-alt text-[20px] group-hover:text-[#E4E6EB]"></i>
+                        <span className="text-[17px] font-medium group-hover:text-[#E4E6EB]">Comment</span>
+                    </button>
+                    <button className="flex-1 flex items-center justify-center gap-2 h-10 rounded hover:bg-[#3A3B3C] transition-colors group text-[#B0B3B8]" onClick={() => onShare(post.id)}>
+                        <i className="fas fa-share text-[20px] group-hover:text-[#E4E6EB]"></i>
+                        <span className="text-[17px] font-medium group-hover:text-[#E4E6EB]">Share</span>
+                    </button>
+                </div>
+            )}
         </div>
     );
 };
