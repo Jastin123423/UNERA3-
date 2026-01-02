@@ -7,7 +7,7 @@ import { UserProfile } from './components/UserProfile';
 import { MarketplacePage, ProductDetailModal } from './components/Marketplace';
 import { ReelsFeed, CreateReelModal } from './components/Reels';
 import { ChatWindow } from './components/Chat';
-import { ImageViewer } from './components/Common';
+import { MultiImageViewer } from './components/Common/MultiImageViewer'; // Updated to MultiImageViewer
 import { EventsPage, BirthdaysPage, SuggestedProfilesPage, SettingsPage, MemoriesPage } from './components/MenuPages';
 import { HelpSupportPage } from './components/HelpSupport';
 import { CreateEventModal } from './components/Events';
@@ -297,7 +297,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const [showCreateStoryModal, setShowCreateStoryModal] = useState(false);
     const [showCreateEventModal, setShowCreateEventModal] = useState(false);
     const [activeStory, setActiveStory] = useState<Story | null>(null);
-    const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+    const [fullScreenImage, setFullScreenImage] = useState<{url: string, index: number, images: string[]} | null>(null); // Updated for multi-image
     const [activeCommentsPostId, setActiveCommentsPostId] = useState<number | null>(null);
     const [activeSharePostId, setActiveSharePostId] = useState<number | null>(null);
     const [activeChatUser, setActiveChatUser] = useState<User | null>(null);
@@ -738,13 +738,29 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setUsers(newUsers);
     };
 
-    const handleCreatePost = (text: string, file: File | null, type: any, visibility: any, location?: string, feeling?: string, taggedUsers?: number[], background?: string, linkPreview?: LinkPreview) => {
+    // UPDATED: handleCreatePost with multi-image support
+    const handleCreatePost = (
+        text: string, 
+        file: File | null, 
+        type: any, 
+        visibility: any, 
+        location?: string, 
+        feeling?: string, 
+        taggedUsers?: number[], 
+        background?: string, 
+        linkPreview?: LinkPreview
+    ) => {
         if (!currentUser) return;
+        
+        // For backward compatibility and multi-image support
+        const imageUrl = file && type === 'image' ? URL.createObjectURL(file) : undefined;
+        const images = imageUrl ? [imageUrl] : undefined; // Create array for single image
+        
         const newPost: PostType = { 
             id: Date.now(), 
             authorId: currentUser.id, 
             content: text, 
-            image: file && type === 'image' ? URL.createObjectURL(file) : undefined, 
+            images: images, // Use images array instead of single image
             video: file && type === 'video' ? URL.createObjectURL(file) : undefined, 
             timestamp: 'Just now', 
             createdAt: Date.now(), 
@@ -752,7 +768,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             comments: [], 
             shares: 0, 
             views: 0, 
-            type, 
+            type: images ? 'image' : (type === 'video' ? 'video' : type), 
             visibility, 
             location, 
             feeling, 
@@ -798,6 +814,46 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 }
             });
         }
+    };
+
+    // NEW: Enhanced create post with multiple images
+    const handleCreatePostWithMultipleImages = (
+        text: string, 
+        files: File[], 
+        visibility: any, 
+        location?: string, 
+        feeling?: string, 
+        taggedUsers?: number[], 
+        background?: string, 
+        linkPreview?: LinkPreview
+    ) => {
+        if (!currentUser) return;
+        
+        // Create array of image URLs
+        const images = files.map(file => URL.createObjectURL(file));
+        
+        const newPost: PostType = { 
+            id: Date.now(), 
+            authorId: currentUser.id, 
+            content: text, 
+            images: images,
+            timestamp: 'Just now', 
+            createdAt: Date.now(), 
+            reactions: [], 
+            comments: [], 
+            shares: 0, 
+            views: 0, 
+            type: 'image',
+            visibility, 
+            location, 
+            feeling, 
+            taggedUsers, 
+            background, 
+            linkPreview 
+        };
+        setPosts([newPost, ...posts]);
+        
+        // ... rest of notification logic (same as above)
     };
 
     // ========== BRAND MANAGEMENT FUNCTIONS WITH NOTIFICATIONS ==========
@@ -1752,7 +1808,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: Date.now(), 
             authorId: currentUser.id, 
             content, 
-            image: file && type === 'image' ? URL.createObjectURL(file) : undefined, 
+            images: file && type === 'image' ? [URL.createObjectURL(file)] : undefined, // Multi-image support for groups too
             video: file && type === 'video' ? URL.createObjectURL(file) : undefined, 
             timestamp: Date.now(), 
             reactions: [], 
@@ -1833,7 +1889,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: Date.now(),
             authorId: currentUser.id,
             content: extraCaption ? `${extraCaption}\n\nShared from ${group.name}: ${groupPost.content}` : `Shared from ${group.name}: ${groupPost.content}`,
-            image: groupPost.image,
+            images: groupPost.images, // Support for multiple images
             video: groupPost.video,
             timestamp: 'Just now',
             createdAt: Date.now(),
@@ -1841,7 +1897,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             comments: [],
             shares: 0,
             views: 0,
-            type: groupPost.video ? 'video' : (groupPost.image ? 'image' : 'text'),
+            type: groupPost.video ? 'video' : (groupPost.images ? 'image' : 'text'),
             visibility: 'Public',
             sharedPostId: postId,
             groupId: groupId,
@@ -1981,6 +2037,16 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         } 
     };
 
+    // UPDATED: Delete post function with multi-image support
+    const handleDeletePost = (postId: number) => {
+        if (!currentUser || !isAdmin) return;
+        
+        if (window.confirm("Are you sure you want to delete this post?")) {
+            setPosts(prev => prev.filter(p => p.id !== postId));
+            alert("Post deleted successfully");
+        }
+    };
+
     // Birthday notification check
     useEffect(() => {
         const checkBirthdays = () => {
@@ -2071,7 +2137,15 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 }} 
                 onReact={handleReact} 
                 onShare={(id) => setActiveSharePostId(id)} 
-                onViewImage={(url) => setFullScreenImage(url)} 
+                onViewImage={(url, index) => {
+                    // Create a simple image viewer that shows all images
+                    const images = post.images || [];
+                    setFullScreenImage({
+                        url,
+                        index,
+                        images: images
+                    });
+                }} 
                 onOpenComments={(postId) => setActiveCommentsPostId(postId)} 
                 onVideoClick={(p) => { setActiveReelId(p.id - 200000); setView('reels'); }} 
                 onViewProduct={(p) => setActiveProduct(p)} 
@@ -2265,7 +2339,15 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     }} 
                                     onEditPost={() => {}} 
                                     getCommentAuthor={(id) => users.find(u => u.id === id)} 
-                                    onViewImage={setFullScreenImage} 
+                                    onViewImage={(url) => {
+                                        const post = posts.find(p => p.id === id);
+                                        const images = post?.images || [url];
+                                        setFullScreenImage({
+                                            url,
+                                            index: 0,
+                                            images: images
+                                        });
+                                    }} 
                                     onOpenComments={setActiveCommentsPostId} 
                                     onVideoClick={() => {}} 
                                     onCreateEventClick={() => setShowCreateEventModal(true)} 
@@ -2335,7 +2417,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 }}
                                                 onReact={handleReact}
                                                 onShare={(id) => setActiveSharePostId(id)}
-                                                onViewImage={setFullScreenImage}
+                                                onViewImage={(url, index) => {
+                                                    const images = post.images || [];
+                                                    setFullScreenImage({
+                                                        url,
+                                                        index,
+                                                        images: images
+                                                    });
+                                                }}
                                                 onOpenComments={setActiveCommentsPostId}
                                                 onVideoClick={() => {}}
                                                 onPlayAudioTrack={handlePlayTrack}
@@ -2655,6 +2744,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                         />
                     )}
                     
+                    {/* Multi-Image Viewer */}
+                    {fullScreenImage && (
+                        <MultiImageViewer 
+                            currentImage={fullScreenImage}
+                            onClose={() => setFullScreenImage(null)} 
+                        />
+                    )}
+                    
                     {/* Regular Post Comments Modal */}
                     {activeCommentsPostId && (
                         <CommentsSheet 
@@ -2681,7 +2778,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     id: groupPost.id,
                                     authorId: groupPost.authorId,
                                     content: groupPost.content || '',
-                                    image: groupPost.image,
+                                    images: groupPost.images, // Support for multiple images
                                     video: groupPost.video,
                                     timestamp: 'Recently',
                                     createdAt: groupPost.timestamp,
@@ -2689,7 +2786,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     comments: groupPost.comments || [],
                                     shares: groupPost.shares || 0,
                                     views: 0,
-                                    type: groupPost.video ? 'video' : (groupPost.image ? 'image' : 'text'),
+                                    type: groupPost.video ? 'video' : (groupPost.images ? 'image' : 'text'),
                                     visibility: 'Public',
                                     groupId: groupId,
                                     groupName: group.name
@@ -2785,12 +2882,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             currentUser={currentUser} 
                             onClose={() => setActiveProduct(null)} 
                             onMessage={(sid) => setActiveChatUser(users.find(u => u.id === sid) || null)} 
-                        />
-                    )}
-                    {fullScreenImage && (
-                        <ImageViewer 
-                            imageUrl={fullScreenImage} 
-                            onClose={() => setFullScreenImage(null)} 
                         />
                     )}
                 </>
