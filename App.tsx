@@ -7,7 +7,7 @@ import { UserProfile } from './components/UserProfile';
 import { MarketplacePage, ProductDetailModal } from './components/Marketplace';
 import { ReelsFeed, CreateReelModal } from './components/Reels';
 import { ChatWindow } from './components/Chat';
-import { MultiImageViewer } from './components/Common/MultiImageViewer'; // Updated to MultiImageViewer
+import { ImageViewer } from './components/Common';
 import { EventsPage, BirthdaysPage, SuggestedProfilesPage, SettingsPage, MemoriesPage } from './components/MenuPages';
 import { HelpSupportPage } from './components/HelpSupport';
 import { CreateEventModal } from './components/Events';
@@ -21,6 +21,112 @@ import { useLanguage } from './contexts/LanguageContext';
 import { User, Post as PostType, Story, Reel, Notification, Message, Event, Product, Comment, ReactionType, LinkPreview, Group, GroupPost, AudioTrack, Brand, Song, Episode } from './types';
 import { INITIAL_USERS, INITIAL_POSTS, INITIAL_STORIES, INITIAL_REELS, INITIAL_EVENTS, INITIAL_GROUPS, INITIAL_BRANDS, MOCK_SONGS, MOCK_EPISODES } from './constants';
 import { rankFeed } from './utils/ranking'; 
+
+// MultiImageViewer Component
+const MultiImageViewer = ({ 
+    currentImage, 
+    onClose 
+}: { 
+    currentImage: { url: string; index: number; images: string[] } | null;
+    onClose: () => void;
+}) => {
+    const [currentIndex, setCurrentIndex] = useState(0);
+    
+    useEffect(() => {
+        if (currentImage) {
+            setCurrentIndex(currentImage.index);
+        }
+    }, [currentImage]);
+    
+    if (!currentImage || !currentImage.images.length) return null;
+    
+    const images = currentImage.images;
+    const totalImages = images.length;
+    
+    const goToNext = () => {
+        setCurrentIndex((prev) => (prev + 1) % totalImages);
+    };
+    
+    const goToPrev = () => {
+        setCurrentIndex((prev) => (prev - 1 + totalImages) % totalImages);
+    };
+    
+    const handleKeyDown = useCallback((e: KeyboardEvent) => {
+        if (e.key === 'Escape') onClose();
+        if (e.key === 'ArrowRight') goToNext();
+        if (e.key === 'ArrowLeft') goToPrev();
+    }, [onClose]);
+    
+    useEffect(() => {
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [handleKeyDown]);
+    
+    return (
+        <div className="fixed inset-0 z-[200] bg-black/95 flex flex-col items-center justify-center">
+            {/* Close button */}
+            <button 
+                onClick={onClose}
+                className="absolute top-4 right-4 z-50 text-white text-2xl hover:bg-white/20 p-2 rounded-full transition-colors"
+            >
+                <i className="fas fa-times"></i>
+            </button>
+            
+            {/* Image counter */}
+            <div className="absolute top-4 left-4 z-50 text-white font-semibold">
+                {currentIndex + 1} / {totalImages}
+            </div>
+            
+            {/* Main image */}
+            <div className="relative w-full h-full flex items-center justify-center">
+                <img 
+                    src={images[currentIndex]}
+                    alt={`Image ${currentIndex + 1}`}
+                    className="max-w-full max-h-full object-contain"
+                />
+                
+                {/* Navigation arrows */}
+                {totalImages > 1 && (
+                    <>
+                        <button 
+                            onClick={goToPrev}
+                            className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-3 rounded-full transition-colors"
+                        >
+                            <i className="fas fa-chevron-left text-xl"></i>
+                        </button>
+                        <button 
+                            onClick={goToNext}
+                            className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-3 rounded-full transition-colors"
+                        >
+                            <i className="fas fa-chevron-right text-xl"></i>
+                        </button>
+                    </>
+                )}
+            </div>
+            
+            {/* Thumbnails */}
+            {totalImages > 1 && (
+                <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 px-4 overflow-x-auto">
+                    {images.map((image, index) => (
+                        <div 
+                            key={index}
+                            onClick={() => setCurrentIndex(index)}
+                            className={`w-16 h-16 rounded-lg overflow-hidden cursor-pointer border-2 transition-all flex-shrink-0 ${
+                                index === currentIndex ? 'border-blue-500' : 'border-transparent'
+                            }`}
+                        >
+                            <img 
+                                src={image}
+                                alt={`Thumbnail ${index + 1}`}
+                                className="w-full h-full object-cover"
+                            />
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
 
 const getPath = () => {
     if (typeof window !== 'undefined') {
@@ -297,7 +403,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const [showCreateStoryModal, setShowCreateStoryModal] = useState(false);
     const [showCreateEventModal, setShowCreateEventModal] = useState(false);
     const [activeStory, setActiveStory] = useState<Story | null>(null);
-    const [fullScreenImage, setFullScreenImage] = useState<{url: string, index: number, images: string[]} | null>(null); // Updated for multi-image
+    const [fullScreenImage, setFullScreenImage] = useState<{url: string, index: number, images: string[]} | null>(null);
     const [activeCommentsPostId, setActiveCommentsPostId] = useState<number | null>(null);
     const [activeSharePostId, setActiveSharePostId] = useState<number | null>(null);
     const [activeChatUser, setActiveChatUser] = useState<User | null>(null);
@@ -738,29 +844,18 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setUsers(newUsers);
     };
 
-    // UPDATED: handleCreatePost with multi-image support
-    const handleCreatePost = (
-        text: string, 
-        file: File | null, 
-        type: any, 
-        visibility: any, 
-        location?: string, 
-        feeling?: string, 
-        taggedUsers?: number[], 
-        background?: string, 
-        linkPreview?: LinkPreview
-    ) => {
+    const handleCreatePost = (text: string, file: File | null, type: any, visibility: any, location?: string, feeling?: string, taggedUsers?: number[], background?: string, linkPreview?: LinkPreview) => {
         if (!currentUser) return;
         
-        // For backward compatibility and multi-image support
+        // Handle both single file and array of files
         const imageUrl = file && type === 'image' ? URL.createObjectURL(file) : undefined;
-        const images = imageUrl ? [imageUrl] : undefined; // Create array for single image
+        const images = imageUrl ? [imageUrl] : undefined;
         
         const newPost: PostType = { 
             id: Date.now(), 
             authorId: currentUser.id, 
             content: text, 
-            images: images, // Use images array instead of single image
+            images: images, // Use images array
             video: file && type === 'video' ? URL.createObjectURL(file) : undefined, 
             timestamp: 'Just now', 
             createdAt: Date.now(), 
@@ -814,46 +909,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 }
             });
         }
-    };
-
-    // NEW: Enhanced create post with multiple images
-    const handleCreatePostWithMultipleImages = (
-        text: string, 
-        files: File[], 
-        visibility: any, 
-        location?: string, 
-        feeling?: string, 
-        taggedUsers?: number[], 
-        background?: string, 
-        linkPreview?: LinkPreview
-    ) => {
-        if (!currentUser) return;
-        
-        // Create array of image URLs
-        const images = files.map(file => URL.createObjectURL(file));
-        
-        const newPost: PostType = { 
-            id: Date.now(), 
-            authorId: currentUser.id, 
-            content: text, 
-            images: images,
-            timestamp: 'Just now', 
-            createdAt: Date.now(), 
-            reactions: [], 
-            comments: [], 
-            shares: 0, 
-            views: 0, 
-            type: 'image',
-            visibility, 
-            location, 
-            feeling, 
-            taggedUsers, 
-            background, 
-            linkPreview 
-        };
-        setPosts([newPost, ...posts]);
-        
-        // ... rest of notification logic (same as above)
     };
 
     // ========== BRAND MANAGEMENT FUNCTIONS WITH NOTIFICATIONS ==========
@@ -1804,11 +1859,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     
     const handlePostToGroup = (groupId: string, content: string, file: File | null, type: any, background?: string) => { 
         if (!currentUser) return; 
+        const imageUrl = file && type === 'image' ? URL.createObjectURL(file) : undefined;
+        const images = imageUrl ? [imageUrl] : undefined;
+        
         const newPost: GroupPost = { 
             id: Date.now(), 
             authorId: currentUser.id, 
             content, 
-            images: file && type === 'image' ? [URL.createObjectURL(file)] : undefined, // Multi-image support for groups too
+            images: images,
             video: file && type === 'video' ? URL.createObjectURL(file) : undefined, 
             timestamp: Date.now(), 
             reactions: [], 
@@ -1823,7 +1881,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         )); 
         const newFeedPost: PostType = { 
             ...newPost, 
-            type, 
+            type: images ? 'image' : (type === 'video' ? 'video' : type), 
             visibility: 'Public', 
             timestamp: 'Just now', 
             createdAt: newPost.timestamp, 
@@ -1889,7 +1947,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: Date.now(),
             authorId: currentUser.id,
             content: extraCaption ? `${extraCaption}\n\nShared from ${group.name}: ${groupPost.content}` : `Shared from ${group.name}: ${groupPost.content}`,
-            images: groupPost.images, // Support for multiple images
+            images: groupPost.images,
             video: groupPost.video,
             timestamp: 'Just now',
             createdAt: Date.now(),
@@ -2037,16 +2095,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         } 
     };
 
-    // UPDATED: Delete post function with multi-image support
-    const handleDeletePost = (postId: number) => {
-        if (!currentUser || !isAdmin) return;
-        
-        if (window.confirm("Are you sure you want to delete this post?")) {
-            setPosts(prev => prev.filter(p => p.id !== postId));
-            alert("Post deleted successfully");
-        }
-    };
-
     // Birthday notification check
     useEffect(() => {
         const checkBirthdays = () => {
@@ -2138,14 +2186,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 onReact={handleReact} 
                 onShare={(id) => setActiveSharePostId(id)} 
                 onViewImage={(url, index) => {
-                    // Create a simple image viewer that shows all images
                     const images = post.images || [];
                     setFullScreenImage({
                         url,
                         index,
                         images: images
                     });
-                }} 
+                }}
                 onOpenComments={(postId) => setActiveCommentsPostId(postId)} 
                 onVideoClick={(p) => { setActiveReelId(p.id - 200000); setView('reels'); }} 
                 onViewProduct={(p) => setActiveProduct(p)} 
@@ -2340,14 +2387,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onEditPost={() => {}} 
                                     getCommentAuthor={(id) => users.find(u => u.id === id)} 
                                     onViewImage={(url) => {
-                                        const post = posts.find(p => p.id === id);
+                                        const post = posts.find(p => p.images?.includes(url));
                                         const images = post?.images || [url];
-                                        setFullScreenImage({
-                                            url,
-                                            index: 0,
-                                            images: images
-                                        });
-                                    }} 
+                                        const index = images.findIndex(img => img === url);
+                                        setFullScreenImage({ url, index, images });
+                                    }}
                                     onOpenComments={setActiveCommentsPostId} 
                                     onVideoClick={() => {}} 
                                     onCreateEventClick={() => setShowCreateEventModal(true)} 
@@ -2382,7 +2426,50 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                             />
                                         );
                                     }}
-                                    renderRegularPost={renderRegularPost}
+                                    renderRegularPost={(post: PostType, author: any, isFollowing?: boolean) => {
+                                        const isBrandAuthor = author?.type === 'brand';
+                                        const isFollowingBrand = isBrandAuthor && currentUser ? 
+                                            brands.find(b => b.id === author.id)?.followers.includes(currentUser.id) || false : 
+                                            false;
+                                        
+                                        return (
+                                            <Post 
+                                                key={post.id} 
+                                                post={post} 
+                                                author={author} 
+                                                currentUser={currentUser} 
+                                                users={users} 
+                                                onProfileClick={(id) => { 
+                                                    if (isBrandAuthor) {
+                                                        setActiveBrandId(id);
+                                                        handleNavigate('brand_view');
+                                                    } else {
+                                                        setSelectedUserId(id); 
+                                                        setView('profile');
+                                                    }
+                                                }} 
+                                                onReact={handleReact} 
+                                                onShare={(id) => setActiveSharePostId(id)} 
+                                                onViewImage={(url, index) => {
+                                                    const images = post.images || [url];
+                                                    setFullScreenImage({
+                                                        url,
+                                                        index,
+                                                        images: images
+                                                    });
+                                                }}
+                                                onOpenComments={(postId) => setActiveCommentsPostId(postId)} 
+                                                onVideoClick={() => {}} 
+                                                onViewProduct={(p) => setActiveProduct(p)} 
+                                                onPlayAudioTrack={handlePlayTrack} 
+                                                onFollow={isBrandAuthor ? handleFollowBrand : handleFollowUser} 
+                                                isFollowing={isBrandAuthor ? isFollowingBrand : isFollowing} 
+                                                onHashtagClick={handleTagClick} 
+                                                onDeletePost={isAdmin ? handleDeletePost : undefined}
+                                                isAdmin={isAdmin}
+                                            />
+                                        );
+                                    }}
                                 />
                             )}
                             
@@ -2418,7 +2505,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 onReact={handleReact}
                                                 onShare={(id) => setActiveSharePostId(id)}
                                                 onViewImage={(url, index) => {
-                                                    const images = post.images || [];
+                                                    const images = post.images || [url];
                                                     setFullScreenImage({
                                                         url,
                                                         index,
@@ -2744,14 +2831,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                         />
                     )}
                     
-                    {/* Multi-Image Viewer */}
-                    {fullScreenImage && (
-                        <MultiImageViewer 
-                            currentImage={fullScreenImage}
-                            onClose={() => setFullScreenImage(null)} 
-                        />
-                    )}
-                    
                     {/* Regular Post Comments Modal */}
                     {activeCommentsPostId && (
                         <CommentsSheet 
@@ -2778,7 +2857,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     id: groupPost.id,
                                     authorId: groupPost.authorId,
                                     content: groupPost.content || '',
-                                    images: groupPost.images, // Support for multiple images
+                                    images: groupPost.images,
                                     video: groupPost.video,
                                     timestamp: 'Recently',
                                     createdAt: groupPost.timestamp,
@@ -2882,6 +2961,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             currentUser={currentUser} 
                             onClose={() => setActiveProduct(null)} 
                             onMessage={(sid) => setActiveChatUser(users.find(u => u.id === sid) || null)} 
+                        />
+                    )}
+                    {fullScreenImage && (
+                        <MultiImageViewer 
+                            currentImage={fullScreenImage}
+                            onClose={() => setFullScreenImage(null)} 
                         />
                     )}
                 </>
