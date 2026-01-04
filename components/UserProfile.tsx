@@ -1,6 +1,5 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { User, Post as PostType, ReactionType, Reel, AudioTrack } from '../types';
+import { User, Post as PostType, ReactionType, Reel, AudioTrack, Song, Episode } from '../types';
 import { CreatePost, Post, CreatePostModal } from './Feed';
 
 // --- EDIT PROFILE MODAL ---
@@ -97,13 +96,17 @@ interface UserProfileProps {
     users: User[];
     posts: PostType[];
     reels?: Reel[]; // Added Reels prop
+    songs?: Song[];
+    episodes?: Episode[];
+    likedTracks?: string[];
     onProfileClick: (id: number) => void;
     onFollow: (id: number) => void;
     onReact: (postId: number, type: ReactionType) => void;
     onComment: (postId: number, text: string) => void;
     onShare: (postId: number) => void;
     onMessage: (id: number) => void;
-    onCreatePost: (text: string, file: File | null, type: any, visibility: any) => void;
+    // UPDATED: Changed to accept multiple files
+    onCreatePost: (text: string, files: File[] | null, type: any, visibility: any, location?: string, feeling?: string, taggedUsers?: number[], background?: string, linkPreview?: any) => void;
     onUpdateProfileImage: (file: File) => void;
     onUpdateCoverImage: (file: File) => void;
     onUpdateUserDetails: (data: Partial<User>) => void;
@@ -122,9 +125,111 @@ interface UserProfileProps {
     onRestrictUser?: (id: number) => void;
     onDeleteUser?: (id: number) => void;
     onMakeModerator?: (id: number) => void;
+    
+    // Music-related props
+    onLikeTrack?: (trackId: string, isLiked: boolean) => void;
+    onTrackComment?: (trackId: string) => void;
+    onTrackShare?: (trackId: string) => void;
+    
+    // Render functions for different post types
+    renderMusicPost?: (post: PostType, author: any) => React.ReactNode;
+    renderRegularPost?: (post: PostType, author: any, isFollowing?: boolean) => React.ReactNode;
 }
 
-export const UserProfile: React.FC<UserProfileProps> = ({ user, currentUser, users, posts, reels = [], onProfileClick, onFollow, onReact, onComment, onShare, onMessage, onCreatePost, onUpdateProfileImage, onUpdateCoverImage, onUpdateUserDetails, onDeletePost, onEditPost, getCommentAuthor, onViewImage, onCreateEventClick, onOpenComments, onVideoClick, onPlayAudioTrack, onHashtagClick, onVerifyUser, onRestrictUser, onDeleteUser, onMakeModerator }) => {
+// Helper function to get song for post
+const getSongForPost = (post: PostType, songs?: Song[], episodes?: Episode[]) => {
+    if (!post.audioTrack || !songs || !episodes) return null;
+    
+    // Check songs array first
+    const song = songs.find(s => s.id === post.audioTrack?.id);
+    if (song) {
+        return {
+            ...song,
+            type: post.type === 'podcast' ? 'podcast' : 'music',
+            plays: song.plays || post.audioTrack.plays || 0,
+            likes: song.likes || post.audioTrack.likes || 0,
+            shares: song.shares || post.audioTrack.shares || 0,
+            comments: song.comments || 0,
+            stats: {
+                plays: song.plays || post.audioTrack.plays || 0,
+                likes: song.likes || post.audioTrack.likes || 0,
+                shares: song.shares || post.audioTrack.shares || 0,
+                comments: song.comments || 0,
+                downloads: song.stats?.downloads || 0,
+                reelsUse: song.stats?.reelsUse || 0
+            }
+        };
+    }
+    
+    // Check episodes array
+    const episode = episodes.find(e => e.id === post.audioTrack?.id);
+    if (episode) {
+        return {
+            id: episode.id,
+            title: episode.title,
+            artist: episode.host || 'Podcast Host',
+            cover: episode.thumbnail || episode.cover,
+            audioUrl: episode.audioUrl,
+            duration: episode.duration,
+            uploaderId: episode.uploaderId,
+            type: 'podcast',
+            plays: episode.plays || post.audioTrack.plays || 0,
+            likes: episode.likes || post.audioTrack.likes || 0,
+            shares: episode.shares || post.audioTrack.shares || 0,
+            comments: episode.comments || 0,
+            description: episode.description,
+            stats: {
+                plays: episode.plays || post.audioTrack.plays || 0,
+                likes: episode.likes || post.audioTrack.likes || 0,
+                shares: episode.shares || post.audioTrack.shares || 0,
+                comments: episode.comments || 0,
+                downloads: episode.stats?.downloads || 0,
+                reelsUse: episode.stats?.reelsUse || 0
+            }
+        };
+    }
+    
+    return null;
+};
+
+export const UserProfile: React.FC<UserProfileProps> = ({ 
+    user, 
+    currentUser, 
+    users, 
+    posts, 
+    reels = [], 
+    songs = [], 
+    episodes = [],
+    likedTracks = [],
+    onProfileClick, 
+    onFollow, 
+    onReact, 
+    onComment, 
+    onShare, 
+    onMessage, 
+    onCreatePost, 
+    onUpdateProfileImage, 
+    onUpdateCoverImage, 
+    onUpdateUserDetails, 
+    onDeletePost, 
+    onEditPost, 
+    getCommentAuthor, 
+    onViewImage, 
+    onCreateEventClick, 
+    onOpenComments, 
+    onVideoClick, 
+    onPlayAudioTrack, 
+    onHashtagClick, 
+    onVerifyUser, 
+    onRestrictUser, 
+    onDeleteUser, 
+    onMakeModerator,
+    onLikeTrack,
+    onTrackComment,
+    onTrackShare,
+    renderMusicPost,
+    renderRegularPost
+}) => {
     const [activeTab, setActiveTab] = useState('Posts');
     const [showCreatePostModal, setShowCreatePostModal] = useState(false);
     const [showEditProfile, setShowEditProfile] = useState(false);
@@ -146,6 +251,141 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, currentUser, use
     const totalShares = userPosts.reduce((acc, curr) => acc + curr.shares, 0) + userReels.reduce((acc, curr) => acc + curr.shares, 0);
     const totalComments = userPosts.reduce((acc, curr) => acc + curr.comments.length, 0) + userReels.reduce((acc, curr) => acc + curr.comments.length, 0);
     const totalEngagement = totalLikes + totalComments + totalShares;
+
+    // Function to render music/podcast posts
+    const renderMusicPostDefault = (post: PostType, author: any) => {
+        const song = getSongForPost(post, songs, episodes);
+        if (!song) return null;
+        
+        return (
+            <div key={post.id} className="bg-[#242526] rounded-xl border border-[#3E4042] p-4 mb-4">
+                <div className="flex items-center gap-3 mb-4">
+                    <img 
+                        src={author.profileImage} 
+                        alt={author.name} 
+                        className="w-12 h-12 rounded-full cursor-pointer"
+                        onClick={() => onProfileClick(author.id)}
+                    />
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <span 
+                                className="font-bold text-[#E4E6EB] cursor-pointer hover:underline"
+                                onClick={() => onProfileClick(author.id)}
+                            >
+                                {author.name}
+                            </span>
+                            {author.isVerified && <i className="fas fa-check-circle text-[#1877F2]"></i>}
+                        </div>
+                        <div className="text-[#B0B3B8] text-sm">{post.timestamp}</div>
+                    </div>
+                </div>
+                
+                {post.content && (
+                    <div className="mb-4 text-[#E4E6EB]">
+                        {post.content}
+                    </div>
+                )}
+                
+                <div className="flex items-center gap-4 border border-[#3E4042] rounded-lg p-4 bg-[#3A3B3C]">
+                    <img 
+                        src={song.cover} 
+                        alt={song.title} 
+                        className="w-16 h-16 rounded-lg object-cover cursor-pointer"
+                        onClick={() => onPlayAudioTrack && onPlayAudioTrack(song)}
+                    />
+                    <div className="flex-1">
+                        <div className="font-bold text-[#E4E6EB]">{song.title}</div>
+                        <div className="text-[#B0B3B8] text-sm">{song.artist}</div>
+                        <div className="flex items-center gap-4 mt-2 text-[#B0B3B8] text-sm">
+                            <div className="flex items-center gap-1">
+                                <i className="fas fa-play"></i>
+                                <span>{song.plays?.toLocaleString() || 0}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <i className="fas fa-heart"></i>
+                                <span>{song.likes?.toLocaleString() || 0}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <i className="fas fa-share"></i>
+                                <span>{song.shares?.toLocaleString() || 0}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button 
+                        className="bg-[#1877F2] text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-[#166FE5]"
+                        onClick={() => onPlayAudioTrack && onPlayAudioTrack(song)}
+                    >
+                        <i className="fas fa-play"></i>
+                    </button>
+                </div>
+                
+                <div className="flex justify-between items-center mt-4 pt-4 border-t border-[#3E4042]">
+                    <button 
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg ${likedTracks.includes(song.id) ? 'text-[#F02849]' : 'text-[#B0B3B8] hover:bg-[#3A3B3C]'}`}
+                        onClick={() => onLikeTrack && onLikeTrack(song.id, likedTracks.includes(song.id))}
+                    >
+                        <i className={`fas fa-heart ${likedTracks.includes(song.id) ? 'text-[#F02849]' : ''}`}></i>
+                        <span>{song.likes?.toLocaleString() || 0}</span>
+                    </button>
+                    <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-[#B0B3B8] hover:bg-[#3A3B3C]">
+                        <i className="far fa-comment"></i>
+                        <span>{song.comments?.toLocaleString() || 0}</span>
+                    </button>
+                    <button 
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-[#B0B3B8] hover:bg-[#3A3B3C]"
+                        onClick={() => onTrackShare && onTrackShare(song.id)}
+                    >
+                        <i className="fas fa-share"></i>
+                        <span>{song.shares?.toLocaleString() || 0}</span>
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
+    // Function to render regular posts
+    const renderRegularPostDefault = (post: PostType, author: any, isFollowing?: boolean) => {
+        return (
+            <Post 
+                key={post.id} 
+                post={post} 
+                author={author} 
+                currentUser={currentUser} 
+                users={users} 
+                onProfileClick={onProfileClick} 
+                onReact={onReact} 
+                onShare={onShare} 
+                onDelete={onDeletePost} 
+                onEdit={onEditPost} 
+                onHashtagClick={onHashtagClick} 
+                onViewImage={onViewImage} 
+                onOpenComments={onOpenComments}
+                onVideoClick={onVideoClick}
+                onViewProduct={() => {}} 
+                onPlayAudioTrack={onPlayAudioTrack}
+                onFollow={onFollow}
+                isFollowing={isFollowing}
+            />
+        );
+    };
+
+    // Helper function to get all photos from posts (including multi-image posts)
+    const getAllPhotos = () => {
+        const photos: string[] = [];
+        userPosts.forEach(post => {
+            if (post.type === 'image') {
+                // Handle single image posts
+                if (post.image) {
+                    photos.push(post.image);
+                }
+                // Handle multi-image posts
+                if (post.images && post.images.length > 0) {
+                    photos.push(...post.images);
+                }
+            }
+        });
+        return photos;
+    };
 
     const renderContent = () => {
         switch (activeTab) {
@@ -210,15 +450,15 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, currentUser, use
                 </div>
             );
             case 'Photos': 
-                const photos = userPosts.filter(p => p.type === 'image' && p.image); 
+                const photos = getAllPhotos();
                 return (
                     <div className="bg-[#242526] p-4 rounded-xl border border-[#3E4042] mx-4 md:mx-0">
-                        <h2 className="text-xl font-bold text-[#E4E6EB] mb-4">Photos</h2>
+                        <h2 className="text-xl font-bold text-[#E4E6EB] mb-4">Photos ({photos.length})</h2>
                         {photos.length > 0 ? (
                             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1">
-                                {photos.map(p => (
-                                    <div key={p.id} className="aspect-square cursor-pointer overflow-hidden relative group" onClick={() => p.image && onViewImage(p.image)}>
-                                        <img src={p.image} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                {photos.map((photo, index) => (
+                                    <div key={index} className="aspect-square cursor-pointer overflow-hidden relative group" onClick={() => onViewImage(photo)}>
+                                        <img src={photo} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                                     </div>
                                 ))}
                             </div>
@@ -282,10 +522,13 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, currentUser, use
                             </div>
                         </div>
                         <div className="bg-[#242526] rounded-xl p-4 shadow-sm border border-[#3E4042]">
-                            <div className="flex justify-between items-center mb-3"><h2 className="text-xl font-bold text-[#E4E6EB]">Photos</h2><span className="text-[#1877F2] cursor-pointer hover:underline" onClick={() => setActiveTab('Photos')}>See all</span></div>
+                            <div className="flex justify-between items-center mb-3">
+                                <h2 className="text-xl font-bold text-[#E4E6EB]">Photos</h2>
+                                <span className="text-[#1877F2] cursor-pointer hover:underline" onClick={() => setActiveTab('Photos')}>See all</span>
+                            </div>
                             <div className="grid grid-cols-3 gap-1 rounded-lg overflow-hidden">
-                                {userPosts.filter(p => p.type === 'image' && p.image).slice(0, 9).map(p => (
-                                    <img key={p.id} src={p.image} className="w-full aspect-square object-cover cursor-pointer hover:opacity-90" alt="" onClick={() => p.image && onViewImage(p.image)} />
+                                {getAllPhotos().slice(0, 9).map((photo, index) => (
+                                    <img key={index} src={photo} className="w-full aspect-square object-cover cursor-pointer hover:opacity-90" alt="" onClick={() => onViewImage(photo)} />
                                 ))}
                             </div>
                         </div>
@@ -352,32 +595,34 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, currentUser, use
                         <div className="bg-[#242526] p-3 mb-4 rounded-xl border border-[#3E4042] flex items-center justify-between mx-4 md:mx-0">
                             <h3 className="text-xl font-bold text-[#E4E6EB]">Posts</h3>
                             <div className="flex gap-2">
-                                <button className="bg-[#3A3B3C] px-3 py-1.5 rounded-md text-[#E4E6EB] font-semibold text-sm hover:bg-[#4E4F50]"><i className="fas fa-sliders-h mr-1"></i> Filters</button>
+                                <button className="bg-[#3A3B3C] px-3 py-1.5 rounded-md text-[#E4E6EB] font-semibold text-sm hover:bg-[#4E4F50]">
+                                    <i className="fas fa-sliders-h mr-1"></i> Filters
+                                </button>
                             </div>
                         </div>
+                        
                         {userPosts.map(post => {
-                             const isFollowingPostAuthor = currentUser ? currentUser.following.includes(post.authorId) : false;
-                            return <Post 
-                                key={post.id} 
-                                post={post} 
-                                author={user} 
-                                currentUser={currentUser} 
-                                onProfileClick={onProfileClick} 
-                                onReact={onReact} 
-                                onShare={onShare} 
-                                onDelete={onDeletePost} 
-                                onEdit={onEditPost} 
-                                onHashtagClick={onHashtagClick} 
-                                onViewImage={onViewImage} 
-                                onOpenComments={onOpenComments}
-                                onVideoClick={onVideoClick}
-                                onViewProduct={() => {}} 
-                                onPlayAudioTrack={onPlayAudioTrack}
-                                onFollow={onFollow}
-                                isFollowing={isFollowingPostAuthor}
-                            />
+                            const isFollowingPostAuthor = currentUser ? currentUser.following.includes(post.authorId) : false;
+                            
+                            // Use custom render functions if provided, otherwise use default
+                            if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
+                                if (renderMusicPost) {
+                                    return renderMusicPost(post, user);
+                                }
+                                return renderMusicPostDefault(post, user);
+                            } else {
+                                if (renderRegularPost) {
+                                    return renderRegularPost(post, user, isFollowingPostAuthor);
+                                }
+                                return renderRegularPostDefault(post, user, isFollowingPostAuthor);
+                            }
                         })}
-                        {userPosts.length === 0 && <div className="text-center py-8 text-[#B0B3B8] font-medium bg-[#242526] rounded-xl mx-4 md:mx-0 border border-[#3E4042]">No posts available</div>}
+                        
+                        {userPosts.length === 0 && (
+                            <div className="text-center py-8 text-[#B0B3B8] font-medium bg-[#242526] rounded-xl mx-4 md:mx-0 border border-[#3E4042]">
+                                No posts available
+                            </div>
+                        )}
                     </div>
                 </div>
             );
