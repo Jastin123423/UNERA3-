@@ -310,11 +310,13 @@ export const CreatePost: React.FC<CreatePostProps> = ({ currentUser, onProfileCl
     );
 };
 
+// --- CREATE POST MODAL WITH MULTI-IMAGE SUPPORT ---
 interface CreatePostModalProps {
     currentUser: User;
     users: User[]; 
     onClose: () => void;
-    onCreatePost: (text: string, file: File | null, type: any, visibility: any, location?: string, feeling?: string, taggedUsers?: number[], background?: string, linkPreview?: LinkPreview) => void;
+    // UPDATED: Now accepts multiple files for multi-image posts
+    onCreatePost: (text: string, files: File[] | null, type: any, visibility: any, location?: string, feeling?: string, taggedUsers?: number[], background?: string, linkPreview?: LinkPreview) => void;
     onCreateEventClick?: () => void;
 }
 
@@ -323,7 +325,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ currentUser, u
     const [text, setText] = useState('');
     const [files, setFiles] = useState<File[]>([]);
     const [previews, setPreviews] = useState<string[]>([]);
-    const [type, setType] = useState<'text' | 'image' | 'video'>('text');
+    const [type, setType] = useState<'text' | 'image' | 'video' | 'multimage'>('text');
     const [visibility, setVisibility] = useState('Public');
     const [activeBackground, setActiveBackground] = useState('');
     const [linkPreview, setLinkPreview] = useState<LinkPreview | null>(null);
@@ -417,7 +419,10 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ currentUser, u
             const newPreviews = imageFiles.map(file => URL.createObjectURL(file));
             setPreviews(prev => [...prev, ...newPreviews]);
             
-            setType('image');
+            // Set type based on number of images
+            const totalImages = files.length + imageFiles.length;
+            setType(totalImages === 1 ? 'image' : 'multimage');
+            
             setActiveBackground('');
             setView('main');
         }
@@ -427,18 +432,25 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ currentUser, u
         setFiles(prev => prev.filter((_, i) => i !== index));
         setPreviews(prev => prev.filter((_, i) => i !== index));
         
+        // Update type based on remaining files
         if (files.length === 1) {
             setType('text');
+        } else if (files.length === 2) {
+            setType('image'); // Only one file left, switch to single image
         }
     };
 
     const handleSubmit = () => { 
         if (!text && files.length === 0 && !activeBackground) return; 
         
-        // For backward compatibility, pass the first file if exists
-        const firstFile = files.length > 0 ? files[0] : null;
+        // Determine post type based on content
+        let postType = type;
+        if (files.length > 0) {
+            postType = files.length === 1 ? 'image' : 'multimage';
+        }
         
-        onCreatePost(text, firstFile, files.length > 0 ? 'image' : type, visibility, location, feeling, taggedUsers, activeBackground, linkPreview || undefined); 
+        // Pass all files to onCreatePost
+        onCreatePost(text, files.length > 0 ? files : null, postType, visibility, location, feeling, taggedUsers, activeBackground, linkPreview || undefined); 
         onClose(); 
     };
     
@@ -504,6 +516,13 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ currentUser, u
                                 <span className="text-white text-xl font-bold">
                                     +{remainingCount}
                                 </span>
+                            </div>
+                        )}
+                        
+                        {/* Multi-image indicator for first image */}
+                        {images.length > 1 && index === 0 && (
+                            <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm rounded-full w-8 h-8 flex items-center justify-center">
+                                <i className="fas fa-layer-group text-white text-sm"></i>
                             </div>
                         )}
                     </div>
@@ -801,6 +820,7 @@ export const CommentsSheet: React.FC<CommentsSheetProps> = ({ post, currentUser,
     );
 };
 
+// --- MAIN POST COMPONENT WITH MULTI-IMAGE SUPPORT ---
 interface PostProps {
     post: PostType;
     author: User | Brand;
@@ -813,7 +833,7 @@ interface PostProps {
     onDelete?: (postId: number) => void;
     onEdit?: (postId: number, content: string) => void;
     onHashtagClick?: (tag: string) => void;
-    onViewImage: (url: string, index: number) => void; // UPDATED: Now includes index
+    onViewImage: (url: string, index: number) => void; // UPDATED: Now includes index for multi-image posts
     onOpenComments: (postId: number) => void;
     onViewProduct?: (product: Product) => void;
     onVideoClick: (post: PostType) => void;
@@ -823,7 +843,27 @@ interface PostProps {
     onPlayAudioTrack?: (track: AudioTrack) => void;
 }
 
-export const Post: React.FC<PostProps> = ({ post, author, currentUser, users, onProfileClick, onGroupClick, onReact, onShare, onDelete, onEdit, onHashtagClick, onViewImage, onOpenComments, onViewProduct, onVideoClick, sharedPost, onFollow, isFollowing, onPlayAudioTrack }) => {
+export const Post: React.FC<PostProps> = ({ 
+    post, 
+    author, 
+    currentUser, 
+    users, 
+    onProfileClick, 
+    onGroupClick, 
+    onReact, 
+    onShare, 
+    onDelete, 
+    onEdit, 
+    onHashtagClick, 
+    onViewImage, 
+    onOpenComments, 
+    onViewProduct, 
+    onVideoClick, 
+    sharedPost, 
+    onFollow, 
+    isFollowing, 
+    onPlayAudioTrack 
+}) => {
     const [showMenu, setShowMenu] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);
     const myReaction = currentUser ? post.reactions.find(r => r.userId === currentUser.id)?.type : undefined;
@@ -847,68 +887,18 @@ export const Post: React.FC<PostProps> = ({ post, author, currentUser, users, on
         );
     };
 
-    // Image Grid function for multi-image posts
-    const renderImageGrid = (images: string[]) => {
-        if (!images || images.length === 0) return null;
-        
-        const displayedImages = images.slice(0, 9);
-        const remainingCount = images.length - displayedImages.length;
-        
-        const getGridClass = () => {
-            const count = displayedImages.length;
-            if (count === 1) return "grid-cols-1";
-            if (count === 2) return "grid-cols-2 gap-1";
-            if (count === 3) return "grid-cols-2";
-            if (count === 4) return "grid-cols-2 gap-1";
-            return "grid-cols-3 gap-1";
-        };
-
-        const getImageClass = (index: number) => {
-            const count = displayedImages.length;
-            if (count === 1) return "row-span-2 col-span-2";
-            if (count === 2) return "col-span-1 row-span-2";
-            if (count === 3) {
-                if (index === 0) return "row-span-2 col-span-1";
-                return "row-span-1 col-span-1";
-            }
-            if (count === 4) return "row-span-1 col-span-1";
-            return "row-span-1 col-span-1";
-        };
-
-        return (
-            <div className={`grid ${getGridClass()} rounded-lg overflow-hidden mt-2 mx-3 md:mx-4 cursor-pointer`}>
-                {displayedImages.map((image, index) => (
-                    <div 
-                        key={index} 
-                        className={`relative ${getImageClass(index)} overflow-hidden bg-black`}
-                        onClick={() => onViewImage(image, index)}
-                    >
-                        <img 
-                            src={image} 
-                            alt={`Post image ${index + 1}`}
-                            className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                        />
-                        
-                        {/* Overlay for remaining count */}
-                        {index === displayedImages.length - 1 && remainingCount > 0 && (
-                            <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
-                                <span className="text-white text-2xl md:text-3xl font-bold">
-                                    +{remainingCount}
-                                </span>
-                            </div>
-                        )}
-                        
-                        {/* Multi-image indicator for first image */}
-                        {images.length > 1 && index === 0 && (
-                            <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm rounded-full w-8 h-8 flex items-center justify-center">
-                                <i className="fas fa-layer-group text-white text-sm"></i>
-                            </div>
-                        )}
-                    </div>
-                ))}
-            </div>
-        );
+    // Helper to get all images from post (supports both single image and multi-image arrays)
+    const getAllImages = () => {
+        if (post.images && post.images.length > 0) {
+            return post.images;
+        }
+        if (post.image) {
+            return [post.image];
+        }
+        return [];
     };
+
+    const images = getAllImages();
 
     return (
         <div className="bg-[#242526] rounded-xl shadow-sm mb-4 animate-fade-in border border-[#3E4042] overflow-hidden">
@@ -1000,7 +990,7 @@ export const Post: React.FC<PostProps> = ({ post, author, currentUser, users, on
                 </div>
             )}
             
-            {post.linkPreview && !post.images && !post.video && (
+            {post.linkPreview && images.length === 0 && !post.video && (
                 <div className="mx-3 md:mx-4 mb-2 bg-[#242526] border border-[#3E4042] rounded-lg overflow-hidden cursor-pointer hover:bg-[#3A3B3C] transition-colors" onClick={() => window.open(post.linkPreview!.url, '_blank')}>
                     <img src={post.linkPreview.image} alt="Preview" className="w-full h-48 md:h-64 object-cover" />
                     <div className="p-3 bg-[#3A3B3C]">
@@ -1031,9 +1021,11 @@ export const Post: React.FC<PostProps> = ({ post, author, currentUser, users, on
                 </div>
             )}
             
-            {/* MULTI-IMAGE SUPPORT - Updated to use images array */}
-            {post.type === 'image' && post.images && post.images.length > 0 && !post.background && (
-                renderImageGrid(post.images)
+            {/* MULTI-IMAGE SUPPORT - Handles both single and multiple images */}
+            {images.length > 0 && post.type === 'image' && !post.background && (
+                <div className="px-3 md:px-4 pb-2">
+                    <ImageGrid images={images} onImageClick={onViewImage} />
+                </div>
             )}
             
             {post.type === 'video' && post.video && (
