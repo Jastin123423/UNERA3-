@@ -384,7 +384,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: p.id + 100000, 
             authorId: p.sellerId, 
             content: `Just listed a new item: ${p.title}`, 
-            timestamp: p.date, // FIXED: Use numeric timestamp
+            timestamp: p.date,
             createdAt: p.date, 
             reactions: [], 
             comments: [], 
@@ -400,7 +400,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             authorId: reel.userId, 
             content: reel.caption, 
             video: reel.videoUrl, 
-            timestamp: reel.createdAt, // FIXED: Use numeric timestamp
+            timestamp: reel.createdAt,
             createdAt: reel.createdAt, 
             reactions: reel.reactions, 
             comments: reel.comments, 
@@ -802,7 +802,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             content: text, 
             images: images.length > 0 ? images : undefined,
             video: video,
-            timestamp: timestamp, // FIXED: Use numeric timestamp
+            timestamp: timestamp,
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
@@ -900,7 +900,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         alert("Brand page created successfully! You are now following this page.");
     };
 
-    // FIXED: Implemented handlePostAsBrand function
+    // FIXED ISSUE #2: handlePostAsBrand function - Properly handles post creation for brands
     const handlePostAsBrand = (
         brandId: number, 
         content: string, 
@@ -949,7 +949,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             content,
             images: images.length > 0 ? images : undefined,
             video: video,
-            timestamp: timestamp, // FIXED: Use numeric timestamp
+            timestamp: timestamp,
             createdAt: timestamp,
             reactions: [], 
             comments: [], 
@@ -964,6 +964,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             linkPreview,
             brandId: brandId // Add brandId to identify as brand post
         };
+        
+        console.log("Creating brand post:", newPost); // Debug log
         
         // Add to main posts array
         setPosts(prev => [newPost, ...prev]);
@@ -1004,6 +1006,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
         
         alert("Brand post published successfully!");
+        return newPost; // Return the created post for debugging
     };
 
     const handleFollowBrand = (brandId: number) => {
@@ -1371,7 +1374,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: timestamp + 1, 
             authorId: currentUser.id, 
             content: `is hosting a new event: ${newEvent.title}`, 
-            timestamp: timestamp, // FIXED: Use numeric timestamp
+            timestamp: timestamp,
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
@@ -1484,8 +1487,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: timestamp, 
             userId: currentUser.id, 
             text, 
-            timestamp: timestamp, // FIXED: Use numeric timestamp
-            formattedTime: formatRelativeTime(timestamp), // Add formatted time
+            timestamp: timestamp,
+            formattedTime: formatRelativeTime(timestamp),
             likes: 0, 
             attachment,
             authorName: currentUser.name,
@@ -1577,7 +1580,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: timestamp, 
             authorId: currentUser.id, 
             content: extraCaption ? `${extraCaption}\n\n${sourcePost.content || ''}` : sourcePost.content, 
-            timestamp: timestamp, // FIXED: Use numeric timestamp
+            timestamp: timestamp,
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
@@ -1608,7 +1611,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: timestamp, 
             authorId: currentUser.id, 
             content: data.content, 
-            timestamp: timestamp, // FIXED: Use numeric timestamp
+            timestamp: timestamp,
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
@@ -1673,7 +1676,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 id: timestamp,
                 authorId: currentUser.id,
                 content: `🎵 Just released new music: "${song.title}" by ${song.artist}`,
-                timestamp: timestamp, // FIXED: Use numeric timestamp
+                timestamp: timestamp,
                 createdAt: timestamp,
                 reactions: [],
                 comments: [],
@@ -1752,7 +1755,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 id: timestamp,
                 authorId: currentUser.id,
                 content: `🎙️ New podcast episode: "${episode.title}" with ${episode.host || 'Podcast Host'}`,
-                timestamp: timestamp, // FIXED: Use numeric timestamp
+                timestamp: timestamp,
                 createdAt: timestamp,
                 reactions: [],
                 comments: [],
@@ -2006,8 +2009,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: timestamp, 
             userId: currentUser.id, 
             text, 
-            timestamp: timestamp, // FIXED: Use numeric timestamp
-            formattedTime: formatRelativeTime(timestamp), // Add formatted time
+            timestamp: timestamp,
+            formattedTime: formatRelativeTime(timestamp),
             likes: 0, 
             attachment,
             authorName: currentUser.name,
@@ -2150,7 +2153,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         )); 
     };
     
-    // FIXED: Group posts now properly sync with main feed
+    // FIXED ISSUE #1: handlePostToGroup - Now properly handles images and posts to both group and main feed
     const handlePostToGroup = (groupId: string, content: string, files: File[] | null, type: any, background?: string) => { 
         if (!currentUser) return;
         
@@ -2192,20 +2195,22 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: timestamp,
             authorId: currentUser.id, 
             content,
-            images: images.length > 0 ? images : undefined,
+            images: images.length > 0 ? images : undefined, // FIX: Ensure images are passed
             video: video,
-            timestamp: timestamp, // FIXED: Use numeric timestamp
+            timestamp: timestamp,
             createdAt: timestamp,
             reactions: [], 
             comments: [], 
             shares: 0,
             views: 0,
-            type: type === 'multimage' ? 'image' : type,
+            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')), // FIX: Proper type detection
             visibility: 'Public' as const,
             groupId, 
             groupName: groups.find(g => g.id === groupId)?.name,
             background
         }; 
+        
+        console.log("Creating group post:", newFeedPost); // Debug log
         
         // 3. Add to main posts array
         setPosts(prev => [newFeedPost, ...prev]); 
@@ -2256,7 +2261,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: timestamp + 1, 
             authorId: currentUser.id, 
             content: `is hosting a new event in ${groups.find(g => g.id === groupId)?.name}: ${newEvent.title}`, 
-            timestamp: timestamp, // FIXED: Use numeric timestamp
+            timestamp: timestamp,
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
@@ -2289,7 +2294,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             content: extraCaption ? `${extraCaption}\n\nShared from ${group.name}: ${groupPost.content}` : `Shared from ${group.name}: ${groupPost.content}`,
             images: groupPost.images,
             video: groupPost.video,
-            timestamp: timestamp, // FIXED: Use numeric timestamp
+            timestamp: timestamp,
             createdAt: timestamp,
             reactions: [],
             comments: [],
@@ -2532,7 +2537,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         );
     };
 
-    // Function to render regular posts with brand support
+    // Function to render regular posts with brand support - FIXED ISSUE #3: Add formattedTime
     const renderRegularPost = (post: PostType, author: any, isFollowing?: boolean) => {
         const isBrandAuthor = author?.type === 'brand';
         const isFollowingBrand = isBrandAuthor && currentUser ? 
@@ -2542,7 +2547,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         return (
             <Post 
                 key={post.id} 
-                post={{...post, formattedTime: formatRelativeTime(post.timestamp)}} // Add formatted time
+                post={{...post, formattedTime: formatRelativeTime(post.timestamp)}} // FIX: Add formatted time
                 author={author as any} 
                 currentUser={currentUser} 
                 users={users} 
@@ -2683,26 +2688,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     users={users} 
                                     posts={(() => {
                                         const userPosts = posts.filter(p => p.authorId === selectedUserId);
-                                        const enhancedPosts = userPosts.map(post => {
-                                            if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
-                                                const song = songs.find(s => s.id === post.audioTrack?.id);
-                                                const episode = episodes.find(e => e.id === post.audioTrack?.id);
-                                                
-                                                if (song || episode) {
-                                                    return {
-                                                        ...post,
-                                                        audioTrack: {
-                                                            ...post.audioTrack,
-                                                            cover: song?.cover || episode?.thumbnail || post.audioTrack.cover || '/default-cover.jpg',
-                                                            plays: song?.plays || episode?.plays || post.audioTrack.plays || 0,
-                                                            likes: song?.likes || episode?.likes || post.audioTrack.likes || 0,
-                                                            shares: song?.shares || episode?.shares || post.audioTrack.shares || 0,
-                                                        }
-                                                    };
-                                                }
-                                            }
-                                            return post;
-                                        });
+                                        const enhancedPosts = userPosts.map(post => ({
+                                            ...post,
+                                            formattedTime: formatRelativeTime(post.timestamp) // FIX: Add formatted time
+                                        }));
                                         
                                         return [
                                             ...enhancedPosts,
@@ -2712,7 +2701,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                     id: p.id + 100000,
                                                     authorId: p.sellerId,
                                                     content: `Just listed a new item: ${p.title}`,
-                                                    timestamp: p.date, // FIXED: Use numeric timestamp
+                                                    timestamp: p.date,
+                                                    formattedTime: formatRelativeTime(p.date), // FIX: Add formatted time
                                                     createdAt: p.date,
                                                     reactions: [],
                                                     comments: [],
@@ -2806,7 +2796,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                         return (
                                             <Post
                                                 key={activeSinglePostId}
-                                                post={{...post, formattedTime: formatRelativeTime(post.timestamp)}} // Add formatted time
+                                                post={{...post, formattedTime: formatRelativeTime(post.timestamp)}} // FIX: Add formatted time
                                                 author={author}
                                                 currentUser={currentUser}
                                                 users={users}
@@ -2869,7 +2859,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                     authorId: currentUser.id, 
                                                     content: `Shared a reel: ${reel.caption}`, 
                                                     video: reel.videoUrl,
-                                                    timestamp: timestamp, // FIXED: Use numeric timestamp
+                                                    timestamp: timestamp,
+                                                    formattedTime: formatRelativeTime(timestamp), // FIX: Add formatted time
                                                     createdAt: timestamp, 
                                                     reactions: [], 
                                                     comments: [], 
@@ -2910,8 +2901,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                             id: timestamp, 
                                             userId: currentUser.id, 
                                             text, 
-                                            timestamp: timestamp, // FIXED: Use numeric timestamp
-                                            formattedTime: formatRelativeTime(timestamp), // Add formatted time
+                                            timestamp: timestamp,
+                                            formattedTime: formatRelativeTime(timestamp), // FIX: Add formatted time
                                             likes: 0,
                                             authorName: currentUser.name,
                                             authorImage: currentUser.profileImage
@@ -2979,7 +2970,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onCreateBrand={handleCreateBrand}
                                     onFollowBrand={handleFollowBrand}
                                     onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
-                                    onPostAsBrand={handlePostAsBrand} // Now properly implemented
+                                    onPostAsBrand={handlePostAsBrand}
                                     onReact={handleReact}
                                     onShare={(id) => setActiveSharePostId(id)}
                                     onOpenComments={(postId) => setActiveCommentsPostId(postId)}
@@ -3172,8 +3163,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     content: groupPost.content || '',
                                     images: groupPost.images,
                                     video: groupPost.video,
-                                    timestamp: groupPost.timestamp, // FIXED: Use numeric timestamp
-                                    formattedTime: formatRelativeTime(groupPost.timestamp), // Add formatted time
+                                    timestamp: groupPost.timestamp,
+                                    formattedTime: formatRelativeTime(groupPost.timestamp), // FIX: Add formatted time
                                     createdAt: groupPost.timestamp,
                                     reactions: groupPost.reactions || [],
                                     comments: groupPost.comments || [],
