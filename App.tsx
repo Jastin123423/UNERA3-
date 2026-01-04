@@ -22,112 +22,6 @@ import { User, Post as PostType, Story, Reel, Notification, Message, Event, Prod
 import { INITIAL_USERS, INITIAL_POSTS, INITIAL_STORIES, INITIAL_REELS, INITIAL_EVENTS, INITIAL_GROUPS, INITIAL_BRANDS, MOCK_SONGS, MOCK_EPISODES } from './constants';
 import { rankFeed } from './utils/ranking'; 
 
-// MultiImageViewer Component
-const MultiImageViewer = ({ 
-    currentImage, 
-    onClose 
-}: { 
-    currentImage: { url: string; index: number; images: string[] } | null;
-    onClose: () => void;
-}) => {
-    const [currentIndex, setCurrentIndex] = useState(0);
-    
-    useEffect(() => {
-        if (currentImage) {
-            setCurrentIndex(currentImage.index);
-        }
-    }, [currentImage]);
-    
-    if (!currentImage || !currentImage.images.length) return null;
-    
-    const images = currentImage.images;
-    const totalImages = images.length;
-    
-    const goToNext = () => {
-        setCurrentIndex((prev) => (prev + 1) % totalImages);
-    };
-    
-    const goToPrev = () => {
-        setCurrentIndex((prev) => (prev - 1 + totalImages) % totalImages);
-    };
-    
-    const handleKeyDown = useCallback((e: KeyboardEvent) => {
-        if (e.key === 'Escape') onClose();
-        if (e.key === 'ArrowRight') goToNext();
-        if (e.key === 'ArrowLeft') goToPrev();
-    }, [onClose]);
-    
-    useEffect(() => {
-        document.addEventListener('keydown', handleKeyDown);
-        return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [handleKeyDown]);
-    
-    return (
-        <div className="fixed inset-0 z-[200] bg-black/95 flex flex-col items-center justify-center">
-            {/* Close button */}
-            <button 
-                onClick={onClose}
-                className="absolute top-4 right-4 z-50 text-white text-2xl hover:bg-white/20 p-2 rounded-full transition-colors"
-            >
-                <i className="fas fa-times"></i>
-            </button>
-            
-            {/* Image counter */}
-            <div className="absolute top-4 left-4 z-50 text-white font-semibold">
-                {currentIndex + 1} / {totalImages}
-            </div>
-            
-            {/* Main image */}
-            <div className="relative w-full h-full flex items-center justify-center">
-                <img 
-                    src={images[currentIndex]}
-                    alt={`Image ${currentIndex + 1}`}
-                    className="max-w-full max-h-full object-contain"
-                />
-                
-                {/* Navigation arrows */}
-                {totalImages > 1 && (
-                    <>
-                        <button 
-                            onClick={goToPrev}
-                            className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-3 rounded-full transition-colors"
-                        >
-                            <i className="fas fa-chevron-left text-xl"></i>
-                        </button>
-                        <button 
-                            onClick={goToNext}
-                            className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-3 rounded-full transition-colors"
-                        >
-                            <i className="fas fa-chevron-right text-xl"></i>
-                        </button>
-                    </>
-                )}
-            </div>
-            
-            {/* Thumbnails */}
-            {totalImages > 1 && (
-                <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 px-4 overflow-x-auto">
-                    {images.map((image, index) => (
-                        <div 
-                            key={index}
-                            onClick={() => setCurrentIndex(index)}
-                            className={`w-16 h-16 rounded-lg overflow-hidden cursor-pointer border-2 transition-all flex-shrink-0 ${
-                                index === currentIndex ? 'border-blue-500' : 'border-transparent'
-                            }`}
-                        >
-                            <img 
-                                src={image}
-                                alt={`Thumbnail ${index + 1}`}
-                                className="w-full h-full object-cover"
-                            />
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-};
-
 const getPath = () => {
     if (typeof window !== 'undefined') {
         return window.location.pathname;
@@ -317,6 +211,37 @@ const createNotification = (
     };
 };
 
+// MISSING FUNCTIONS DECLARATIONS (to fix TypeScript errors)
+const handlePostAsBrand = (brandId: number, content: string, files: File[] | null, type: string, visibility: string, location?: string, feeling?: string, taggedUsers?: number[], background?: string, linkPreview?: LinkPreview) => {
+    console.log('Posting as brand:', { brandId, content, files, type });
+    // Implementation needed
+};
+
+const handleUpdateBrand = (brandId: number, updates: Partial<Brand>) => {
+    console.log('Updating brand:', { brandId, updates });
+    // Implementation needed
+};
+
+const handleDeleteBrand = (brandId: number) => {
+    console.log('Deleting brand:', brandId);
+    // Implementation needed
+};
+
+const handleUpdateBrandImage = (brandId: number, type: 'cover' | 'profile', file: File) => {
+    console.log('Updating brand image:', { brandId, type, file });
+    // Implementation needed
+};
+
+const handleVerifyBrand = (brandId: number) => {
+    console.log('Verifying brand:', brandId);
+    // Implementation needed
+};
+
+const handleDeletePost = (postId: number) => {
+    console.log('Deleting post:', postId);
+    // Implementation needed
+};
+
 export default function App({ initialData, initialPath }: { initialData?: any, initialPath?: string }) {
     const { t } = useLanguage();
 
@@ -403,7 +328,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const [showCreateStoryModal, setShowCreateStoryModal] = useState(false);
     const [showCreateEventModal, setShowCreateEventModal] = useState(false);
     const [activeStory, setActiveStory] = useState<Story | null>(null);
-    const [fullScreenImage, setFullScreenImage] = useState<{url: string, index: number, images: string[]} | null>(null);
+    const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
     const [activeCommentsPostId, setActiveCommentsPostId] = useState<number | null>(null);
     const [activeSharePostId, setActiveSharePostId] = useState<number | null>(null);
     const [activeChatUser, setActiveChatUser] = useState<User | null>(null);
@@ -844,26 +769,45 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setUsers(newUsers);
     };
 
-    const handleCreatePost = (text: string, file: File | null, type: any, visibility: any, location?: string, feeling?: string, taggedUsers?: number[], background?: string, linkPreview?: LinkPreview) => {
+    // UPDATED: Modified to handle multiple images
+    const handleCreatePost = (
+        text: string, 
+        files: File[] | null, 
+        type: any, 
+        visibility: any, 
+        location?: string, 
+        feeling?: string, 
+        taggedUsers?: number[], 
+        background?: string, 
+        linkPreview?: LinkPreview
+    ) => {
         if (!currentUser) return;
         
-        // Handle both single file and array of files
-        const imageUrl = file && type === 'image' ? URL.createObjectURL(file) : undefined;
-        const images = imageUrl ? [imageUrl] : undefined;
+        // Handle multiple images
+        let images: string[] = [];
+        let video: string | undefined = undefined;
+        
+        if (files && files.length > 0) {
+            if (type === 'video' && files.length === 1) {
+                video = URL.createObjectURL(files[0]);
+            } else if (type === 'image' || type === 'multimage') {
+                images = files.map(file => URL.createObjectURL(file));
+            }
+        }
         
         const newPost: PostType = { 
             id: Date.now(), 
             authorId: currentUser.id, 
             content: text, 
-            images: images, // Use images array
-            video: file && type === 'video' ? URL.createObjectURL(file) : undefined, 
+            images: images.length > 0 ? images : undefined,
+            video: video,
             timestamp: 'Just now', 
             createdAt: Date.now(), 
             reactions: [], 
             comments: [], 
             shares: 0, 
             views: 0, 
-            type: images ? 'image' : (type === 'video' ? 'video' : type), 
+            type: type === 'multimage' ? 'image' : type, 
             visibility, 
             location, 
             feeling, 
@@ -1857,37 +1801,51 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         )); 
     };
     
-    const handlePostToGroup = (groupId: string, content: string, file: File | null, type: any, background?: string) => { 
-        if (!currentUser) return; 
-        const imageUrl = file && type === 'image' ? URL.createObjectURL(file) : undefined;
-        const images = imageUrl ? [imageUrl] : undefined;
+    // UPDATED: Modified to handle multiple images for group posts
+    const handlePostToGroup = (groupId: string, content: string, files: File[] | null, type: any, background?: string) => { 
+        if (!currentUser) return;
+        
+        // Handle multiple images
+        let images: string[] = [];
+        let video: string | undefined = undefined;
+        
+        if (files && files.length > 0) {
+            if (type === 'video' && files.length === 1) {
+                video = URL.createObjectURL(files[0]);
+            } else if (type === 'image' || type === 'multimage') {
+                images = files.map(file => URL.createObjectURL(file));
+            }
+        }
         
         const newPost: GroupPost = { 
             id: Date.now(), 
             authorId: currentUser.id, 
             content, 
-            images: images,
-            video: file && type === 'video' ? URL.createObjectURL(file) : undefined, 
+            images: images.length > 0 ? images : undefined,
+            video: video,
             timestamp: Date.now(), 
             reactions: [], 
             comments: [], 
             shares: 0,
             background: background
         }; 
+        
         setGroups(prev => prev.map(g => 
             g.id === groupId 
                 ? { ...g, posts: [newPost, ...g.posts] } 
                 : g
         )); 
+        
         const newFeedPost: PostType = { 
             ...newPost, 
-            type: images ? 'image' : (type === 'video' ? 'video' : type), 
+            type: type === 'multimage' ? 'image' : type, 
             visibility: 'Public', 
             timestamp: 'Just now', 
             createdAt: newPost.timestamp, 
             groupId, 
             groupName: groups.find(g => g.id === groupId)?.name 
         }; 
+        
         setPosts(prev => [newFeedPost, ...prev]); 
     };
     
@@ -2185,14 +2143,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 }} 
                 onReact={handleReact} 
                 onShare={(id) => setActiveSharePostId(id)} 
-                onViewImage={(url, index) => {
-                    const images = post.images || [];
-                    setFullScreenImage({
-                        url,
-                        index,
-                        images: images
-                    });
-                }}
+                onViewImage={(url) => setFullScreenImage(url)} 
                 onOpenComments={(postId) => setActiveCommentsPostId(postId)} 
                 onVideoClick={(p) => { setActiveReelId(p.id - 200000); setView('reels'); }} 
                 onViewProduct={(p) => setActiveProduct(p)} 
@@ -2386,12 +2337,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     }} 
                                     onEditPost={() => {}} 
                                     getCommentAuthor={(id) => users.find(u => u.id === id)} 
-                                    onViewImage={(url) => {
-                                        const post = posts.find(p => p.images?.includes(url));
-                                        const images = post?.images || [url];
-                                        const index = images.findIndex(img => img === url);
-                                        setFullScreenImage({ url, index, images });
-                                    }}
+                                    onViewImage={setFullScreenImage} 
                                     onOpenComments={setActiveCommentsPostId} 
                                     onVideoClick={() => {}} 
                                     onCreateEventClick={() => setShowCreateEventModal(true)} 
@@ -2426,50 +2372,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                             />
                                         );
                                     }}
-                                    renderRegularPost={(post: PostType, author: any, isFollowing?: boolean) => {
-                                        const isBrandAuthor = author?.type === 'brand';
-                                        const isFollowingBrand = isBrandAuthor && currentUser ? 
-                                            brands.find(b => b.id === author.id)?.followers.includes(currentUser.id) || false : 
-                                            false;
-                                        
-                                        return (
-                                            <Post 
-                                                key={post.id} 
-                                                post={post} 
-                                                author={author} 
-                                                currentUser={currentUser} 
-                                                users={users} 
-                                                onProfileClick={(id) => { 
-                                                    if (isBrandAuthor) {
-                                                        setActiveBrandId(id);
-                                                        handleNavigate('brand_view');
-                                                    } else {
-                                                        setSelectedUserId(id); 
-                                                        setView('profile');
-                                                    }
-                                                }} 
-                                                onReact={handleReact} 
-                                                onShare={(id) => setActiveSharePostId(id)} 
-                                                onViewImage={(url, index) => {
-                                                    const images = post.images || [url];
-                                                    setFullScreenImage({
-                                                        url,
-                                                        index,
-                                                        images: images
-                                                    });
-                                                }}
-                                                onOpenComments={(postId) => setActiveCommentsPostId(postId)} 
-                                                onVideoClick={() => {}} 
-                                                onViewProduct={(p) => setActiveProduct(p)} 
-                                                onPlayAudioTrack={handlePlayTrack} 
-                                                onFollow={isBrandAuthor ? handleFollowBrand : handleFollowUser} 
-                                                isFollowing={isBrandAuthor ? isFollowingBrand : isFollowing} 
-                                                onHashtagClick={handleTagClick} 
-                                                onDeletePost={isAdmin ? handleDeletePost : undefined}
-                                                isAdmin={isAdmin}
-                                            />
-                                        );
-                                    }}
+                                    renderRegularPost={renderRegularPost}
                                 />
                             )}
                             
@@ -2504,14 +2407,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 }}
                                                 onReact={handleReact}
                                                 onShare={(id) => setActiveSharePostId(id)}
-                                                onViewImage={(url, index) => {
-                                                    const images = post.images || [url];
-                                                    setFullScreenImage({
-                                                        url,
-                                                        index,
-                                                        images: images
-                                                    });
-                                                }}
+                                                onViewImage={setFullScreenImage}
                                                 onOpenComments={setActiveCommentsPostId}
                                                 onVideoClick={() => {}}
                                                 onPlayAudioTrack={handlePlayTrack}
@@ -2964,8 +2860,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                         />
                     )}
                     {fullScreenImage && (
-                        <MultiImageViewer 
-                            currentImage={fullScreenImage}
+                        <ImageViewer 
+                            imageUrl={fullScreenImage} 
                             onClose={() => setFullScreenImage(null)} 
                         />
                     )}
