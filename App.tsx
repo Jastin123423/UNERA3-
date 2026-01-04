@@ -1,9 +1,3 @@
-Look for these issues in App.tsx and professionally provide a solution 
-
-1. See why when Groups members submit posts it retun blank 
-2. See why when Brands/page users submit post no post is seen in both profile and homepage feeds 
-3. Make posts time count like Facebook eg posted 3h, 1day, 6days
-
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Login, Register, ForgotPassword } from './components/Auth';
