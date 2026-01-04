@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, TouchEvent } from 'react';
 import { User, Post as PostType, ReactionType, Comment, Product, LinkPreview, Group, Brand, AudioTrack } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 import { INITIAL_USERS, LOCATIONS_DATA, REACTION_ICONS, REACTION_COLORS, GIF_CATEGORIES, MARKETPLACE_COUNTRIES, MARKETPLACE_CATEGORIES } from '../constants';
@@ -36,8 +36,176 @@ const RichText = ({ text, users, onProfileClick, onHashtagClick }: { text: strin
     );
 };
 
+// --- FULL SCREEN IMAGE VIEWER WITH SWIPE SUPPORT ---
+interface FullScreenImageViewerProps {
+    images: string[];
+    currentIndex: number;
+    onClose: () => void;
+    onIndexChange: (index: number) => void;
+}
+
+const FullScreenImageViewer: React.FC<FullScreenImageViewerProps> = ({ images, currentIndex, onClose, onIndexChange }) => {
+    const [touchStart, setTouchStart] = useState<number | null>(null);
+    const [touchEnd, setTouchEnd] = useState<number | null>(null);
+    const [isTransitioning, setIsTransitioning] = useState(false);
+
+    // Minimum swipe distance required
+    const minSwipeDistance = 50;
+
+    const handleTouchStart = (e: TouchEvent) => {
+        setTouchEnd(null);
+        setTouchStart(e.targetTouches[0].clientX);
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+        setTouchEnd(e.targetTouches[0].clientX);
+    };
+
+    const handleTouchEnd = () => {
+        if (!touchStart || !touchEnd) return;
+        
+        const distance = touchStart - touchEnd;
+        const isLeftSwipe = distance > minSwipeDistance;
+        const isRightSwipe = distance < -minSwipeDistance;
+
+        if (isLeftSwipe && currentIndex < images.length - 1) {
+            setIsTransitioning(true);
+            setTimeout(() => {
+                onIndexChange(currentIndex + 1);
+                setIsTransitioning(false);
+            }, 300);
+        } else if (isRightSwipe && currentIndex > 0) {
+            setIsTransitioning(true);
+            setTimeout(() => {
+                onIndexChange(currentIndex - 1);
+                setIsTransitioning(false);
+            }, 300);
+        }
+    };
+
+    const goToNext = () => {
+        if (currentIndex < images.length - 1) {
+            setIsTransitioning(true);
+            setTimeout(() => {
+                onIndexChange(currentIndex + 1);
+                setIsTransitioning(false);
+            }, 300);
+        }
+    };
+
+    const goToPrev = () => {
+        if (currentIndex > 0) {
+            setIsTransitioning(true);
+            setTimeout(() => {
+                onIndexChange(currentIndex - 1);
+                setIsTransitioning(false);
+            }, 300);
+        }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') onClose();
+        if (e.key === 'ArrowRight') goToNext();
+        if (e.key === 'ArrowLeft') goToPrev();
+    };
+
+    useEffect(() => {
+        document.addEventListener('keydown', handleKeyDown);
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown);
+            document.body.style.overflow = 'unset';
+        };
+    }, [currentIndex]);
+
+    return (
+        <div className="fixed inset-0 z-[300] bg-black flex items-center justify-center">
+            {/* Close button */}
+            <button 
+                onClick={onClose}
+                className="absolute top-4 right-4 z-40 w-10 h-10 bg-black/50 rounded-full flex items-center justify-center hover:bg-black/70 transition-colors"
+            >
+                <i className="fas fa-times text-white text-xl"></i>
+            </button>
+
+            {/* Previous button */}
+            {currentIndex > 0 && (
+                <button 
+                    onClick={goToPrev}
+                    className="absolute left-4 top-1/2 transform -translate-y-1/2 z-40 w-12 h-12 bg-black/50 rounded-full flex items-center justify-center hover:bg-black/70 transition-colors"
+                >
+                    <i className="fas fa-chevron-left text-white text-xl"></i>
+                </button>
+            )}
+
+            {/* Next button */}
+            {currentIndex < images.length - 1 && (
+                <button 
+                    onClick={goToNext}
+                    className="absolute right-4 top-1/2 transform -translate-y-1/2 z-40 w-12 h-12 bg-black/50 rounded-full flex items-center justify-center hover:bg-black/70 transition-colors"
+                >
+                    <i className="fas fa-chevron-right text-white text-xl"></i>
+                </button>
+            )}
+
+            {/* Main image */}
+            <div 
+                className="relative w-full h-full flex items-center justify-center"
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+            >
+                <img 
+                    src={images[currentIndex]} 
+                    alt={`Image ${currentIndex + 1}`}
+                    className={`max-w-full max-h-full object-contain ${isTransitioning ? 'opacity-50' : 'opacity-100'} transition-opacity duration-300`}
+                />
+            </div>
+
+            {/* Image counter */}
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-40 bg-black/50 backdrop-blur-sm px-4 py-2 rounded-full">
+                <span className="text-white font-medium">
+                    {currentIndex + 1} / {images.length}
+                </span>
+            </div>
+
+            {/* Thumbnail strip */}
+            {images.length > 1 && (
+                <div className="absolute bottom-20 left-0 right-0 overflow-x-auto px-4 pb-2 flex justify-center">
+                    <div className="flex gap-2">
+                        {images.map((img, index) => (
+                            <div 
+                                key={index}
+                                onClick={() => {
+                                    setIsTransitioning(true);
+                                    setTimeout(() => {
+                                        onIndexChange(index);
+                                        setIsTransitioning(false);
+                                    }, 300);
+                                }}
+                                className={`w-16 h-16 rounded-lg overflow-hidden cursor-pointer transition-all ${index === currentIndex ? 'ring-2 ring-[#1877F2] scale-110' : 'ring-1 ring-white/20'}`}
+                            >
+                                <img 
+                                    src={img} 
+                                    alt={`Thumbnail ${index + 1}`}
+                                    className="w-full h-full object-cover"
+                                />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 // --- IMAGE GRID COMPONENT (Facebook-style) ---
-const ImageGrid = ({ images, onImageClick }: { images: string[], onImageClick: (url: string, index: number) => void }) => {
+interface ImageGridProps {
+    images: string[];
+    onImageClick: (index: number) => void;
+}
+
+const ImageGrid: React.FC<ImageGridProps> = ({ images, onImageClick }) => {
     if (!images || images.length === 0) return null;
     
     const displayedImages = images.slice(0, 9);
@@ -70,7 +238,7 @@ const ImageGrid = ({ images, onImageClick }: { images: string[], onImageClick: (
                 <div 
                     key={index} 
                     className={`relative ${getImageClass(index)} cursor-pointer overflow-hidden bg-black`}
-                    onClick={() => onImageClick(image, index)}
+                    onClick={() => onImageClick(index)}
                 >
                     <img 
                         src={image} 
@@ -833,7 +1001,7 @@ interface PostProps {
     onDelete?: (postId: number) => void;
     onEdit?: (postId: number, content: string) => void;
     onHashtagClick?: (tag: string) => void;
-    onViewImage: (url: string, index: number) => void; // UPDATED: Now includes index for multi-image posts
+    onViewImage: (url: string) => void; // Updated: Now only needs url for single image clicks
     onOpenComments: (postId: number) => void;
     onViewProduct?: (product: Product) => void;
     onVideoClick: (post: PostType) => void;
@@ -866,26 +1034,12 @@ export const Post: React.FC<PostProps> = ({
 }) => {
     const [showMenu, setShowMenu] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);
+    const [showFullScreenViewer, setShowFullScreenViewer] = useState(false);
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const myReaction = currentUser ? post.reactions.find(r => r.userId === currentUser.id)?.type : undefined;
     const isOwner = currentUser?.id === post.authorId;
     const isAdmin = currentUser?.role === 'admin';
     const isVideo = post.type === 'video';
-
-    const renderContent = (content: string) => {
-        if (!content) return null;
-        const words = content.split(/\s+/);
-        const isLong = words.length > 250;
-        const isShortText = content.length < 150 && post.type === 'text' && !post.images && !post.video && !post.background && !post.event && !post.product && !sharedPost;
-        const textSizeClass = isShortText ? 'text-[24px] leading-tight font-normal' : 'text-[22px] leading-relaxed';
-        let displayContent = content;
-        if (isLong && !isExpanded) displayContent = words.slice(0, 250).join(' ') + '...';
-        return (
-            <div className={`px-3 md:px-4 pb-2 text-[#E4E6EB] ${textSizeClass}`}>
-                <RichText text={displayContent} users={users} onProfileClick={onProfileClick} onHashtagClick={onHashtagClick} />
-                {isLong && !isExpanded && (<span className="text-[#B0B3B8] font-semibold cursor-pointer hover:underline ml-1" onClick={() => setIsExpanded(true)}>See more</span>)}
-            </div>
-        );
-    };
 
     // Helper to get all images from post (supports both single image and multi-image arrays)
     const getAllImages = () => {
@@ -900,186 +1054,225 @@ export const Post: React.FC<PostProps> = ({
 
     const images = getAllImages();
 
-    return (
-        <div className="bg-[#242526] rounded-xl shadow-sm mb-4 animate-fade-in border border-[#3E4042] overflow-hidden">
-            <div className="p-3 md:p-4 flex items-center justify-between">
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <img src={'profileImage' in author ? author.profileImage : ''} alt={author.name} className="w-10 h-10 rounded-full object-cover cursor-pointer border border-[#3E4042]" onClick={() => 'followers' in author && onProfileClick(author.id)} />
-                    <div className="min-w-0">
-                        <div className="flex items-center gap-1 flex-wrap">
-                            <h4 className="font-bold text-[#E4E6EB] text-[18.5px] cursor-pointer hover:underline truncate" onClick={() => 'followers' in author && onProfileClick(author.id)}>{author.name}</h4>
-                            {post.groupName && (<span className="text-[#B0B3B8] text-[15px] flex items-center min-w-0"><i className="fas fa-caret-right mx-1 text-xs"></i><span className="font-bold text-[#E4E6EB] hover:underline cursor-pointer truncate" onClick={() => post.groupId && onGroupClick && onGroupClick(post.groupId)}>{post.groupName}</span></span>)}
-                            {'isVerified' in author && author.isVerified && <i className="fas fa-check-circle text-[#1877F2] text-[13px] flex-shrink-0"></i>}
-                            {post.feeling && <span className="text-[#B0B3B8] text-[15px] whitespace-nowrap">is feeling {post.feeling}</span>}
-                        </div>
-                        <div className="flex items-center gap-1.5 text-[#B0B3B8] text-[13px]">
-                            <span>{post.timestamp}</span>
-                            {post.location && (<><span>•</span><i className="fas fa-map-marker-alt text-[12px]"></i><span className="truncate max-w-[150px]">{post.location}</span></>)}
-                            <span>•</span>
-                            <i className={`fas ${post.visibility === 'Public' ? 'fa-globe-americas' : 'fa-user-friends'} text-[12px]`}></i>
-                        </div>
-                    </div>
-                </div>
-                <div className="flex items-center gap-2">
-                    {!isOwner && currentUser && 'followers' in author && onFollow && (
-                        <button onClick={() => onFollow(author.id)} className={`flex items-center gap-2 text-sm font-bold px-5 py-2 rounded-lg transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#242526] ${isFollowing ? 'bg-[#3A3B3C] text-[#E4E6EB] hover:bg-[#4E4F50] focus:ring-[#4E4F50]' : 'bg-[#1877F2] text-white hover:bg-[#166FE5] focus:ring-[#1877F2]'}`}>
-                            {isFollowing ? (<><i className="fas fa-user-check text-xs"></i><span>Following</span></>) : (<><i className="fas fa-user-plus text-xs"></i><span>Follow</span></>)}
-                        </button>
-                    )}
-                    <div className="relative">
-                        <div className="w-9 h-9 hover:bg-[#3A3B3C] rounded-full flex items-center justify-center cursor-pointer" onClick={() => setShowMenu(!showMenu)}>
-                            <i className="fas fa-ellipsis-h text-[#B0B3B8]"></i>
-                        </div>
-                        {showMenu && (
-                            <div className="absolute right-0 top-10 bg-[#242526] rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.5)] border border-[#3E4042] w-[200px] z-10 py-2">
-                                <div className="px-3 py-2 hover:bg-[#3A3B3C] cursor-pointer flex items-center gap-3 text-[#E4E6EB]">
-                                    <i className="far fa-bookmark w-5"></i> Save Post
-                                </div>
-                                {(isOwner || isAdmin) && (
-                                    <>
-                                        <div className="px-3 py-2 hover:bg-[#3A3B3C] cursor-pointer flex items-center gap-3 text-[#E4E6EB]">
-                                            <i className="fas fa-pen w-5"></i> Edit Post
-                                        </div>
-                                        <div className="px-3 py-2 hover:bg-[#3A3B3C] cursor-pointer flex items-center gap-3 text-[#E4E6EB]" onClick={() => onDelete && onDelete(post.id)}>
-                                            <i className="fas fa-trash w-5"></i> Move to trash
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                </div>
+    const handleImageClick = (index: number) => {
+        if (images.length === 1) {
+            // Single image - use the existing onViewImage callback
+            onViewImage(images[0]);
+        } else {
+            // Multiple images - open full-screen viewer
+            setCurrentImageIndex(index);
+            setShowFullScreenViewer(true);
+        }
+    };
+
+    const renderContent = (content: string) => {
+        if (!content) return null;
+        const words = content.split(/\s+/);
+        const isLong = words.length > 250;
+        const isShortText = content.length < 150 && post.type === 'text' && images.length === 0 && !post.video && !post.background && !post.event && !post.product && !sharedPost;
+        const textSizeClass = isShortText ? 'text-[24px] leading-tight font-normal' : 'text-[22px] leading-relaxed';
+        let displayContent = content;
+        if (isLong && !isExpanded) displayContent = words.slice(0, 250).join(' ') + '...';
+        return (
+            <div className={`px-3 md:px-4 pb-2 text-[#E4E6EB] ${textSizeClass}`}>
+                <RichText text={displayContent} users={users} onProfileClick={onProfileClick} onHashtagClick={onHashtagClick} />
+                {isLong && !isExpanded && (<span className="text-[#B0B3B8] font-semibold cursor-pointer hover:underline ml-1" onClick={() => setIsExpanded(true)}>See more</span>)}
             </div>
-            
-            {renderContent(post.content || '')}
-            
-            {post.type === 'audio' && post.audioTrack && (
-                <div className="mx-3 md:mx-4 mb-2 rounded-xl overflow-hidden cursor-pointer relative group border border-[#3E4042] shadow-lg" onClick={() => onPlayAudioTrack && onPlayAudioTrack(post.audioTrack!)}>
-                    <img src={post.audioTrack.cover} alt="album cover" className="w-full h-full object-cover absolute inset-0 blur-md opacity-30 group-hover:opacity-50 transition-all" />
-                    <div className="relative p-6 bg-black/40 backdrop-blur-sm flex items-center gap-6">
-                        <div className="w-24 h-24 md:w-32 md:h-32 flex-shrink-0 relative">
-                            <img src={post.audioTrack.cover} alt="album cover" className="w-full h-full object-cover rounded-lg shadow-2xl" />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
-                                <div className="w-12 h-12 bg-[#1877F2]/80 rounded-full flex items-center justify-center border-2 border-white/50">
-                                    <i className="fas fa-play text-white text-xl pl-1"></i>
-                                </div>
+        );
+    };
+
+    return (
+        <>
+            {/* Full Screen Image Viewer */}
+            {showFullScreenViewer && images.length > 0 && (
+                <FullScreenImageViewer
+                    images={images}
+                    currentIndex={currentImageIndex}
+                    onClose={() => setShowFullScreenViewer(false)}
+                    onIndexChange={setCurrentImageIndex}
+                />
+            )}
+
+            <div className="bg-[#242526] rounded-xl shadow-sm mb-4 animate-fade-in border border-[#3E4042] overflow-hidden">
+                <div className="p-3 md:p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <img src={'profileImage' in author ? author.profileImage : ''} alt={author.name} className="w-10 h-10 rounded-full object-cover cursor-pointer border border-[#3E4042]" onClick={() => 'followers' in author && onProfileClick(author.id)} />
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-1 flex-wrap">
+                                <h4 className="font-bold text-[#E4E6EB] text-[18.5px] cursor-pointer hover:underline truncate" onClick={() => 'followers' in author && onProfileClick(author.id)}>{author.name}</h4>
+                                {post.groupName && (<span className="text-[#B0B3B8] text-[15px] flex items-center min-w-0"><i className="fas fa-caret-right mx-1 text-xs"></i><span className="font-bold text-[#E4E6EB] hover:underline cursor-pointer truncate" onClick={() => post.groupId && onGroupClick && onGroupClick(post.groupId)}>{post.groupName}</span></span>)}
+                                {'isVerified' in author && author.isVerified && <i className="fas fa-check-circle text-[#1877F2] text-[13px] flex-shrink-0"></i>}
+                                {post.feeling && <span className="text-[#B0B3B8] text-[15px] whitespace-nowrap">is feeling {post.feeling}</span>}
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[#B0B3B8] text-[13px]">
+                                <span>{post.timestamp}</span>
+                                {post.location && (<><span>•</span><i className="fas fa-map-marker-alt text-[12px]"></i><span className="truncate max-w-[150px]">{post.location}</span></>)}
+                                <span>•</span>
+                                <i className={`fas ${post.visibility === 'Public' ? 'fa-globe-americas' : 'fa-user-friends'} text-[12px]`}></i>
                             </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                            <span className="text-xs font-bold uppercase tracking-wider text-[#B0B3B8]">{post.audioTrack.type}</span>
-                            <h3 className="text-xl md:text-2xl font-bold text-white truncate my-1">{post.audioTrack.title}</h3>
-                            <p className="text-md text-[#B0B3B8] truncate">{post.audioTrack.artist}</p>
-                        </div>
                     </div>
-                </div>
-            )}
-            
-            {post.type === 'product' && post.product && (
-                <div className="mx-3 md:mx-4 mb-2 border border-[#3E4042] rounded-lg overflow-hidden cursor-pointer" onClick={() => onViewProduct && onViewProduct(post.product!)}>
-                    <div className="aspect-video bg-black">
-                        <img src={post.product.images[0]} alt={post.product.title} className="w-full h-full object-cover" />
-                    </div>
-                    <div className="p-3 bg-[#3A3B3C]">
-                        <div className="text-[#B0B3B8] text-xs uppercase font-bold">{MARKETPLACE_CATEGORIES.find(c => c.id === post.product?.category)?.name}</div>
-                        <div className="text-[#E4E6EB] font-bold text-lg truncate">{post.product.title}</div>
-                        <div className="flex items-center justify-between mt-1">
-                            <span className="text-[#F02849] font-bold text-xl">{MARKETPLACE_COUNTRIES.find(c => c.code === post.product!.country)?.symbol || '$'}{post.product.mainPrice}</span>
-                            <button className="bg-[#1877F2] text-white px-4 py-1.5 rounded-md font-semibold text-sm">View Item</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-            
-            {post.linkPreview && images.length === 0 && !post.video && (
-                <div className="mx-3 md:mx-4 mb-2 bg-[#242526] border border-[#3E4042] rounded-lg overflow-hidden cursor-pointer hover:bg-[#3A3B3C] transition-colors" onClick={() => window.open(post.linkPreview!.url, '_blank')}>
-                    <img src={post.linkPreview.image} alt="Preview" className="w-full h-48 md:h-64 object-cover" />
-                    <div className="p-3 bg-[#3A3B3C]">
-                        <div className="text-[#B0B3B8] text-xs uppercase font-bold mb-1">{post.linkPreview.domain}</div>
-                        <div className="text-[#E4E6EB] font-bold text-[17px] mb-1 line-clamp-1">{post.linkPreview.title}</div>
-                        <div className="text-[#B0B3B8] text-[14px] line-clamp-2">{post.linkPreview.description}</div>
-                    </div>
-                </div>
-            )}
-            
-            {post.background && (
-                <div className="h-[300px] flex items-center justify-center p-8 text-center text-white font-bold text-2xl" style={{ background: post.background, backgroundSize: 'cover' }}>
-                    {post.content}
-                </div>
-            )}
-            
-            {post.type === 'event' && post.event && (
-                <div className="mx-4 mb-4 rounded-xl overflow-hidden border border-[#3E4042]">
-                    <img src={post.event.image} className="w-full h-40 object-cover" alt="" />
-                    <div className="bg-[#3A3B3C] p-3 flex justify-between items-center">
-                        <div>
-                            <div className="text-red-500 text-xs font-bold uppercase">{new Date(post.event.date).toLocaleString('default', { month: 'short' })} {new Date(post.event.date).getDate()}</div>
-                            <div className="text-[#E4E6EB] font-bold">{post.event.title}</div>
-                            <div className="text-[#B0B3B8] text-sm">{post.event.location}</div>
-                        </div>
-                        <button className="border border-[#B0B3B8] text-[#E4E6EB] px-4 py-1.5 rounded-lg font-bold text-sm hover:bg-[#4E4F50]">Interested</button>
-                    </div>
-                </div>
-            )}
-            
-            {/* MULTI-IMAGE SUPPORT - Handles both single and multiple images */}
-            {images.length > 0 && post.type === 'image' && !post.background && (
-                <div className="px-3 md:px-4 pb-2">
-                    <ImageGrid images={images} onImageClick={onViewImage} />
-                </div>
-            )}
-            
-            {post.type === 'video' && post.video && (
-                <div className="mt-1 bg-black w-full cursor-pointer relative h-[500px] md:h-[600px]" onClick={() => onVideoClick(post)}>
-                    <video src={post.video} className="w-full h-full object-cover" />
-                    <div className="absolute top-3 right-3 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-2 border border-white/10 z-10">
-                        <i className="fas fa-eye text-white text-xs animate-pulse"></i>
-                        <span className="text-white font-bold text-xs">{post.views || 0}</span>
-                    </div>
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="w-16 h-16 bg-black/40 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/20">
-                            <i className="fas fa-play text-white text-2xl pl-1"></i>
-                        </div>
-                    </div>
-                </div>
-            )}
-            
-            {!isVideo && (
-                <div className="px-3 md:px-4 py-2.5 flex items-center justify-between text-[#B0B3B8] text-[14px]">
-                    <div className="flex items-center gap-1.5 cursor-pointer">
-                        {post.reactions.length > 0 && (
-                            <div className="flex -space-x-1">
-                                <div className="bg-[#1877F2] rounded-full p-[2px] z-10">
-                                    <i className="fas fa-thumbs-up text-white text-[10px]"></i>
-                                </div>
-                                {post.reactions.some(r => r.type === 'love') && (
-                                    <div className="bg-[#F3425F] rounded-full p-[2px]">
-                                        <i className="fas fa-heart text-white text-[10px]"></i>
-                                    </div>
-                                )}
-                            </div>
+                    <div className="flex items-center gap-2">
+                        {!isOwner && currentUser && 'followers' in author && onFollow && (
+                            <button onClick={() => onFollow(author.id)} className={`flex items-center gap-2 text-sm font-bold px-5 py-2 rounded-lg transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#242526] ${isFollowing ? 'bg-[#3A3B3C] text-[#E4E6EB] hover:bg-[#4E4F50] focus:ring-[#4E4F50]' : 'bg-[#1877F2] text-white hover:bg-[#166FE5] focus:ring-[#1877F2]'}`}>
+                                {isFollowing ? (<><i className="fas fa-user-check text-xs"></i><span>Following</span></>) : (<><i className="fas fa-user-plus text-xs"></i><span>Follow</span></>)}
+                            </button>
                         )}
-                        <span className="hover:underline">{post.reactions.length > 0 ? post.reactions.length : ''}</span>
-                    </div>
-                    <div className="flex gap-4">
-                        <span className="hover:underline cursor-pointer" onClick={() => onOpenComments(post.id)}>{post.comments.length} comments</span>
-                        <span className="hover:underline cursor-pointer">{post.shares} shares</span>
+                        <div className="relative">
+                            <div className="w-9 h-9 hover:bg-[#3A3B3C] rounded-full flex items-center justify-center cursor-pointer" onClick={() => setShowMenu(!showMenu)}>
+                                <i className="fas fa-ellipsis-h text-[#B0B3B8]"></i>
+                            </div>
+                            {showMenu && (
+                                <div className="absolute right-0 top-10 bg-[#242526] rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.5)] border border-[#3E4042] w-[200px] z-10 py-2">
+                                    <div className="px-3 py-2 hover:bg-[#3A3B3C] cursor-pointer flex items-center gap-3 text-[#E4E6EB]">
+                                        <i className="far fa-bookmark w-5"></i> Save Post
+                                    </div>
+                                    {(isOwner || isAdmin) && (
+                                        <>
+                                            <div className="px-3 py-2 hover:bg-[#3A3B3C] cursor-pointer flex items-center gap-3 text-[#E4E6EB]">
+                                                <i className="fas fa-pen w-5"></i> Edit Post
+                                            </div>
+                                            <div className="px-3 py-2 hover:bg-[#3A3B3C] cursor-pointer flex items-center gap-3 text-[#E4E6EB]" onClick={() => onDelete && onDelete(post.id)}>
+                                                <i className="fas fa-trash w-5"></i> Move to trash
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
-            )}
-            
-            {!isVideo && (
-                <div className="px-2 py-1 border-t border-[#3E4042] mx-2 mb-1 flex items-center justify-between">
-                    <ReactionButton currentUserReactions={myReaction} reactionCount={post.reactions.length} onReact={(type) => onReact(post.id, type)} isGuest={!currentUser} />
-                    <button className="flex-1 flex items-center justify-center gap-2 h-10 rounded hover:bg-[#3A3B3C] transition-colors group text-[#B0B3B8]" onClick={() => currentUser ? onOpenComments(post.id) : alert("Login first")}>
-                        <i className="far fa-comment-alt text-[20px] group-hover:text-[#E4E6EB]"></i>
-                        <span className="text-[17px] font-medium group-hover:text-[#E4E6EB]">Comment</span>
-                    </button>
-                    <button className="flex-1 flex items-center justify-center gap-2 h-10 rounded hover:bg-[#3A3B3C] transition-colors group text-[#B0B3B8]" onClick={() => onShare(post.id)}>
-                        <i className="fas fa-share text-[20px] group-hover:text-[#E4E6EB]"></i>
-                        <span className="text-[17px] font-medium group-hover:text-[#E4E6EB]">Share</span>
-                    </button>
-                </div>
-            )}
-        </div>
+                
+                {renderContent(post.content || '')}
+                
+                {post.type === 'audio' && post.audioTrack && (
+                    <div className="mx-3 md:mx-4 mb-2 rounded-xl overflow-hidden cursor-pointer relative group border border-[#3E4042] shadow-lg" onClick={() => onPlayAudioTrack && onPlayAudioTrack(post.audioTrack!)}>
+                        <img src={post.audioTrack.cover} alt="album cover" className="w-full h-full object-cover absolute inset-0 blur-md opacity-30 group-hover:opacity-50 transition-all" />
+                        <div className="relative p-6 bg-black/40 backdrop-blur-sm flex items-center gap-6">
+                            <div className="w-24 h-24 md:w-32 md:h-32 flex-shrink-0 relative">
+                                <img src={post.audioTrack.cover} alt="album cover" className="w-full h-full object-cover rounded-lg shadow-2xl" />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
+                                    <div className="w-12 h-12 bg-[#1877F2]/80 rounded-full flex items-center justify-center border-2 border-white/50">
+                                        <i className="fas fa-play text-white text-xl pl-1"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <span className="text-xs font-bold uppercase tracking-wider text-[#B0B3B8]">{post.audioTrack.type}</span>
+                                <h3 className="text-xl md:text-2xl font-bold text-white truncate my-1">{post.audioTrack.title}</h3>
+                                <p className="text-md text-[#B0B3B8] truncate">{post.audioTrack.artist}</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                
+                {post.type === 'product' && post.product && (
+                    <div className="mx-3 md:mx-4 mb-2 border border-[#3E4042] rounded-lg overflow-hidden cursor-pointer" onClick={() => onViewProduct && onViewProduct(post.product!)}>
+                        <div className="aspect-video bg-black">
+                            <img src={post.product.images[0]} alt={post.product.title} className="w-full h-full object-cover" />
+                        </div>
+                        <div className="p-3 bg-[#3A3B3C]">
+                            <div className="text-[#B0B3B8] text-xs uppercase font-bold">{MARKETPLACE_CATEGORIES.find(c => c.id === post.product?.category)?.name}</div>
+                            <div className="text-[#E4E6EB] font-bold text-lg truncate">{post.product.title}</div>
+                            <div className="flex items-center justify-between mt-1">
+                                <span className="text-[#F02849] font-bold text-xl">{MARKETPLACE_COUNTRIES.find(c => c.code === post.product!.country)?.symbol || '$'}{post.product.mainPrice}</span>
+                                <button className="bg-[#1877F2] text-white px-4 py-1.5 rounded-md font-semibold text-sm">View Item</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                
+                {post.linkPreview && images.length === 0 && !post.video && (
+                    <div className="mx-3 md:mx-4 mb-2 bg-[#242526] border border-[#3E4042] rounded-lg overflow-hidden cursor-pointer hover:bg-[#3A3B3C] transition-colors" onClick={() => window.open(post.linkPreview!.url, '_blank')}>
+                        <img src={post.linkPreview.image} alt="Preview" className="w-full h-48 md:h-64 object-cover" />
+                        <div className="p-3 bg-[#3A3B3C]">
+                            <div className="text-[#B0B3B8] text-xs uppercase font-bold mb-1">{post.linkPreview.domain}</div>
+                            <div className="text-[#E4E6EB] font-bold text-[17px] mb-1 line-clamp-1">{post.linkPreview.title}</div>
+                            <div className="text-[#B0B3B8] text-[14px] line-clamp-2">{post.linkPreview.description}</div>
+                        </div>
+                    </div>
+                )}
+                
+                {post.background && (
+                    <div className="h-[300px] flex items-center justify-center p-8 text-center text-white font-bold text-2xl" style={{ background: post.background, backgroundSize: 'cover' }}>
+                        {post.content}
+                    </div>
+                )}
+                
+                {post.type === 'event' && post.event && (
+                    <div className="mx-4 mb-4 rounded-xl overflow-hidden border border-[#3E4042]">
+                        <img src={post.event.image} className="w-full h-40 object-cover" alt="" />
+                        <div className="bg-[#3A3B3C] p-3 flex justify-between items-center">
+                            <div>
+                                <div className="text-red-500 text-xs font-bold uppercase">{new Date(post.event.date).toLocaleString('default', { month: 'short' })} {new Date(post.event.date).getDate()}</div>
+                                <div className="text-[#E4E6EB] font-bold">{post.event.title}</div>
+                                <div className="text-[#B0B3B8] text-sm">{post.event.location}</div>
+                            </div>
+                            <button className="border border-[#B0B3B8] text-[#E4E6EB] px-4 py-1.5 rounded-lg font-bold text-sm hover:bg-[#4E4F50]">Interested</button>
+                        </div>
+                    </div>
+                )}
+                
+                {/* MULTI-IMAGE SUPPORT - Full width with no frames */}
+                {images.length > 0 && post.type === 'image' && !post.background && (
+                    <div className="w-full mt-2">
+                        <ImageGrid images={images} onImageClick={handleImageClick} />
+                    </div>
+                )}
+                
+                {post.type === 'video' && post.video && (
+                    <div className="mt-1 bg-black w-full cursor-pointer relative h-[500px] md:h-[600px]" onClick={() => onVideoClick(post)}>
+                        <video src={post.video} className="w-full h-full object-cover" />
+                        <div className="absolute top-3 right-3 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-2 border border-white/10 z-10">
+                            <i className="fas fa-eye text-white text-xs animate-pulse"></i>
+                            <span className="text-white font-bold text-xs">{post.views || 0}</span>
+                        </div>
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div className="w-16 h-16 bg-black/40 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/20">
+                                <i className="fas fa-play text-white text-2xl pl-1"></i>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                
+                {!isVideo && (
+                    <div className="px-3 md:px-4 py-2.5 flex items-center justify-between text-[#B0B3B8] text-[14px]">
+                        <div className="flex items-center gap-1.5 cursor-pointer">
+                            {post.reactions.length > 0 && (
+                                <div className="flex -space-x-1">
+                                    <div className="bg-[#1877F2] rounded-full p-[2px] z-10">
+                                        <i className="fas fa-thumbs-up text-white text-[10px]"></i>
+                                    </div>
+                                    {post.reactions.some(r => r.type === 'love') && (
+                                        <div className="bg-[#F3425F] rounded-full p-[2px]">
+                                            <i className="fas fa-heart text-white text-[10px]"></i>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            <span className="hover:underline">{post.reactions.length > 0 ? post.reactions.length : ''}</span>
+                        </div>
+                        <div className="flex gap-4">
+                            <span className="hover:underline cursor-pointer" onClick={() => onOpenComments(post.id)}>{post.comments.length} comments</span>
+                            <span className="hover:underline cursor-pointer">{post.shares} shares</span>
+                        </div>
+                    </div>
+                )}
+                
+                {!isVideo && (
+                    <div className="px-2 py-1 border-t border-[#3E4042] mx-2 mb-1 flex items-center justify-between">
+                        <ReactionButton currentUserReactions={myReaction} reactionCount={post.reactions.length} onReact={(type) => onReact(post.id, type)} isGuest={!currentUser} />
+                        <button className="flex-1 flex items-center justify-center gap-2 h-10 rounded hover:bg-[#3A3B3C] transition-colors group text-[#B0B3B8]" onClick={() => currentUser ? onOpenComments(post.id) : alert("Login first")}>
+                            <i className="far fa-comment-alt text-[20px] group-hover:text-[#E4E6EB]"></i>
+                            <span className="text-[17px] font-medium group-hover:text-[#E4E6EB]">Comment</span>
+                        </button>
+                        <button className="flex-1 flex items-center justify-center gap-2 h-10 rounded hover:bg-[#3A3B3C] transition-colors group text-[#B0B3B8]" onClick={() => onShare(post.id)}>
+                            <i className="fas fa-share text-[20px] group-hover:text-[#E4E6EB]"></i>
+                            <span className="text-[17px] font-medium group-hover:text-[#E4E6EB]">Share</span>
+                        </button>
+                    </div>
+                )}
+            </div>
+        </>
     );
 };
