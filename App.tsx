@@ -22,6 +22,7 @@ import { User, Post as PostType, Story, Reel, Notification, Message, Event, Prod
 import { INITIAL_USERS, INITIAL_POSTS, INITIAL_STORIES, INITIAL_REELS, INITIAL_EVENTS, INITIAL_GROUPS, INITIAL_BRANDS, MOCK_SONGS, MOCK_EPISODES } from './constants';
 import { rankFeed } from './utils/ranking'; 
 
+// ========== UTILITY FUNCTIONS ==========
 const getPath = () => {
     if (typeof window !== 'undefined') {
         return window.location.pathname;
@@ -59,6 +60,35 @@ const parsePath = (path: string, users: User[]) => {
     if (path === '/terms') return { view: 'terms_of_service' };
     
     return { view: 'home' };
+};
+
+// Facebook-style relative time formatter
+const formatRelativeTime = (timestamp: number): string => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const diffInSeconds = Math.floor(diff / 1000);
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    const diffInDays = Math.floor(diffInHours / 24);
+    
+    if (diffInSeconds < 60) {
+        return 'Just now';
+    } else if (diffInMinutes < 60) {
+        return `${diffInMinutes}m`;
+    } else if (diffInHours < 24) {
+        return `${diffInHours}h`;
+    } else if (diffInDays < 7) {
+        return `${diffInDays}d`;
+    } else if (diffInDays < 30) {
+        const weeks = Math.floor(diffInDays / 7);
+        return `${weeks}w`;
+    } else if (diffInDays < 365) {
+        const months = Math.floor(diffInDays / 30);
+        return `${months}mo`;
+    } else {
+        const years = Math.floor(diffInDays / 365);
+        return `${years}y`;
+    }
 };
 
 // Helper function to get song for post
@@ -211,37 +241,7 @@ const createNotification = (
     };
 };
 
-// MISSING FUNCTIONS DECLARATIONS (to fix TypeScript errors)
-const handlePostAsBrand = (brandId: number, content: string, files: File[] | null, type: string, visibility: string, location?: string, feeling?: string, taggedUsers?: number[], background?: string, linkPreview?: LinkPreview) => {
-    console.log('Posting as brand:', { brandId, content, files, type });
-    // Implementation needed
-};
-
-const handleUpdateBrand = (brandId: number, updates: Partial<Brand>) => {
-    console.log('Updating brand:', { brandId, updates });
-    // Implementation needed
-};
-
-const handleDeleteBrand = (brandId: number) => {
-    console.log('Deleting brand:', brandId);
-    // Implementation needed
-};
-
-const handleUpdateBrandImage = (brandId: number, type: 'cover' | 'profile', file: File) => {
-    console.log('Updating brand image:', { brandId, type, file });
-    // Implementation needed
-};
-
-const handleVerifyBrand = (brandId: number) => {
-    console.log('Verifying brand:', brandId);
-    // Implementation needed
-};
-
-const handleDeletePost = (postId: number) => {
-    console.log('Deleting post:', postId);
-    // Implementation needed
-};
-
+// ========== MAIN APP COMPONENT ==========
 export default function App({ initialData, initialPath }: { initialData?: any, initialPath?: string }) {
     const { t } = useLanguage();
 
@@ -384,7 +384,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: p.id + 100000, 
             authorId: p.sellerId, 
             content: `Just listed a new item: ${p.title}`, 
-            timestamp: 'Just now', 
+            timestamp: formatRelativeTime(p.date), // Fixed: Use relative time
             createdAt: p.date, 
             reactions: [], 
             comments: [], 
@@ -400,7 +400,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             authorId: reel.userId, 
             content: reel.caption, 
             video: reel.videoUrl, 
-            timestamp: 'Recently', 
+            timestamp: formatRelativeTime(reel.createdAt), // Fixed: Use relative time
             createdAt: reel.createdAt, 
             reactions: reel.reactions, 
             comments: reel.comments, 
@@ -795,14 +795,15 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             }
         }
         
+        const timestamp = Date.now();
         const newPost: PostType = { 
-            id: Date.now(), 
+            id: timestamp, 
             authorId: currentUser.id, 
             content: text, 
             images: images.length > 0 ? images : undefined,
             video: video,
-            timestamp: 'Just now', 
-            createdAt: Date.now(), 
+            timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+            createdAt: timestamp, 
             reactions: [], 
             comments: [], 
             shares: 0, 
@@ -899,6 +900,112 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         alert("Brand page created successfully! You are now following this page.");
     };
 
+    // FIXED: Implemented handlePostAsBrand function
+    const handlePostAsBrand = (
+        brandId: number, 
+        content: string, 
+        files: File[] | null, 
+        type: string, 
+        visibility: string, 
+        location?: string, 
+        feeling?: string, 
+        taggedUsers?: number[], 
+        background?: string, 
+        linkPreview?: LinkPreview
+    ) => {
+        if (!currentUser) {
+            alert("Please login to post as a brand.");
+            return;
+        }
+        
+        // Verify the current user is admin of this brand
+        const brand = brands.find(b => b.id === brandId);
+        if (!brand) {
+            alert("Brand not found.");
+            return;
+        }
+        
+        if (brand.adminId !== currentUser.id && !isAdmin) {
+            alert("You don't have permission to post as this brand.");
+            return;
+        }
+        
+        // Handle media files
+        let images: string[] = [];
+        let video: string | undefined = undefined;
+        
+        if (files && files.length > 0) {
+            if (type === 'video' && files.length === 1) {
+                video = URL.createObjectURL(files[0]);
+            } else if (type === 'image' || type === 'multimage') {
+                images = files.map(file => URL.createObjectURL(file));
+            }
+        }
+        
+        const timestamp = Date.now();
+        const newPost: PostType = { 
+            id: timestamp,
+            authorId: brandId, // Use brand ID as author
+            content,
+            images: images.length > 0 ? images : undefined,
+            video: video,
+            timestamp: formatRelativeTime(timestamp),
+            createdAt: timestamp,
+            reactions: [], 
+            comments: [], 
+            shares: 0,
+            views: 0,
+            type: type === 'multimage' ? 'image' : type,
+            visibility: visibility as any,
+            location, 
+            feeling, 
+            taggedUsers, 
+            background, 
+            linkPreview,
+            brandId: brandId // Add brandId to identify as brand post
+        };
+        
+        // Add to main posts array
+        setPosts(prev => [newPost, ...posts]);
+        
+        // Update brand's posts array
+        setBrands(prev => prev.map(b => 
+            b.id === brandId 
+                ? { ...b, posts: [...(b.posts || []), timestamp] }
+                : b
+        ));
+        
+        // Notify brand followers
+        brand.followers.forEach(followerId => {
+            if (followerId !== currentUser.id) {
+                handleCreateNotification(
+                    followerId,
+                    currentUser.id,
+                    'brand_post',
+                    `${brand.name} posted: ${content.substring(0, 50)}${content.length > 50 ? '...' : ''}`,
+                    { brandId, postId: timestamp }
+                );
+            }
+        });
+        
+        // Enhanced notification logic for tagged users in brand posts
+        if (taggedUsers && taggedUsers.length > 0) {
+            taggedUsers.forEach(userId => {
+                if (userId !== currentUser.id) {
+                    handleCreateNotification(
+                        userId,
+                        currentUser.id,
+                        'tag_post',
+                        `${brand.name} tagged you in a post.`,
+                        { postId: timestamp, brandId }
+                    );
+                }
+            });
+        }
+        
+        alert("Brand post published successfully!");
+    };
+
     const handleFollowBrand = (brandId: number) => {
         if (!currentUser) return alert("Login to follow brands.");
         
@@ -942,6 +1049,170 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             }
             return b;
         }));
+    };
+
+    // FIXED: Implemented missing brand management functions
+    const handleUpdateBrand = (brandId: number, updates: Partial<Brand>) => {
+        if (!currentUser) {
+            alert("Please login to update brand.");
+            return;
+        }
+        
+        const brand = brands.find(b => b.id === brandId);
+        if (!brand) {
+            alert("Brand not found.");
+            return;
+        }
+        
+        if (brand.adminId !== currentUser.id && !isAdmin) {
+            alert("You don't have permission to update this brand.");
+            return;
+        }
+        
+        setBrands(prev => prev.map(b => 
+            b.id === brandId ? { ...b, ...updates } : b
+        ));
+        
+        alert("Brand updated successfully!");
+    };
+
+    const handleDeleteBrand = (brandId: number) => {
+        if (!currentUser) {
+            alert("Please login to delete brand.");
+            return;
+        }
+        
+        const brand = brands.find(b => b.id === brandId);
+        if (!brand) {
+            alert("Brand not found.");
+            return;
+        }
+        
+        if (brand.adminId !== currentUser.id && !isAdmin) {
+            alert("You don't have permission to delete this brand.");
+            return;
+        }
+        
+        if (window.confirm(`Are you sure you want to delete "${brand.name}"? This will also delete all brand posts.`)) {
+            // Remove brand
+            setBrands(prev => prev.filter(b => b.id !== brandId));
+            
+            // Remove brand posts
+            setPosts(prev => prev.filter(p => p.brandId !== brandId && p.authorId !== brandId));
+            
+            // Remove brand from users' following lists
+            setUsers(prev => prev.map(user => ({
+                ...user,
+                following: user.following.filter(id => id !== brandId)
+            })));
+            
+            alert("Brand deleted successfully!");
+        }
+    };
+
+    const handleUpdateBrandImage = (brandId: number, type: 'cover' | 'profile', file: File) => {
+        if (!currentUser) {
+            alert("Please login to update brand image.");
+            return;
+        }
+        
+        const brand = brands.find(b => b.id === brandId);
+        if (!brand) {
+            alert("Brand not found.");
+            return;
+        }
+        
+        if (brand.adminId !== currentUser.id && !isAdmin) {
+            alert("You don't have permission to update this brand's image.");
+            return;
+        }
+        
+        const url = URL.createObjectURL(file);
+        setBrands(prev => prev.map(b => 
+            b.id === brandId 
+                ? (type === 'cover' 
+                    ? { ...b, coverImage: url } 
+                    : { ...b, profileImage: url })
+                : b
+        ));
+        
+        alert("Brand image updated successfully!");
+    };
+
+    const handleVerifyBrand = (brandId: number) => {
+        if (!isAdmin) {
+            alert("Only admins can verify brands.");
+            return;
+        }
+        
+        setBrands(prev => prev.map(b => 
+            b.id === brandId ? { ...b, isVerified: !b.isVerified } : b
+        ));
+        
+        const brand = brands.find(b => b.id === brandId);
+        if (brand) {
+            const action = brand.isVerified ? "unverified" : "verified";
+            alert(`Brand ${action} successfully!`);
+        }
+    };
+
+    // FIXED: Implemented handleDeletePost function
+    const handleDeletePost = (postId: number) => {
+        if (!currentUser) {
+            alert("Please login to delete posts.");
+            return;
+        }
+        
+        const post = posts.find(p => p.id === postId);
+        if (!post) {
+            alert("Post not found.");
+            return;
+        }
+        
+        // Check permissions
+        const canDelete = isAdmin || post.authorId === currentUser.id;
+        if (!canDelete) {
+            // For group posts, check if user is group admin
+            if (post.groupId) {
+                const group = groups.find(g => g.id === post.groupId);
+                if (group && group.adminId === currentUser.id) {
+                    // Group admin can delete group posts
+                } else {
+                    alert("You can only delete your own posts.");
+                    return;
+                }
+            } else {
+                alert("You can only delete your own posts.");
+                return;
+            }
+        }
+        
+        if (window.confirm("Are you sure you want to delete this post?")) {
+            // Remove from main posts
+            setPosts(prev => prev.filter(p => p.id !== postId));
+            
+            // Also remove from group posts if applicable
+            if (post.groupId) {
+                setGroups(prev => prev.map(group => ({
+                    ...group,
+                    posts: group.id === post.groupId 
+                        ? group.posts.filter(p => p.id !== postId)
+                        : group.posts
+                })));
+            }
+            
+            // Remove from brand posts if applicable
+            if (post.brandId) {
+                setBrands(prev => prev.map(brand => ({
+                    ...brand,
+                    posts: brand.id === post.brandId 
+                        ? (brand.posts || []).filter(id => id !== postId)
+                        : (brand.posts || [])
+                })));
+            }
+            
+            alert("Post deleted successfully!");
+        }
     };
 
     const handleCreateProduct = (productData: Partial<Product>) => {
@@ -1005,21 +1276,29 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleCreateStory = (storyData: Partial<Story>) => {
         if (!currentUser) return;
-        const newStory: Story = { id: Date.now(), userId: currentUser.id, user: currentUser, ...storyData, createdAt: Date.now() } as Story;
+        const timestamp = Date.now();
+        const newStory: Story = { 
+            id: timestamp, 
+            userId: currentUser.id, 
+            user: currentUser, 
+            ...storyData, 
+            createdAt: timestamp 
+        } as Story;
         setStories(prev => [newStory, ...prev]);
         setShowCreateStoryModal(false);
     };
 
     const handleCreateReel = (videoFile: File, caption: string, song?: Song | { name: string, url: string }, effectName?: string) => {
         if (!currentUser) return;
+        const timestamp = Date.now();
         const newReel: Reel = { 
-            id: Date.now(), 
+            id: timestamp, 
             userId: currentUser.id, 
             videoUrl: URL.createObjectURL(videoFile), 
             caption, 
             songName: song ? (song as Song).title || (song as {name: string}).name : 'Original Audio', 
             effectName: effectName, 
-            createdAt: Date.now(), 
+            createdAt: timestamp, 
             reactions: [], 
             comments: [], 
             shares: 0 
@@ -1080,9 +1359,28 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleCreateEvent = (eventData: Partial<Event>) => {
         if (!currentUser) return;
-        const newEvent: Event = { ...eventData, id: Date.now(), attendees: [currentUser.id], interestedIds: [] } as Event;
+        const timestamp = Date.now();
+        const newEvent: Event = { 
+            ...eventData, 
+            id: timestamp, 
+            attendees: [currentUser.id], 
+            interestedIds: [] 
+        } as Event;
         setEvents(prev => [newEvent, ...prev]);
-        const eventPost: PostType = { id: Date.now() + 1, authorId: currentUser.id, content: `is hosting a new event: ${newEvent.title}`, timestamp: 'Just now', createdAt: Date.now(), reactions: [], comments: [], shares: 0, type: 'event', visibility: 'Public', event: newEvent, eventId: newEvent.id };
+        const eventPost: PostType = { 
+            id: timestamp + 1, 
+            authorId: currentUser.id, 
+            content: `is hosting a new event: ${newEvent.title}`, 
+            timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+            createdAt: timestamp, 
+            reactions: [], 
+            comments: [], 
+            shares: 0, 
+            type: 'event', 
+            visibility: 'Public', 
+            event: newEvent, 
+            eventId: newEvent.id 
+        };
         setPosts(prev => [eventPost, ...prev]);
     };
 
@@ -1181,11 +1479,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleComment = (itemId: number, text: string, attachment?: any, parentId?: number) => {
         if (!currentUser) return;
+        const timestamp = Date.now();
         const newComment: Comment = { 
-            id: Date.now(), 
+            id: timestamp, 
             userId: currentUser.id, 
             text, 
-            timestamp: 'Just now', 
+            timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
             likes: 0, 
             attachment,
             authorName: currentUser.name,
@@ -1271,13 +1570,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             }
         }
         
+        const timestamp = Date.now();
         const newSharedPost: PostType = { 
             ...sourcePost, 
-            id: Date.now(), 
+            id: timestamp, 
             authorId: currentUser.id, 
             content: extraCaption ? `${extraCaption}\n\n${sourcePost.content || ''}` : sourcePost.content, 
-            timestamp: 'Just now', 
-            createdAt: Date.now(), 
+            timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+            createdAt: timestamp, 
             reactions: [], 
             comments: [], 
             shares: 0, 
@@ -1302,7 +1602,21 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleFeedPost = (data: any) => {
         if (!currentUser) return;
-        const newPost: PostType = { id: Date.now(), authorId: currentUser.id, content: data.content, timestamp: 'Just now', createdAt: Date.now(), reactions: [], comments: [], shares: 0, views: 0, type: data.type || 'text', visibility: 'Public', audioTrack: data.audioTrack };
+        const timestamp = Date.now();
+        const newPost: PostType = { 
+            id: timestamp, 
+            authorId: currentUser.id, 
+            content: data.content, 
+            timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+            createdAt: timestamp, 
+            reactions: [], 
+            comments: [], 
+            shares: 0, 
+            views: 0, 
+            type: data.type || 'text', 
+            visibility: 'Public', 
+            audioTrack: data.audioTrack 
+        };
         setPosts([newPost, ...posts]);
     };
 
@@ -1336,6 +1650,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         
         // Also create a feed post for the new upload
         if (currentUser) {
+            const timestamp = Date.now();
             const audioTrack: AudioTrack = {
                 id: song.id,
                 title: song.title,
@@ -1354,11 +1669,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             };
             
             const newPost: PostType = {
-                id: Date.now(),
+                id: timestamp,
                 authorId: currentUser.id,
                 content: `🎵 Just released new music: "${song.title}" by ${song.artist}`,
-                timestamp: 'Just now',
-                createdAt: Date.now(),
+                timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+                createdAt: timestamp,
                 reactions: [],
                 comments: [],
                 shares: 0,
@@ -1414,6 +1729,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         
         // Also create a feed post for the new upload
         if (currentUser) {
+            const timestamp = Date.now();
             const audioTrack: AudioTrack = {
                 id: episode.id,
                 title: episode.title,
@@ -1432,11 +1748,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             };
             
             const newPost: PostType = {
-                id: Date.now(),
+                id: timestamp,
                 authorId: currentUser.id,
                 content: `🎙️ New podcast episode: "${episode.title}" with ${episode.host || 'Podcast Host'}`,
-                timestamp: 'Just now',
-                createdAt: Date.now(),
+                timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+                createdAt: timestamp,
                 reactions: [],
                 comments: [],
                 shares: 0,
@@ -1648,20 +1964,48 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    const handleVerifyUser = (userId: number) => { if (isAdmin) setUsers(users.map(u => u.id === userId ? { ...u, isVerified: !u.isVerified } : u)); };
-    const handleRestrictUser = (userId: number) => { if (isAdmin) setUsers(users.map(u => u.id === userId ? { ...u, isRestricted: true, restrictedUntil: Date.now() + 24 * 60 * 60 * 1000 } : u)); };
-    const handleDeleteUser = (userId: number) => { if (isAdmin && window.confirm("Delete this user and all their content? This is irreversible.")) { setUsers(users.filter(u => u.id !== userId)); setPosts(posts.filter(p => p.authorId !== userId)); setReels(reels.filter(r => r.userId !== userId)); setStories(stories.filter(s => s.userId !== userId)); } };
-    const handleMakeModerator = (userId: number) => { if (isAdmin) setUsers(users.map(u => u.id === userId ? { ...u, role: u.role === 'moderator' ? 'user' : 'moderator' } : u)); };
+    const handleVerifyUser = (userId: number) => { 
+        if (isAdmin) {
+            setUsers(users.map(u => u.id === userId ? { ...u, isVerified: !u.isVerified } : u));
+            alert(`User ${users.find(u => u.id === userId)?.isVerified ? 'unverified' : 'verified'} successfully!`);
+        }
+    };
+    
+    const handleRestrictUser = (userId: number) => { 
+        if (isAdmin) {
+            setUsers(users.map(u => u.id === userId ? { ...u, isRestricted: true, restrictedUntil: Date.now() + 24 * 60 * 60 * 1000 } : u));
+            alert("User restricted for 24 hours");
+        }
+    };
+    
+    const handleDeleteUser = (userId: number) => { 
+        if (isAdmin && window.confirm("Delete this user and all their content? This is irreversible.")) { 
+            setUsers(users.filter(u => u.id !== userId)); 
+            setPosts(posts.filter(p => p.authorId !== userId)); 
+            setReels(reels.filter(r => r.userId !== userId)); 
+            setStories(stories.filter(s => s.userId !== userId)); 
+            alert("User deleted successfully");
+        } 
+    };
+    
+    const handleMakeModerator = (userId: number) => { 
+        if (isAdmin) {
+            setUsers(users.map(u => u.id === userId ? { ...u, role: u.role === 'moderator' ? 'user' : 'moderator' } : u));
+            const user = users.find(u => u.id === userId);
+            alert(`${user?.name} is now ${user?.role === 'moderator' ? 'a user' : 'a moderator'}!`);
+        }
+    };
     
     // ========== ENHANCED GROUP FUNCTIONS WITH NOTIFICATIONS ==========
     const handleGroupComment = (groupId: string, postId: number, text: string, attachment?: any, parentId?: number) => {
         if (!currentUser) return;
         
+        const timestamp = Date.now();
         const newComment: Comment = { 
-            id: Date.now(), 
+            id: timestamp, 
             userId: currentUser.id, 
             text, 
-            timestamp: 'Just now', 
+            timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
             likes: 0, 
             attachment,
             authorName: currentUser.name,
@@ -1786,8 +2130,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         if (group && (group.adminId === currentUser.id || isAdmin)) { 
             if (window.confirm("Are you sure you want to permanently delete this group?")) { 
                 setGroups(prev => prev.filter(g => g.id !== groupId)); 
+                alert("Group deleted successfully!");
             } 
-        } 
+        } else {
+            alert("You don't have permission to delete this group.");
+        }
     };
     
     const handleUpdateGroupImage = (groupId: string, type: 'cover' | 'profile', file: File) => { 
@@ -1801,7 +2148,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         )); 
     };
     
-    // UPDATED: Modified to handle multiple images for group posts
+    // FIXED: Group posts now properly sync with main feed
     const handlePostToGroup = (groupId: string, content: string, files: File[] | null, type: any, background?: string) => { 
         if (!currentUser) return;
         
@@ -1817,43 +2164,75 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             }
         }
         
-        const newPost: GroupPost = { 
-            id: Date.now(), 
+        const timestamp = Date.now();
+        const newGroupPost: GroupPost = { 
+            id: timestamp,
             authorId: currentUser.id, 
             content, 
             images: images.length > 0 ? images : undefined,
             video: video,
-            timestamp: Date.now(), 
+            timestamp: timestamp, 
             reactions: [], 
             comments: [], 
             shares: 0,
             background: background
         }; 
         
+        // 1. Update group posts
         setGroups(prev => prev.map(g => 
             g.id === groupId 
-                ? { ...g, posts: [newPost, ...g.posts] } 
+                ? { ...g, posts: [newGroupPost, ...g.posts] } 
                 : g
         )); 
         
+        // 2. Create a proper PostType for the main feed with ALL required properties
         const newFeedPost: PostType = { 
-            ...newPost, 
-            type: type === 'multimage' ? 'image' : type, 
-            visibility: 'Public', 
-            timestamp: 'Just now', 
-            createdAt: newPost.timestamp, 
+            id: timestamp,
+            authorId: currentUser.id, 
+            content,
+            images: images.length > 0 ? images : undefined,
+            video: video,
+            timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+            createdAt: timestamp,
+            reactions: [], 
+            comments: [], 
+            shares: 0,
+            views: 0,
+            type: type === 'multimage' ? 'image' : type,
+            visibility: 'Public' as const,
             groupId, 
-            groupName: groups.find(g => g.id === groupId)?.name 
+            groupName: groups.find(g => g.id === groupId)?.name,
+            background
         }; 
         
+        // 3. Add to main posts array
         setPosts(prev => [newFeedPost, ...prev]); 
+        
+        // Notify group members (excluding the poster)
+        const group = groups.find(g => g.id === groupId);
+        if (group && group.memberPostingAllowed) {
+            group.members.forEach(memberId => {
+                if (memberId !== currentUser.id) {
+                    handleCreateNotification(
+                        memberId,
+                        currentUser.id,
+                        'group_post',
+                        `posted in ${group.name}`,
+                        { groupId, postId: timestamp }
+                    );
+                }
+            });
+        }
+        
+        alert("Post published to group successfully!");
     };
     
     const handleCreateGroupEvent = (groupId: string, eventData: Partial<Event>) => {
         if (!currentUser) return;
+        const timestamp = Date.now();
         const newEvent: Event = { 
             ...eventData, 
-            id: Date.now(), 
+            id: timestamp, 
             attendees: [currentUser.id], 
             interestedIds: [],
             groupId: groupId,
@@ -1872,11 +2251,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         
         // Create a post about the event
         const eventPost: PostType = { 
-            id: Date.now() + 1, 
+            id: timestamp + 1, 
             authorId: currentUser.id, 
             content: `is hosting a new event in ${groups.find(g => g.id === groupId)?.name}: ${newEvent.title}`, 
-            timestamp: 'Just now', 
-            createdAt: Date.now(), 
+            timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+            createdAt: timestamp, 
             reactions: [], 
             comments: [], 
             shares: 0, 
@@ -1901,14 +2280,15 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         if (!groupPost) return;
         
         // Create a shared post for the feed
+        const timestamp = Date.now();
         const newSharedPost: PostType = {
-            id: Date.now(),
+            id: timestamp,
             authorId: currentUser.id,
             content: extraCaption ? `${extraCaption}\n\nShared from ${group.name}: ${groupPost.content}` : `Shared from ${group.name}: ${groupPost.content}`,
             images: groupPost.images,
             video: groupPost.video,
-            timestamp: 'Just now',
-            createdAt: Date.now(),
+            timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+            createdAt: timestamp,
             reactions: [],
             comments: [],
             shares: 0,
@@ -1954,19 +2334,36 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     
     const handleCreateGroup = (groupData: Partial<Group>) => {
         if (!currentUser) return;
+        const timestamp = Date.now();
         const newGroup: Group = { 
             ...groupData, 
-            id: `g${Date.now()}`, 
+            id: `g${timestamp}`, 
             adminId: currentUser.id, 
             members: [currentUser.id], 
             posts: [], 
-            createdDate: Date.now(),
+            createdDate: timestamp,
             image: groupData.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(groupData.name || 'Group')}&background=random&size=150`,
             coverImage: groupData.coverImage || 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-1.2.1&auto=format&fit=crop&w=1500&q=80',
             events: [],
             memberPostingAllowed: true
         } as Group;
         setGroups(prev => [newGroup, ...prev]);
+        
+        // Notify followers about new group
+        const followers = currentUser.followers || [];
+        followers.forEach(followerId => {
+            if (followerId !== currentUser.id) {
+                handleCreateNotification(
+                    followerId,
+                    currentUser.id,
+                    'group_created',
+                    `created a new group: ${newGroup.name}`,
+                    { groupId: newGroup.id }
+                );
+            }
+        });
+        
+        alert("Group created successfully!");
     };
     
     const handleReactGroupPost = (groupId: string, postId: number, type: ReactionType) => { 
@@ -2035,6 +2432,15 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     ? { ...g, members: g.members.filter(id => id !== memberId) } 
                     : g
             )); 
+            
+            // Notify removed member
+            handleCreateNotification(
+                memberId,
+                currentUser.id,
+                'group_removed',
+                `removed you from ${group.name}.`,
+                { groupId }
+            );
         } 
     };
     
@@ -2042,15 +2448,21 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         const group = groups.find(g => g.id === groupId); 
         const post = group?.posts.find(p => p.id === postId); 
         if (currentUser && group && post && (group.adminId === currentUser.id || isAdmin || post.authorId === currentUser.id)) { 
-            setGroups(prev => prev.map(g => 
-                (g.id === groupId) 
-                    ? { ...g, posts: g.posts.filter(p => p.id !== postId) } 
-                    : g
-            )); 
-            
-            // Also delete from main feed if it exists
-            setPosts(prev => prev.filter(p => !(p.id === postId && p.groupId === groupId)));
-        } 
+            if (window.confirm("Are you sure you want to delete this group post?")) {
+                setGroups(prev => prev.map(g => 
+                    (g.id === groupId) 
+                        ? { ...g, posts: g.posts.filter(p => p.id !== postId) } 
+                        : g
+                )); 
+                
+                // Also delete from main feed if it exists
+                setPosts(prev => prev.filter(p => !(p.id === postId && p.groupId === groupId)));
+                
+                alert("Group post deleted successfully!");
+            }
+        } else {
+            alert("You don't have permission to delete this post.");
+        }
     };
 
     // Birthday notification check
@@ -2152,7 +2564,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 onFollow={isBrandAuthor ? handleFollowBrand : handleFollowUser} 
                 isFollowing={isBrandAuthor ? isFollowingBrand : isFollowing} 
                 onHashtagClick={handleTagClick} 
-                onDeletePost={isAdmin ? handleDeletePost : undefined}
+                onDeletePost={handleDeletePost} 
                 isAdmin={isAdmin}
             />
         );
@@ -2298,7 +2710,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                     id: p.id + 100000,
                                                     authorId: p.sellerId,
                                                     content: `Just listed a new item: ${p.title}`,
-                                                    timestamp: 'Just now',
+                                                    timestamp: formatRelativeTime(p.date), // Fixed: Use relative time
                                                     createdAt: p.date,
                                                     reactions: [],
                                                     comments: [],
@@ -2417,7 +2829,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                     author.type === 'user' && currentUser ?
                                                     currentUser.following.includes(author.id) : false}
                                                 onHashtagClick={handleTagClick}
-                                                onDeletePost={isAdmin ? handleDeletePost : undefined}
+                                                onDeletePost={handleDeletePost}
                                                 isAdmin={isAdmin}
                                             />
                                         );
@@ -2449,13 +2861,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                         if (type === 'feed') {
                                             const reel = reels.find(r => r.id === reelId);
                                             if (reel && currentUser) {
+                                                const timestamp = Date.now();
                                                 const newPost: PostType = { 
-                                                    id: Date.now(), 
+                                                    id: timestamp, 
                                                     authorId: currentUser.id, 
                                                     content: `Shared a reel: ${reel.caption}`, 
                                                     video: reel.videoUrl,
-                                                    timestamp: 'Just now', 
-                                                    createdAt: Date.now(), 
+                                                    timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+                                                    createdAt: timestamp, 
                                                     reactions: [], 
                                                     comments: [], 
                                                     shares: 0, 
@@ -2490,11 +2903,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     }}
                                     onComment={(reelId, text) => {
                                         if (!currentUser) return;
+                                        const timestamp = Date.now();
                                         const newComment = { 
-                                            id: Date.now(), 
+                                            id: timestamp, 
                                             userId: currentUser.id, 
                                             text, 
-                                            timestamp: 'Just now', 
+                                            timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
                                             likes: 0,
                                             authorName: currentUser.name,
                                             authorImage: currentUser.profileImage
@@ -2562,7 +2976,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onCreateBrand={handleCreateBrand}
                                     onFollowBrand={handleFollowBrand}
                                     onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
-                                    onPostAsBrand={handlePostAsBrand}
+                                    onPostAsBrand={handlePostAsBrand} // Now properly implemented
                                     onReact={handleReact}
                                     onShare={(id) => setActiveSharePostId(id)}
                                     onOpenComments={(postId) => setActiveCommentsPostId(postId)}
@@ -2755,7 +3169,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     content: groupPost.content || '',
                                     images: groupPost.images,
                                     video: groupPost.video,
-                                    timestamp: 'Recently',
+                                    timestamp: formatRelativeTime(groupPost.timestamp), // Fixed: Use relative time
                                     createdAt: groupPost.timestamp,
                                     reactions: groupPost.reactions || [],
                                     comments: groupPost.comments || [],
