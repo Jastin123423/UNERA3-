@@ -384,7 +384,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: p.id + 100000, 
             authorId: p.sellerId, 
             content: `Just listed a new item: ${p.title}`, 
-            timestamp: formatRelativeTime(p.date), // Fixed: Use relative time
+            timestamp: p.date, // FIXED: Use numeric timestamp
             createdAt: p.date, 
             reactions: [], 
             comments: [], 
@@ -400,7 +400,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             authorId: reel.userId, 
             content: reel.caption, 
             video: reel.videoUrl, 
-            timestamp: formatRelativeTime(reel.createdAt), // Fixed: Use relative time
+            timestamp: reel.createdAt, // FIXED: Use numeric timestamp
             createdAt: reel.createdAt, 
             reactions: reel.reactions, 
             comments: reel.comments, 
@@ -802,7 +802,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             content: text, 
             images: images.length > 0 ? images : undefined,
             video: video,
-            timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+            timestamp: timestamp, // FIXED: Use numeric timestamp
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
@@ -949,7 +949,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             content,
             images: images.length > 0 ? images : undefined,
             video: video,
-            timestamp: formatRelativeTime(timestamp),
+            timestamp: timestamp, // FIXED: Use numeric timestamp
             createdAt: timestamp,
             reactions: [], 
             comments: [], 
@@ -966,7 +966,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         };
         
         // Add to main posts array
-        setPosts(prev => [newPost, ...posts]);
+        setPosts(prev => [newPost, ...prev]);
         
         // Update brand's posts array
         setBrands(prev => prev.map(b => 
@@ -1371,7 +1371,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: timestamp + 1, 
             authorId: currentUser.id, 
             content: `is hosting a new event: ${newEvent.title}`, 
-            timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+            timestamp: timestamp, // FIXED: Use numeric timestamp
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
@@ -1484,7 +1484,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: timestamp, 
             userId: currentUser.id, 
             text, 
-            timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+            timestamp: timestamp, // FIXED: Use numeric timestamp
+            formattedTime: formatRelativeTime(timestamp), // Add formatted time
             likes: 0, 
             attachment,
             authorName: currentUser.name,
@@ -1576,7 +1577,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: timestamp, 
             authorId: currentUser.id, 
             content: extraCaption ? `${extraCaption}\n\n${sourcePost.content || ''}` : sourcePost.content, 
-            timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+            timestamp: timestamp, // FIXED: Use numeric timestamp
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
@@ -1607,7 +1608,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: timestamp, 
             authorId: currentUser.id, 
             content: data.content, 
-            timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+            timestamp: timestamp, // FIXED: Use numeric timestamp
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
@@ -1672,7 +1673,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 id: timestamp,
                 authorId: currentUser.id,
                 content: `🎵 Just released new music: "${song.title}" by ${song.artist}`,
-                timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+                timestamp: timestamp, // FIXED: Use numeric timestamp
                 createdAt: timestamp,
                 reactions: [],
                 comments: [],
@@ -1751,7 +1752,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 id: timestamp,
                 authorId: currentUser.id,
                 content: `🎙️ New podcast episode: "${episode.title}" with ${episode.host || 'Podcast Host'}`,
-                timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+                timestamp: timestamp, // FIXED: Use numeric timestamp
                 createdAt: timestamp,
                 reactions: [],
                 comments: [],
@@ -2005,7 +2006,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: timestamp, 
             userId: currentUser.id, 
             text, 
-            timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+            timestamp: timestamp, // FIXED: Use numeric timestamp
+            formattedTime: formatRelativeTime(timestamp), // Add formatted time
             likes: 0, 
             attachment,
             authorName: currentUser.name,
@@ -2192,7 +2194,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             content,
             images: images.length > 0 ? images : undefined,
             video: video,
-            timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+            timestamp: timestamp, // FIXED: Use numeric timestamp
             createdAt: timestamp,
             reactions: [], 
             comments: [], 
@@ -2254,7 +2256,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: timestamp + 1, 
             authorId: currentUser.id, 
             content: `is hosting a new event in ${groups.find(g => g.id === groupId)?.name}: ${newEvent.title}`, 
-            timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+            timestamp: timestamp, // FIXED: Use numeric timestamp
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
@@ -2287,7 +2289,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             content: extraCaption ? `${extraCaption}\n\nShared from ${group.name}: ${groupPost.content}` : `Shared from ${group.name}: ${groupPost.content}`,
             images: groupPost.images,
             video: groupPost.video,
-            timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+            timestamp: timestamp, // FIXED: Use numeric timestamp
             createdAt: timestamp,
             reactions: [],
             comments: [],
@@ -2540,7 +2542,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         return (
             <Post 
                 key={post.id} 
-                post={post} 
+                post={{...post, formattedTime: formatRelativeTime(post.timestamp)}} // Add formatted time
                 author={author as any} 
                 currentUser={currentUser} 
                 users={users} 
@@ -2710,7 +2712,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                     id: p.id + 100000,
                                                     authorId: p.sellerId,
                                                     content: `Just listed a new item: ${p.title}`,
-                                                    timestamp: formatRelativeTime(p.date), // Fixed: Use relative time
+                                                    timestamp: p.date, // FIXED: Use numeric timestamp
                                                     createdAt: p.date,
                                                     reactions: [],
                                                     comments: [],
@@ -2804,7 +2806,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                         return (
                                             <Post
                                                 key={activeSinglePostId}
-                                                post={post}
+                                                post={{...post, formattedTime: formatRelativeTime(post.timestamp)}} // Add formatted time
                                                 author={author}
                                                 currentUser={currentUser}
                                                 users={users}
@@ -2867,7 +2869,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                     authorId: currentUser.id, 
                                                     content: `Shared a reel: ${reel.caption}`, 
                                                     video: reel.videoUrl,
-                                                    timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+                                                    timestamp: timestamp, // FIXED: Use numeric timestamp
                                                     createdAt: timestamp, 
                                                     reactions: [], 
                                                     comments: [], 
@@ -2908,7 +2910,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                             id: timestamp, 
                                             userId: currentUser.id, 
                                             text, 
-                                            timestamp: formatRelativeTime(timestamp), // Fixed: Use relative time
+                                            timestamp: timestamp, // FIXED: Use numeric timestamp
+                                            formattedTime: formatRelativeTime(timestamp), // Add formatted time
                                             likes: 0,
                                             authorName: currentUser.name,
                                             authorImage: currentUser.profileImage
@@ -3169,7 +3172,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     content: groupPost.content || '',
                                     images: groupPost.images,
                                     video: groupPost.video,
-                                    timestamp: formatRelativeTime(groupPost.timestamp), // Fixed: Use relative time
+                                    timestamp: groupPost.timestamp, // FIXED: Use numeric timestamp
+                                    formattedTime: formatRelativeTime(groupPost.timestamp), // Add formatted time
                                     createdAt: groupPost.timestamp,
                                     reactions: groupPost.reactions || [],
                                     comments: groupPost.comments || [],
