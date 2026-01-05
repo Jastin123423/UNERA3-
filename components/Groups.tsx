@@ -3,6 +3,35 @@ import { User, Group, Event, GroupPost, Post as PostType, ReactionType, AudioTra
 import { Post } from './Feed';
 import { CreateEventModal } from './Events';
 
+// Facebook-style relative time formatter (same as in App.tsx and feeds.tsx)
+const formatRelativeTime = (timestamp: number): string => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const diffInSeconds = Math.floor(diff / 1000);
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    const diffInDays = Math.floor(diffInHours / 24);
+    
+    if (diffInSeconds < 60) {
+        return 'Just now';
+    } else if (diffInMinutes < 60) {
+        return `${diffInMinutes}m`;
+    } else if (diffInHours < 24) {
+        return `${diffInHours}h`;
+    } else if (diffInDays < 7) {
+        return `${diffInDays}d`;
+    } else if (diffInDays < 30) {
+        const weeks = Math.floor(diffInDays / 7);
+        return `${weeks}w`;
+    } else if (diffInDays < 365) {
+        const months = Math.floor(diffInDays / 30);
+        return `${months}mo`;
+    } else {
+        const years = Math.floor(diffInDays / 365);
+        return `${years}y`;
+    }
+};
+
 interface GroupSettingsModalProps {
     group: Group;
     onClose: () => void;
@@ -46,7 +75,7 @@ interface GroupsPageProps {
     onLeaveGroup: (groupId: string) => void;
     onDeleteGroup: (groupId: string) => void;
     onUpdateGroupImage: (groupId: string, type: 'cover' | 'profile', file: File) => void;
-    onPostToGroup: (groupId: string, content: string, file: File | null, type: 'image' | 'video' | 'doc' | 'text', background?: string) => void;
+    onPostToGroup: (groupId: string, content: string, files: File[] | null, type: any, background?: string) => void; // UPDATED: Support multiple files
     onCreateGroupEvent: (groupId: string, event: Partial<Event>) => void;
     onInviteToGroup: (groupId: string, userIds: number[]) => void;
     onProfileClick: (id: number) => void;
@@ -137,7 +166,9 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
     const [newGroupDesc, setNewGroupDesc] = useState('');
     const [newGroupType, setNewGroupType] = useState<'public' | 'private'>('public');
     const [postContent, setPostContent] = useState('');
-    const [postFile, setPostFile] = useState<File | null>(null);
+    const [postFiles, setPostFiles] = useState<File[]>([]); // UPDATED: Support multiple files
+    const [postPreviews, setPostPreviews] = useState<string[]>([]); // UPDATED: Store preview URLs
+    const [postType, setPostType] = useState<'text' | 'image' | 'multimage'>('text'); // UPDATED: Support multiple images
 
     // Initialize active group
     useEffect(() => {
@@ -155,43 +186,73 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
         return activeGroupId ? groups.find(g => g.id === activeGroupId) || null : null;
     }, [groups, activeGroupId]);
 
+    // UPDATED: Enhanced mergedPosts with proper time formatting
     const mergedPosts = useMemo(() => {
         if (!activeGroup) return [];
-        const p = activeGroup.posts.map(gp => ({ 
-            ...gp, 
-            type: gp.video ? 'video' : (gp.image ? 'image' : 'text'), 
-            visibility: 'Public', 
-            reactions: gp.reactions || [], 
-            comments: gp.comments || [], 
-            shares: gp.shares || 0, 
-            timestamp: 'Recently', 
-            groupId: activeGroup.id, 
-            groupName: activeGroup.name, 
-            createdAt: gp.timestamp 
-        }));
-        const e = (activeGroup.events || []).map(ev => ({ 
-            id: ev.id + 5000, 
-            authorId: ev.organizerId, 
-            type: 'event', 
-            event: ev, 
-            timestamp: 'Upcoming', 
-            groupId: activeGroup.id, 
-            groupName: activeGroup.name, 
-            reactions: [], 
-            comments: [], 
-            shares: 0, 
-            createdAt: new Date(ev.date).getTime(), 
-            visibility: 'Public' 
-        }));
-        return [...p, ...e].sort((a,b) => b.createdAt - a.createdAt);
+        
+        // Process group posts with proper time formatting
+        const processedGroupPosts = activeGroup.posts.map(gp => {
+            // Ensure each group post has formattedTime
+            const formattedTime = gp.formattedTime || formatRelativeTime(gp.timestamp);
+            
+            return { 
+                ...gp, 
+                type: gp.video ? 'video' : (gp.images && gp.images.length > 0 ? (gp.images.length > 1 ? 'image' : 'image') : 'text'), // UPDATED: Handle multiple images
+                images: gp.images || (gp.image ? [gp.image] : undefined), // UPDATED: Convert single image to array
+                visibility: 'Public', 
+                reactions: gp.reactions || [], 
+                comments: gp.comments || [], 
+                shares: gp.shares || 0, 
+                formattedTime: formattedTime, // ADDED: formattedTime
+                timestamp: formattedTime, // Use formatted time as timestamp for display
+                groupId: activeGroup.id, 
+                groupName: activeGroup.name, 
+                createdAt: gp.timestamp 
+            };
+        });
+        
+        // Process events
+        const processedEvents = (activeGroup.events || []).map(ev => {
+            const eventTime = new Date(ev.date).getTime();
+            const formattedTime = formatRelativeTime(eventTime);
+            
+            return { 
+                id: ev.id + 5000, 
+                authorId: ev.organizerId, 
+                type: 'event', 
+                event: ev, 
+                formattedTime: formattedTime, // ADDED: formattedTime
+                timestamp: formattedTime, // Use formatted time
+                groupId: activeGroup.id, 
+                groupName: activeGroup.name, 
+                reactions: [], 
+                comments: [], 
+                shares: 0, 
+                createdAt: eventTime, 
+                visibility: 'Public' 
+            };
+        });
+        
+        // Combine and sort by creation date (newest first)
+        return [...processedGroupPosts, ...processedEvents].sort((a,b) => b.createdAt - a.createdAt);
     }, [activeGroup]);
     
+    // Clean up post modal state
     useEffect(() => { 
         if (!showGroupPostModal) { 
             setPostContent(''); 
-            setPostFile(null); 
+            setPostFiles([]); 
+            setPostPreviews([]);
+            setPostType('text');
         } 
     }, [showGroupPostModal]);
+    
+    // Clean up preview URLs when component unmounts
+    useEffect(() => {
+        return () => {
+            postPreviews.forEach(preview => URL.revokeObjectURL(preview));
+        };
+    }, []);
     
     const handleGroupClick = (group: Group) => { 
         setActiveGroupId(group.id); 
@@ -213,18 +274,139 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
         setNewGroupDesc(''); 
     };
     
+    // UPDATED: Handle file selection for multiple images
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            const newFiles = Array.from(e.target.files);
+            
+            // Check if total files exceed limit (9 max like Facebook)
+            const totalFiles = postFiles.length + newFiles.length;
+            if (totalFiles > 9) {
+                alert("You can only upload up to 9 images.");
+                return;
+            }
+            
+            // Filter to only allow images
+            const imageFiles = newFiles.filter(file => file.type.startsWith('image/'));
+            
+            if (imageFiles.length === 0) return;
+            
+            setPostFiles(prev => [...prev, ...imageFiles]);
+            
+            // Create previews
+            const newPreviews = imageFiles.map(file => URL.createObjectURL(file));
+            setPostPreviews(prev => [...prev, ...newPreviews]);
+            
+            // Set post type based on number of images
+            const totalImages = postFiles.length + imageFiles.length;
+            setPostType(totalImages === 1 ? 'image' : 'multimage');
+        }
+    };
+
+    // Remove a file from the list
+    const removeFile = (index: number) => {
+        // Revoke the object URL to prevent memory leaks
+        URL.revokeObjectURL(postPreviews[index]);
+        
+        setPostFiles(prev => prev.filter((_, i) => i !== index));
+        setPostPreviews(prev => prev.filter((_, i) => i !== index));
+        
+        // Update post type based on remaining files
+        if (postFiles.length === 1) {
+            setPostType('text');
+        } else if (postFiles.length === 2) {
+            setPostType('image'); // Only one file left, switch to single image
+        }
+    };
+    
+    // UPDATED: Handle post submission with multiple files
     const handlePostSubmit = () => { 
         if (!activeGroup) return; 
-        if (!postContent.trim() && !postFile) return; 
-        let type: any = 'text'; 
-        if (postFile) type = postFile.type.startsWith('image') ? 'image' : 'video'; 
-        onPostToGroup(activeGroup.id, postContent, postFile, type); 
+        if (!postContent.trim() && postFiles.length === 0) return; 
+        
+        // Determine post type based on content
+        let finalPostType = postType;
+        if (postFiles.length > 0) {
+            finalPostType = postFiles.length === 1 ? 'image' : 'multimage';
+        }
+        
+        onPostToGroup(activeGroup.id, postContent, postFiles.length > 0 ? postFiles : null, finalPostType); 
         setShowGroupPostModal(false); 
     };
     
-    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'cover' | 'profile') => { 
+    const handleGroupImageChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'cover' | 'profile') => { 
         if (e.target.files && e.target.files[0] && activeGroup) 
         onUpdateGroupImage(activeGroup.id, type, e.target.files[0]); 
+    };
+
+    // Render Image Grid for previews (similar to CreatePostModal)
+    const renderImageGrid = (images: string[]) => {
+        if (images.length === 0) return null;
+        
+        const displayedImages = images.slice(0, 9);
+        const remainingCount = images.length - displayedImages.length;
+        
+        const getGridClass = () => {
+            const count = displayedImages.length;
+            if (count === 1) return "grid-cols-1";
+            if (count === 2) return "grid-cols-2 gap-1";
+            if (count === 3) return "grid-cols-2";
+            if (count === 4) return "grid-cols-2 gap-1";
+            return "grid-cols-3 gap-1";
+        };
+
+        const getImageClass = (index: number) => {
+            const count = displayedImages.length;
+            if (count === 1) return "row-span-2 col-span-2";
+            if (count === 2) return "col-span-1 row-span-2";
+            if (count === 3) {
+                if (index === 0) return "row-span-2 col-span-1";
+                return "row-span-1 col-span-1";
+            }
+            if (count === 4) return "row-span-1 col-span-1";
+            return "row-span-1 col-span-1";
+        };
+
+        return (
+            <div className={`grid ${getGridClass()} rounded-lg overflow-hidden mt-4`}>
+                {displayedImages.map((image, index) => (
+                    <div 
+                        key={index} 
+                        className={`relative ${getImageClass(index)} overflow-hidden bg-black`}
+                    >
+                        <img 
+                            src={image} 
+                            alt={`Preview ${index + 1}`}
+                            className="w-full h-full object-cover"
+                        />
+                        
+                        {/* Remove button */}
+                        <div 
+                            onClick={() => removeFile(index)}
+                            className="absolute top-2 right-2 w-6 h-6 bg-black/80 rounded-full flex items-center justify-center cursor-pointer hover:bg-black"
+                        >
+                            <i className="fas fa-times text-white text-xs"></i>
+                        </div>
+                        
+                        {/* Overlay for remaining count */}
+                        {index === displayedImages.length - 1 && remainingCount > 0 && (
+                            <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
+                                <span className="text-white text-xl font-bold">
+                                    +{remainingCount}
+                                </span>
+                            </div>
+                        )}
+                        
+                        {/* Multi-image indicator for first image */}
+                        {images.length > 1 && index === 0 && (
+                            <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm rounded-full w-8 h-8 flex items-center justify-center">
+                                <i className="fas fa-layer-group text-white text-sm"></i>
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
+        );
     };
 
     // If no activeGroup is selected, show the feed (list of groups)
@@ -388,7 +570,7 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                                 <i className="fas fa-camera"></i> Edit Cover
                             </div>
                         )}
-                        <input type="file" ref={groupCoverInputRef} className="hidden" accept="image/*" onChange={(e) => handleImageChange(e, 'cover')} />
+                        <input type="file" ref={groupCoverInputRef} className="hidden" accept="image/*" onChange={(e) => handleGroupImageChange(e, 'cover')} />
                     </div>
                     
                     <div className="px-4 pb-0">
@@ -405,7 +587,7 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                                         <i className="fas fa-camera text-white text-xs"></i>
                                     </div>
                                 )}
-                                <input type="file" ref={groupProfileInputRef} className="hidden" accept="image/*" onChange={(e) => handleImageChange(e, 'profile')} />
+                                <input type="file" ref={groupProfileInputRef} className="hidden" accept="image/*" onChange={(e) => handleGroupImageChange(e, 'profile')} />
                             </div>
                             
                             <div className="flex-1 mt-2">
@@ -512,10 +694,16 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                                         profileImage: 'https://ui-avatars.com/api/?name=User&background=random' 
                                     } as User;
                                     
+                                    // Ensure the post has proper formattedTime for display
+                                    const postWithFormattedTime = {
+                                        ...post,
+                                        formattedTime: post.formattedTime || formatRelativeTime(post.createdAt || post.timestamp)
+                                    };
+                                    
                                     return (
                                         <div key={post.id} className="mx-2 md:mx-0">
                                             <Post 
-                                                post={post as PostType}
+                                                post={postWithFormattedTime as PostType}
                                                 author={author}
                                                 currentUser={currentUser}
                                                 users={users}
@@ -625,7 +813,7 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                 )}
             </div>
             
-            {/* Modals */}
+            {/* UPDATED: Group Post Modal with multiple image support */}
             {showGroupPostModal && (
                 <div className="fixed inset-0 z-[150] bg-[#18191A] flex flex-col animate-slide-up font-sans">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-[#3E4042] bg-[#242526]">
@@ -633,6 +821,13 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                             <i className="fas fa-arrow-left text-[#E4E6EB] text-xl cursor-pointer" onClick={() => setShowGroupPostModal(false)}></i>
                             <h3 className="text-[#E4E6EB] text-[18px] font-bold">Post to Group</h3>
                         </div>
+                        <button 
+                            onClick={handlePostSubmit} 
+                            disabled={!postContent.trim() && postFiles.length === 0} 
+                            className="text-[#1877F2] font-bold text-base disabled:text-[#B0B3B8]"
+                        >
+                            Post
+                        </button>
                     </div>
                     <div className="flex-1 flex flex-col overflow-y-auto">
                         <div className="p-6 flex items-center gap-4">
@@ -651,6 +846,26 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                                 rows={5} 
                             />
                         </div>
+                        
+                        {/* UPDATED: Show image previews if any */}
+                        {postPreviews.length > 0 && (
+                            <div className="px-6">
+                                {renderImageGrid(postPreviews)}
+                                
+                                {/* Add more images button */}
+                                {postPreviews.length < 9 && (
+                                    <div className="flex gap-2 mt-2">
+                                        <div 
+                                            className="w-16 h-16 rounded-lg border-2 border-dashed border-[#3E4042] flex items-center justify-center cursor-pointer hover:bg-[#3A3B3C]"
+                                            onClick={() => postFileInputRef.current?.click()}
+                                        >
+                                            <i className="fas fa-plus text-[#B0B3B8]"></i>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        
                         <div className="border-t border-[#3E4042] bg-[#1C1D1E] p-2">
                             <div 
                                 className="flex items-center gap-4 p-4 hover:bg-[#3A3B3C] rounded-2xl cursor-pointer transition-all border border-transparent hover:border-[#3E4042]" 
@@ -674,7 +889,7 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                         <div className="p-6 bg-[#242526]">
                             <button 
                                 onClick={handlePostSubmit} 
-                                disabled={!postContent.trim() && !postFile} 
+                                disabled={!postContent.trim() && postFiles.length === 0} 
                                 className="w-full bg-[#1877F2] text-white font-black text-xl py-4 rounded-2xl hover:bg-[#166FE5] disabled:opacity-50 transition-all shadow-2xl active:scale-95"
                             >
                                 POST TO FEED
@@ -685,8 +900,9 @@ export const GroupsPage: React.FC<GroupsPageProps> = ({
                         type="file" 
                         ref={postFileInputRef} 
                         className="hidden" 
-                        accept="image/*,video/*" 
-                        onChange={(e) => { if(e.target.files && e.target.files[0]) setPostFile(e.target.files[0]); }} 
+                        accept="image/*" 
+                        multiple // UPDATED: Allow multiple file selection
+                        onChange={handleFileChange} 
                     />
                 </div>
             )}
