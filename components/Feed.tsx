@@ -4,6 +4,35 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { INITIAL_USERS, LOCATIONS_DATA, REACTION_ICONS, REACTION_COLORS, GIF_CATEGORIES, MARKETPLACE_COUNTRIES, MARKETPLACE_CATEGORIES } from '../constants';
 import { StickerPicker, EmojiPicker } from './Pickers';
 
+// Facebook-style relative time formatter (same as in App.tsx)
+const formatRelativeTime = (timestamp: number): string => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const diffInSeconds = Math.floor(diff / 1000);
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    const diffInDays = Math.floor(diffInHours / 24);
+    
+    if (diffInSeconds < 60) {
+        return 'Just now';
+    } else if (diffInMinutes < 60) {
+        return `${diffInMinutes}m`;
+    } else if (diffInHours < 24) {
+        return `${diffInHours}h`;
+    } else if (diffInDays < 7) {
+        return `${diffInDays}d`;
+    } else if (diffInDays < 30) {
+        const weeks = Math.floor(diffInDays / 7);
+        return `${weeks}w`;
+    } else if (diffInDays < 365) {
+        const months = Math.floor(diffInDays / 30);
+        return `${months}mo`;
+    } else {
+        const years = Math.floor(diffInDays / 365);
+        return `${years}y`;
+    }
+};
+
 // --- RICH TEXT RENDERER FOR MENTIONS & TAGS ---
 const RichText = ({ text, users, onProfileClick, onHashtagClick }: { text: string, users?: User[], onProfileClick: (id: number) => void, onHashtagClick?: (tag: string) => void }) => {
     if (!text) return null;
@@ -894,6 +923,12 @@ export const CommentsSheet: React.FC<CommentsSheetProps> = ({ post, currentUser,
     const [replyingTo, setReplyingTo] = useState<{ id: number, name: string } | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); if(text.trim()) { onComment(post.id, text, undefined, replyingTo?.id); setText(''); setShowPicker(null); setReplyingTo(null); } };
+    
+    // Use formattedTime from comment or calculate it if missing
+    const getCommentTime = (timestamp: number, formattedTime?: string) => {
+        return formattedTime || formatRelativeTime(timestamp);
+    };
+    
     return (
         <div className="fixed inset-0 z-[120] flex flex-col justify-end md:items-center md:justify-center">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
@@ -946,7 +981,7 @@ export const CommentsSheet: React.FC<CommentsSheetProps> = ({ post, currentUser,
                                                     )}
                                                 </div>
                                                 <div className="flex gap-4 ml-3 mt-1 text-[13px] font-bold text-[#B0B3B8]">
-                                                    <span className="font-normal">{comment.timestamp}</span>
+                                                    <span className="font-normal">{getCommentTime(comment.timestamp, comment.formattedTime)}</span>
                                                     <span className={`cursor-pointer hover:underline ${comment.hasLiked ? 'text-[#1877F2]' : ''}`} onClick={() => onLikeComment(comment.id)}>Like</span>
                                                     <span className="cursor-pointer hover:underline" onClick={() => { setReplyingTo({ id: comment.id, name: author.name }); setText(`@${author.name} `); setTimeout(() => inputRef.current?.focus(), 0); }}>Reply</span>
                                                 </div>
@@ -1065,6 +1100,11 @@ export const Post: React.FC<PostProps> = ({
         }
     };
 
+    // Use formattedTime from post or calculate it if missing
+    const getPostTime = () => {
+        return post.formattedTime || formatRelativeTime(post.timestamp);
+    };
+
     const renderContent = (content: string) => {
         if (!content) return null;
         const words = content.split(/\s+/);
@@ -1105,7 +1145,7 @@ export const Post: React.FC<PostProps> = ({
                                 {post.feeling && <span className="text-[#B0B3B8] text-[15px] whitespace-nowrap">is feeling {post.feeling}</span>}
                             </div>
                             <div className="flex items-center gap-1.5 text-[#B0B3B8] text-[13px]">
-                                <span>{post.timestamp}</span>
+                                <span>{getPostTime()}</span>
                                 {post.location && (<><span>•</span><i className="fas fa-map-marker-alt text-[12px]"></i><span className="truncate max-w-[150px]">{post.location}</span></>)}
                                 <span>•</span>
                                 <i className={`fas ${post.visibility === 'Public' ? 'fa-globe-americas' : 'fa-user-friends'} text-[12px]`}></i>
