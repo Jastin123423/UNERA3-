@@ -20,7 +20,7 @@ import { TermsOfServicePage } from './components/TermsOfService';
 import { useLanguage } from './contexts/LanguageContext';
 import { User, Post as PostType, Story, Reel, Notification, Message, Event, Product, Comment, ReactionType, LinkPreview, Group, GroupPost, AudioTrack, Brand, Song, Episode } from './types';
 import { INITIAL_USERS, INITIAL_POSTS, INITIAL_STORIES, INITIAL_REELS, INITIAL_EVENTS, INITIAL_GROUPS, INITIAL_BRANDS, MOCK_SONGS, MOCK_EPISODES } from './constants';
-import { rankFeed } from './utils/ranking'; 
+import { rankFeed } from './utils/ranking';
 
 // ========== UTILITY FUNCTIONS ==========
 const getPath = () => {
@@ -261,6 +261,127 @@ const createNotification = (
     };
 };
 
+// Suggested User Interface
+interface SuggestedUser {
+    id: number;
+    name: string;
+    username?: string;
+    profileImage: string;
+    mutualFriends: number;
+    bio?: string;
+    location?: string;
+    education?: string;
+    work?: string;
+    viewed: boolean;
+}
+
+// People You May Know Component
+const PeopleYouMayKnow: React.FC<{
+    suggestedUsers: SuggestedUser[];
+    onViewProfile: (userId: number) => void;
+    onFollow: (userId: number) => void;
+    onRemove: (userId: number) => void;
+}> = ({ suggestedUsers, onViewProfile, onFollow, onRemove }) => {
+    const { t } = useLanguage();
+    
+    if (suggestedUsers.length === 0) return null;
+    
+    return (
+        <div className="bg-[#242526] rounded-lg p-4 mb-6 border border-[#3E4042] shadow-lg">
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-semibold text-white">People You May Know</h2>
+                <button className="text-[#1877F2] text-sm font-medium hover:bg-[#3A3B3C] px-3 py-1 rounded-md transition-colors">
+                    See All
+                </button>
+            </div>
+            
+            <div className="relative">
+                <div className="flex space-x-4 overflow-x-auto pb-4 scrollbar-hide">
+                    {suggestedUsers.map((user) => (
+                        <div 
+                            key={user.id} 
+                            className="flex-shrink-0 w-56 bg-[#3A3B3C] rounded-lg overflow-hidden border border-[#4E4F50] hover:border-[#1877F2] transition-all duration-300 hover:shadow-xl hover:shadow-[#1877F2]/10"
+                        >
+                            {/* User Image */}
+                            <div className="relative h-48">
+                                <img 
+                                    src={user.profileImage} 
+                                    alt={user.name}
+                                    className="w-full h-full object-cover"
+                                />
+                                <button 
+                                    onClick={() => onRemove(user.id)}
+                                    className="absolute top-2 right-2 w-8 h-8 bg-[#242526] rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-[#3A3B3C] transition-colors"
+                                    title="Remove suggestion"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                            
+                            {/* User Info */}
+                            <div className="p-3">
+                                <h3 className="font-semibold text-white text-base truncate">{user.name}</h3>
+                                
+                                {user.mutualFriends > 0 && (
+                                    <p className="text-[#B0B3B8] text-sm mt-1">
+                                        {user.mutualFriends} mutual friend{user.mutualFriends !== 1 ? 's' : ''}
+                                    </p>
+                                )}
+                                
+                                {user.location && (
+                                    <div className="flex items-center text-[#B0B3B8] text-sm mt-2">
+                                        <span className="mr-2">📍</span>
+                                        <span className="truncate">{user.location}</span>
+                                    </div>
+                                )}
+                                
+                                {user.work && (
+                                    <div className="flex items-center text-[#B0B3B8] text-sm mt-1">
+                                        <span className="mr-2">💼</span>
+                                        <span className="truncate">{user.work}</span>
+                                    </div>
+                                )}
+                                
+                                {/* Action Buttons */}
+                                <div className="flex space-x-2 mt-4">
+                                    <button
+                                        onClick={() => onViewProfile(user.id)}
+                                        className="flex-1 bg-[#1877F2] text-white font-semibold py-2 px-4 rounded-md hover:bg-[#166FE5] transition-colors text-sm"
+                                    >
+                                        View Profile
+                                    </button>
+                                    <button
+                                        onClick={() => onFollow(user.id)}
+                                        className="flex-1 bg-[#3A3B3C] text-white font-semibold py-2 px-4 rounded-md hover:bg-[#4E4F50] transition-colors text-sm border border-[#4E4F50]"
+                                    >
+                                        Follow
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                
+                {/* Scroll indicators */}
+                <div className="flex justify-center space-x-2 mt-4">
+                    {suggestedUsers.slice(0, 5).map((_, index) => (
+                        <div 
+                            key={index} 
+                            className={`w-2 h-2 rounded-full ${index === 0 ? 'bg-[#1877F2]' : 'bg-[#4E4F50]'}`}
+                        />
+                    ))}
+                </div>
+            </div>
+            
+            <div className="mt-4 pt-4 border-t border-[#3E4042]">
+                <p className="text-[#B0B3B8] text-sm">
+                    Suggestions are based on your profile, activity, and mutual connections.
+                </p>
+            </div>
+        </div>
+    );
+};
+
 // ========== MAIN APP COMPONENT ==========
 export default function App({ initialData, initialPath }: { initialData?: any, initialPath?: string }) {
     const { t } = useLanguage();
@@ -318,6 +439,106 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             reelsUse: 0
         }
     })));
+    
+    // People You May Know state
+    const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([
+        {
+            id: 5,
+            name: "Alex Johnson",
+            username: "alexjohnson",
+            profileImage: "https://randomuser.me/api/portraits/men/32.jpg",
+            mutualFriends: 15,
+            bio: "Software Engineer at TechCorp",
+            location: "San Francisco, CA",
+            education: "Stanford University",
+            work: "TechCorp Inc.",
+            viewed: false
+        },
+        {
+            id: 6,
+            name: "Sarah Miller",
+            username: "sarahm",
+            profileImage: "https://randomuser.me/api/portraits/women/44.jpg",
+            mutualFriends: 8,
+            bio: "Digital Marketer & Content Creator",
+            location: "New York, NY",
+            education: "NYU Stern",
+            work: "Creative Agency",
+            viewed: false
+        },
+        {
+            id: 7,
+            name: "Michael Chen",
+            username: "mchen",
+            profileImage: "https://randomuser.me/api/portraits/men/67.jpg",
+            mutualFriends: 12,
+            bio: "Product Designer | UI/UX Specialist",
+            location: "Austin, TX",
+            education: "RISD",
+            work: "DesignStudio",
+            viewed: false
+        },
+        {
+            id: 8,
+            name: "Jessica Williams",
+            username: "jessw",
+            profileImage: "https://randomuser.me/api/portraits/women/68.jpg",
+            mutualFriends: 6,
+            bio: "Medical Researcher | PhD in Biochemistry",
+            location: "Boston, MA",
+            education: "Harvard University",
+            work: "Biotech Labs",
+            viewed: false
+        },
+        {
+            id: 9,
+            name: "David Rodriguez",
+            username: "davidr",
+            profileImage: "https://randomuser.me/api/portraits/men/55.jpg",
+            mutualFriends: 20,
+            bio: "Entrepreneur & Startup Founder",
+            location: "Miami, FL",
+            education: "MIT Sloan",
+            work: "Startup Ventures",
+            viewed: false
+        },
+        {
+            id: 10,
+            name: "Emma Thompson",
+            username: "emmat",
+            profileImage: "https://randomuser.me/api/portraits/women/26.jpg",
+            mutualFriends: 10,
+            bio: "Architect & Urban Planner",
+            location: "Chicago, IL",
+            education: "Columbia University",
+            work: "Design Architects",
+            viewed: false
+        },
+        {
+            id: 11,
+            name: "Ryan Park",
+            username: "ryanp",
+            profileImage: "https://randomuser.me/api/portraits/men/45.jpg",
+            mutualFriends: 7,
+            bio: "Data Scientist | AI Researcher",
+            location: "Seattle, WA",
+            education: "Carnegie Mellon",
+            work: "AI Research Lab",
+            viewed: false
+        },
+        {
+            id: 12,
+            name: "Olivia Martinez",
+            username: "oliviam",
+            profileImage: "https://randomuser.me/api/portraits/women/33.jpg",
+            mutualFriends: 18,
+            bio: "Fashion Designer & Stylist",
+            location: "Los Angeles, CA",
+            education: "FIT New York",
+            work: "Fashion House",
+            viewed: false
+        }
+    ]);
     
     const [currentUser, setCurrentUser] = useState<User | null>(initialData?.currentUser || null);
     const [showRegister, setShowRegister] = useState(false);
@@ -519,7 +740,55 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
     // ========== END NOTIFICATION MANAGEMENT FUNCTIONS ==========
 
-    // Load data from localStorage
+    // Handle People You May Know actions
+    const handleViewProfile = (userId: number) => {
+        // Mark the user as viewed and remove from suggestions
+        setSuggestedUsers(prev => prev.filter(user => user.id !== userId));
+        
+        // Navigate to profile
+        setSelectedUserId(userId);
+        setView('profile');
+        setActiveTab('profile');
+        
+        // Update localStorage
+        if (isClient) {
+            localStorage.setItem('universeViewedProfiles', JSON.stringify([
+                ...(JSON.parse(localStorage.getItem('universeViewedProfiles') || '[]')),
+                userId
+            ]));
+        }
+    };
+
+    const handleFollowSuggestedUser = (userId: number) => {
+        // Call existing follow function
+        handleFollowUser(userId);
+        
+        // Remove from suggestions after following
+        setSuggestedUsers(prev => prev.filter(user => user.id !== userId));
+        
+        // Optional: Add to recently followed in localStorage
+        if (isClient) {
+            localStorage.setItem('universeFollowedProfiles', JSON.stringify([
+                ...(JSON.parse(localStorage.getItem('universeFollowedProfiles') || '[]')),
+                userId
+            ]));
+        }
+    };
+
+    const handleRemoveSuggestedUser = (userId: number) => {
+        // Remove from suggestions
+        setSuggestedUsers(prev => prev.filter(user => user.id !== userId));
+        
+        // Store in localStorage to prevent showing again
+        if (isClient) {
+            localStorage.setItem('universeRemovedSuggestions', JSON.stringify([
+                ...(JSON.parse(localStorage.getItem('universeRemovedSuggestions') || '[]')),
+                userId
+            ]));
+        }
+    };
+
+    // Load People You May Know data from localStorage
     useEffect(() => {
         if (isClient) {
             const storedUser = localStorage.getItem('universeCurrentUser');
@@ -532,6 +801,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             const storedPosts = localStorage.getItem('universePosts');
             const storedGroups = localStorage.getItem('universeGroups');
             const storedNotifications = localStorage.getItem('universeNotifications');
+            
+            // Load People You May Know filters
+            const viewedProfiles = JSON.parse(localStorage.getItem('universeViewedProfiles') || '[]');
+            const followedProfiles = JSON.parse(localStorage.getItem('universeFollowedProfiles') || '[]');
+            const removedSuggestions = JSON.parse(localStorage.getItem('universeRemovedSuggestions') || '[]');
             
             if (storedUsers) setUsers(JSON.parse(storedUsers));
             if (storedSongs) setSongs(JSON.parse(storedSongs));
@@ -551,6 +825,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             if (storedGroups) setGroups(JSON.parse(storedGroups));
             if (storedNotifications) setNotifications(JSON.parse(storedNotifications));
             
+            // Filter out already viewed/followed/removed suggestions
+            const allRemovedIds = [...viewedProfiles, ...followedProfiles, ...removedSuggestions];
+            setSuggestedUsers(prev => prev.filter(user => !allRemovedIds.includes(user.id)));
+            
             if (storedUser) {
                 const user = JSON.parse(storedUser);
                 const freshUser = (storedUsers ? JSON.parse(storedUsers) : INITIAL_USERS).find((u: User) => u.id === user.id);
@@ -560,15 +838,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setTimeout(() => setIsLoading(false), 800);
     }, [isClient]);
 
-    // Save data to localStorage
-    useEffect(() => {
-        if (isClient && currentUser) {
-            localStorage.setItem('universeCurrentUser', JSON.stringify(currentUser));
-        }
-    }, [currentUser, isClient]);
-
+    // Save People You May Know data to localStorage
     useEffect(() => {
         if (isClient) {
+            localStorage.setItem('universeCurrentUser', JSON.stringify(currentUser));
             localStorage.setItem('universeUsers', JSON.stringify(users));
             localStorage.setItem('universeSongs', JSON.stringify(songs));
             localStorage.setItem('universeEpisodes', JSON.stringify(episodes));
@@ -579,7 +852,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             localStorage.setItem('universeGroups', JSON.stringify(groups));
             localStorage.setItem('universeNotifications', JSON.stringify(notifications));
         }
-    }, [users, songs, episodes, likedTracks, products, brands, posts, groups, notifications, isClient]);
+    }, [currentUser, users, songs, episodes, likedTracks, products, brands, posts, groups, notifications, isClient]);
 
     const handleLogin = (email: string, pass: string) => {
         const user = users.find(u => u.email === email && u.password === pass);
@@ -2756,6 +3029,17 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 onClick={() => setShowCreatePostModal(true)} 
                                                 onCreateEventClick={() => setShowCreateEventModal(true)} 
                                             /> 
+                                            
+                                            {/* People You May Know Section - Added Here */}
+                                            {suggestedUsers.length > 0 && (
+                                                <PeopleYouMayKnow 
+                                                    suggestedUsers={suggestedUsers}
+                                                    onViewProfile={handleViewProfile}
+                                                    onFollow={handleFollowSuggestedUser}
+                                                    onRemove={handleRemoveSuggestedUser}
+                                                />
+                                            )}
+                                            
                                             <SuggestedProductsWidget 
                                                 products={products} 
                                                 currentUser={currentUser} 
