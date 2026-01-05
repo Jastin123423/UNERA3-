@@ -251,7 +251,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     }, []);
 
     const [users, setUsers] = useState<User[]>(initialData?.users || INITIAL_USERS);
-    const [posts, setPosts] = useState<PostType[]>(initialData?.posts || INITIAL_POSTS);
+    const [posts, setPosts] = useState<PostType[]>(() => {
+        // Ensure all posts have formattedTime on initial load
+        const initialPosts = initialData?.posts || INITIAL_POSTS;
+        return initialPosts.map(post => ({
+            ...post,
+            formattedTime: formatRelativeTime(post.timestamp)
+        }));
+    });
     const [stories, setStories] = useState<Story[]>(INITIAL_STORIES.map(s => ({...s, createdAt: Date.now(), user: (initialData?.users || INITIAL_USERS).find((u: User) => u.id === s.userId)}))); 
     const [reels, setReels] = useState<Reel[]>(INITIAL_REELS);
     const [events, setEvents] = useState<Event[]>(INITIAL_EVENTS);
@@ -385,6 +392,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             authorId: p.sellerId, 
             content: `Just listed a new item: ${p.title}`, 
             timestamp: p.date,
+            formattedTime: formatRelativeTime(p.date),
             createdAt: p.date, 
             reactions: [], 
             comments: [], 
@@ -401,6 +409,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             content: reel.caption, 
             video: reel.videoUrl, 
             timestamp: reel.createdAt,
+            formattedTime: formatRelativeTime(reel.createdAt),
             createdAt: reel.createdAt, 
             reactions: reel.reactions, 
             comments: reel.comments, 
@@ -498,7 +507,15 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             if (storedLikedTracks) setLikedTracks(JSON.parse(storedLikedTracks));
             if (storedProducts) setProducts(JSON.parse(storedProducts));
             if (storedBrands) setBrands(JSON.parse(storedBrands));
-            if (storedPosts) setPosts(JSON.parse(storedPosts));
+            if (storedPosts) {
+                const parsedPosts = JSON.parse(storedPosts);
+                // Ensure all loaded posts have formattedTime
+                const postsWithFormattedTime = parsedPosts.map((post: PostType) => ({
+                    ...post,
+                    formattedTime: post.formattedTime || formatRelativeTime(post.timestamp)
+                }));
+                setPosts(postsWithFormattedTime);
+            }
             if (storedGroups) setGroups(JSON.parse(storedGroups));
             if (storedNotifications) setNotifications(JSON.parse(storedNotifications));
             
@@ -803,12 +820,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             images: images.length > 0 ? images : undefined,
             video: video,
             timestamp: timestamp,
+            formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
             shares: 0, 
             views: 0, 
-            type: type === 'multimage' ? 'image' : type, 
+            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')), // FIXED: Proper type detection
             visibility, 
             location, 
             feeling, 
@@ -950,12 +968,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             images: images.length > 0 ? images : undefined,
             video: video,
             timestamp: timestamp,
+            formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
             createdAt: timestamp,
             reactions: [], 
             comments: [], 
             shares: 0,
             views: 0,
-            type: type === 'multimage' ? 'image' : type,
+            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')), // FIXED: Proper type detection
             visibility: visibility as any,
             location, 
             feeling, 
@@ -1006,7 +1025,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
         
         alert("Brand post published successfully!");
-        return newPost; // Return the created post for debugging
+        return newPost;
     };
 
     const handleFollowBrand = (brandId: number) => {
@@ -1375,6 +1394,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             authorId: currentUser.id, 
             content: `is hosting a new event: ${newEvent.title}`, 
             timestamp: timestamp,
+            formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
@@ -1488,7 +1508,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             userId: currentUser.id, 
             text, 
             timestamp: timestamp,
-            formattedTime: formatRelativeTime(timestamp),
+            formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
             likes: 0, 
             attachment,
             authorName: currentUser.name,
@@ -1550,7 +1570,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleShare = (postId: number, targetType: 'profile' | 'group' | 'brand', targetId?: string | number, extraCaption?: string) => {
         if (!currentUser) return;
-        const sourcePost = rankedPosts.find(p => p.id === postId);
+        const sourcePost = posts.find(p => p.id === postId); // FIXED: Use posts instead of rankedPosts
         if (!sourcePost) return;
         
         // Send notification to original post author
@@ -1581,6 +1601,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             authorId: currentUser.id, 
             content: extraCaption ? `${extraCaption}\n\n${sourcePost.content || ''}` : sourcePost.content, 
             timestamp: timestamp,
+            formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
@@ -1612,6 +1633,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             authorId: currentUser.id, 
             content: data.content, 
             timestamp: timestamp,
+            formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
@@ -1677,6 +1699,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 authorId: currentUser.id,
                 content: `🎵 Just released new music: "${song.title}" by ${song.artist}`,
                 timestamp: timestamp,
+                formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
                 createdAt: timestamp,
                 reactions: [],
                 comments: [],
@@ -1756,6 +1779,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 authorId: currentUser.id,
                 content: `🎙️ New podcast episode: "${episode.title}" with ${episode.host || 'Podcast Host'}`,
                 timestamp: timestamp,
+                formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
                 createdAt: timestamp,
                 reactions: [],
                 comments: [],
@@ -2010,7 +2034,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             userId: currentUser.id, 
             text, 
             timestamp: timestamp,
-            formattedTime: formatRelativeTime(timestamp),
+            formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
             likes: 0, 
             attachment,
             authorName: currentUser.name,
@@ -2177,6 +2201,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             images: images.length > 0 ? images : undefined,
             video: video,
             timestamp: timestamp, 
+            formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
             reactions: [], 
             comments: [], 
             shares: 0,
@@ -2198,12 +2223,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             images: images.length > 0 ? images : undefined, // FIX: Ensure images are passed
             video: video,
             timestamp: timestamp,
+            formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
             createdAt: timestamp,
             reactions: [], 
             comments: [], 
             shares: 0,
             views: 0,
-            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')), // FIX: Proper type detection
+            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')), // FIXED: Proper type detection
             visibility: 'Public' as const,
             groupId, 
             groupName: groups.find(g => g.id === groupId)?.name,
@@ -2262,6 +2288,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             authorId: currentUser.id, 
             content: `is hosting a new event in ${groups.find(g => g.id === groupId)?.name}: ${newEvent.title}`, 
             timestamp: timestamp,
+            formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
@@ -2295,6 +2322,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             images: groupPost.images,
             video: groupPost.video,
             timestamp: timestamp,
+            formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
             createdAt: timestamp,
             reactions: [],
             comments: [],
@@ -2537,17 +2565,23 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         );
     };
 
-    // Function to render regular posts with brand support - FIXED ISSUE #3: Add formattedTime
+    // Function to render regular posts with brand support - FIXED ISSUE #3: Ensure formattedTime is always present
     const renderRegularPost = (post: PostType, author: any, isFollowing?: boolean) => {
         const isBrandAuthor = author?.type === 'brand';
         const isFollowingBrand = isBrandAuthor && currentUser ? 
             brands.find(b => b.id === author.id)?.followers.includes(currentUser.id) || false : 
             false;
         
+        // Ensure post has formattedTime
+        const postWithFormattedTime = {
+            ...post,
+            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp)
+        };
+        
         return (
             <Post 
                 key={post.id} 
-                post={{...post, formattedTime: formatRelativeTime(post.timestamp)}} // FIX: Add formatted time
+                post={postWithFormattedTime}
                 author={author as any} 
                 currentUser={currentUser} 
                 users={users} 
@@ -2690,7 +2724,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                         const userPosts = posts.filter(p => p.authorId === selectedUserId);
                                         const enhancedPosts = userPosts.map(post => ({
                                             ...post,
-                                            formattedTime: formatRelativeTime(post.timestamp) // FIX: Add formatted time
+                                            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp)
                                         }));
                                         
                                         return [
@@ -2702,7 +2736,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                     authorId: p.sellerId,
                                                     content: `Just listed a new item: ${p.title}`,
                                                     timestamp: p.date,
-                                                    formattedTime: formatRelativeTime(p.date), // FIX: Add formatted time
+                                                    formattedTime: formatRelativeTime(p.date),
                                                     createdAt: p.date,
                                                     reactions: [],
                                                     comments: [],
@@ -2796,7 +2830,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                         return (
                                             <Post
                                                 key={activeSinglePostId}
-                                                post={{...post, formattedTime: formatRelativeTime(post.timestamp)}} // FIX: Add formatted time
+                                                post={{...post, formattedTime: post.formattedTime || formatRelativeTime(post.timestamp)}}
                                                 author={author}
                                                 currentUser={currentUser}
                                                 users={users}
@@ -2860,7 +2894,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                     content: `Shared a reel: ${reel.caption}`, 
                                                     video: reel.videoUrl,
                                                     timestamp: timestamp,
-                                                    formattedTime: formatRelativeTime(timestamp), // FIX: Add formatted time
+                                                    formattedTime: formatRelativeTime(timestamp),
                                                     createdAt: timestamp, 
                                                     reactions: [], 
                                                     comments: [], 
@@ -2902,7 +2936,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                             userId: currentUser.id, 
                                             text, 
                                             timestamp: timestamp,
-                                            formattedTime: formatRelativeTime(timestamp), // FIX: Add formatted time
+                                            formattedTime: formatRelativeTime(timestamp),
                                             likes: 0,
                                             authorName: currentUser.name,
                                             authorImage: currentUser.profileImage
@@ -3164,7 +3198,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     images: groupPost.images,
                                     video: groupPost.video,
                                     timestamp: groupPost.timestamp,
-                                    formattedTime: formatRelativeTime(groupPost.timestamp), // FIX: Add formatted time
+                                    formattedTime: groupPost.formattedTime || formatRelativeTime(groupPost.timestamp),
                                     createdAt: groupPost.timestamp,
                                     reactions: groupPost.reactions || [],
                                     comments: groupPost.comments || [],
