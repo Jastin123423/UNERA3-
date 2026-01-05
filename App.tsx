@@ -62,17 +62,24 @@ const parsePath = (path: string, users: User[]) => {
     return { view: 'home' };
 };
 
-// Facebook-style relative time formatter
+// Enhanced Facebook-style relative time formatter with precise calculations
 const formatRelativeTime = (timestamp: number): string => {
     const now = Date.now();
     const diff = now - timestamp;
+    
+    // If timestamp is in the future or invalid, return fallback
+    if (diff < 0 || !timestamp) return 'Just now';
+    
     const diffInSeconds = Math.floor(diff / 1000);
     const diffInMinutes = Math.floor(diffInSeconds / 60);
     const diffInHours = Math.floor(diffInMinutes / 60);
     const diffInDays = Math.floor(diffInHours / 24);
+    const diffInWeeks = Math.floor(diffInDays / 7);
+    const diffInMonths = Math.floor(diffInDays / 30);
+    const diffInYears = Math.floor(diffInDays / 365);
     
     if (diffInSeconds < 60) {
-        return 'Just now';
+        return diffInSeconds < 10 ? 'Just now' : `${diffInSeconds}s`;
     } else if (diffInMinutes < 60) {
         return `${diffInMinutes}m`;
     } else if (diffInHours < 24) {
@@ -80,14 +87,11 @@ const formatRelativeTime = (timestamp: number): string => {
     } else if (diffInDays < 7) {
         return `${diffInDays}d`;
     } else if (diffInDays < 30) {
-        const weeks = Math.floor(diffInDays / 7);
-        return `${weeks}w`;
+        return `${diffInWeeks}w`;
     } else if (diffInDays < 365) {
-        const months = Math.floor(diffInDays / 30);
-        return `${months}mo`;
+        return `${diffInMonths}mo`;
     } else {
-        const years = Math.floor(diffInDays / 365);
-        return `${years}y`;
+        return `${diffInYears}y`;
     }
 };
 
@@ -172,16 +176,32 @@ const getSongForPost = (post: PostType, songs: Song[], episodes: Episode[]) => {
 // Helper function to get author (user or brand) for a post
 const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
     // First check if it's a brand post
-    const brand = brands.find(b => b.id === post.authorId);
-    if (brand) {
+    if (post.brandId) {
+        const brand = brands.find(b => b.id === post.brandId);
+        if (brand) {
+            return {
+                ...brand,
+                type: 'brand' as const,
+                name: brand.name,
+                profileImage: brand.profileImage,
+                isVerified: brand.isVerified,
+                id: brand.id,
+                followers: brand.followers || []
+            };
+        }
+    }
+    
+    // Check if authorId matches a brand
+    const brandByAuthorId = brands.find(b => b.id === post.authorId);
+    if (brandByAuthorId) {
         return {
-            ...brand,
+            ...brandByAuthorId,
             type: 'brand' as const,
-            name: brand.name,
-            profileImage: brand.profileImage,
-            isVerified: brand.isVerified,
-            id: brand.id,
-            followers: brand.followers || []
+            name: brandByAuthorId.name,
+            profileImage: brandByAuthorId.profileImage,
+            isVerified: brandByAuthorId.isVerified,
+            id: brandByAuthorId.id,
+            followers: brandByAuthorId.followers || []
         };
     }
     
@@ -256,7 +276,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         const initialPosts = initialData?.posts || INITIAL_POSTS;
         return initialPosts.map(post => ({
             ...post,
-            formattedTime: formatRelativeTime(post.timestamp)
+            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
         }));
     });
     const [stories, setStories] = useState<Story[]>(INITIAL_STORIES.map(s => ({...s, createdAt: Date.now(), user: (initialData?.users || INITIAL_USERS).find((u: User) => u.id === s.userId)}))); 
@@ -387,6 +407,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     // Enhanced ranked posts with brand boost using the unified rankFeed function
     const rankedPosts = useMemo(() => {
+        // Ensure all posts have formattedTime
+        const processedPosts = posts.map(post => ({
+            ...post,
+            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+        }));
+        
         const productPosts: PostType[] = products.map(p => ({ 
             id: p.id + 100000, 
             authorId: p.sellerId, 
@@ -420,7 +446,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }));
         
         // Combine all posts including brand posts
-        const allContent = [...posts, ...productPosts, ...reelPosts];
+        const allContent = [...processedPosts, ...productPosts, ...reelPosts];
         
         // Use the unified rankFeed function that now accepts brands
         return rankFeed(allContent, currentUser, users, brands);
@@ -512,7 +538,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 // Ensure all loaded posts have formattedTime
                 const postsWithFormattedTime = parsedPosts.map((post: PostType) => ({
                     ...post,
-                    formattedTime: post.formattedTime || formatRelativeTime(post.timestamp)
+                    formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
                 }));
                 setPosts(postsWithFormattedTime);
             }
@@ -813,7 +839,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
         
         const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp); // FIX: Calculate formattedTime
+        const formattedTime = formatRelativeTime(timestamp);
         const newPost: PostType = { 
             id: timestamp, 
             authorId: currentUser.id, 
@@ -821,13 +847,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             images: images.length > 0 ? images : undefined,
             video: video,
             timestamp: timestamp,
-            formattedTime: formattedTime, // FIX: Set formattedTime
+            formattedTime: formattedTime,
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
             shares: 0, 
             views: 0, 
-            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')), // FIXED: Proper type detection
+            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')),
             visibility, 
             location, 
             feeling, 
@@ -875,7 +901,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    // ========== BRAND MANAGEMENT FUNCTIONS WITH NOTIFICATIONS ==========
+    // ========== PROFESSIONAL BRAND MANAGEMENT FUNCTIONS WITH NOTIFICATIONS ==========
     const handleCreateBrand = (brandData: Partial<Brand>) => {
         if (!currentUser) {
             alert("Please login to create a brand page.");
@@ -919,23 +945,28 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         alert("Brand page created successfully! You are now following this page.");
     };
 
-    // FIXED ISSUE #2: handlePostAsBrand function - Properly handles post creation for brands
+    // PROFESSIONAL: Updated handlePostAsBrand function with full multiple image support
     const handlePostAsBrand = (
         brandId: number, 
-        content: string, 
-        files: File[] | null, 
-        type: string, 
-        visibility: string, 
-        location?: string, 
-        feeling?: string, 
-        taggedUsers?: number[], 
-        background?: string, 
-        linkPreview?: LinkPreview
+        content: any
     ) => {
         if (!currentUser) {
             alert("Please login to post as a brand.");
             return;
         }
+        
+        // Destructure all parameters
+        const { 
+            text, 
+            files, 
+            type, 
+            visibility, 
+            location, 
+            feeling, 
+            taggedUsers, 
+            background, 
+            linkPreview 
+        } = content;
         
         // Verify the current user is admin of this brand
         const brand = brands.find(b => b.id === brandId);
@@ -949,7 +980,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             return;
         }
         
-        // Handle media files
+        // Handle multiple images
         let images: string[] = [];
         let video: string | undefined = undefined;
         
@@ -962,31 +993,31 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
         
         const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp); // FIX: Calculate formattedTime
+        const formattedTime = formatRelativeTime(timestamp);
         const newPost: PostType = { 
             id: timestamp,
-            authorId: brandId, // Use brand ID as author
-            content,
+            authorId: brandId,
+            content: text,
             images: images.length > 0 ? images : undefined,
             video: video,
             timestamp: timestamp,
-            formattedTime: formattedTime, // FIX: Set formattedTime
+            formattedTime: formattedTime,
             createdAt: timestamp,
             reactions: [], 
             comments: [], 
             shares: 0,
             views: 0,
-            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')), // FIXED: Proper type detection
+            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')),
             visibility: visibility as any,
             location, 
             feeling, 
             taggedUsers, 
             background, 
             linkPreview,
-            brandId: brandId // Add brandId to identify as brand post
+            brandId: brandId
         };
         
-        console.log("Creating brand post:", newPost); // Debug log
+        console.log("Creating brand post with multiple images:", newPost); // Debug log
         
         // Add to main posts array
         setPosts(prev => [newPost, ...prev]);
@@ -1005,7 +1036,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     followerId,
                     currentUser.id,
                     'brand_post',
-                    `${brand.name} posted: ${content.substring(0, 50)}${content.length > 50 ? '...' : ''}`,
+                    `${brand.name} posted: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`,
                     { brandId, postId: timestamp }
                 );
             }
@@ -1075,7 +1106,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }));
     };
 
-    // FIXED: Implemented missing brand management functions
+    // PROFESSIONAL: Updated brand management functions
     const handleUpdateBrand = (brandId: number, updates: Partial<Brand>) => {
         if (!currentUser) {
             alert("Please login to update brand.");
@@ -1180,7 +1211,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    // FIXED: Implemented handleDeletePost function
     const handleDeletePost = (postId: number) => {
         if (!currentUser) {
             alert("Please login to delete posts.");
@@ -1196,8 +1226,16 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         // Check permissions
         const canDelete = isAdmin || post.authorId === currentUser.id;
         if (!canDelete) {
-            // For group posts, check if user is group admin
-            if (post.groupId) {
+            // For brand posts, check if user is brand admin
+            if (post.brandId) {
+                const brand = brands.find(b => b.id === post.brandId);
+                if (brand && brand.adminId === currentUser.id) {
+                    // Brand admin can delete brand posts
+                } else {
+                    alert("You can only delete your own posts.");
+                    return;
+                }
+            } else if (post.groupId) {
                 const group = groups.find(g => g.id === post.groupId);
                 if (group && group.adminId === currentUser.id) {
                     // Group admin can delete group posts
@@ -1215,16 +1253,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             // Remove from main posts
             setPosts(prev => prev.filter(p => p.id !== postId));
             
-            // Also remove from group posts if applicable
-            if (post.groupId) {
-                setGroups(prev => prev.map(group => ({
-                    ...group,
-                    posts: group.id === post.groupId 
-                        ? group.posts.filter(p => p.id !== postId)
-                        : group.posts
-                })));
-            }
-            
             // Remove from brand posts if applicable
             if (post.brandId) {
                 setBrands(prev => prev.map(brand => ({
@@ -1232,6 +1260,16 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     posts: brand.id === post.brandId 
                         ? (brand.posts || []).filter(id => id !== postId)
                         : (brand.posts || [])
+                })));
+            }
+            
+            // Also remove from group posts if applicable
+            if (post.groupId) {
+                setGroups(prev => prev.map(group => ({
+                    ...group,
+                    posts: group.id === post.groupId 
+                        ? group.posts.filter(p => p.id !== postId)
+                        : group.posts
                 })));
             }
             
@@ -1384,7 +1422,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const handleCreateEvent = (eventData: Partial<Event>) => {
         if (!currentUser) return;
         const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp); // FIX: Calculate formattedTime
+        const formattedTime = formatRelativeTime(timestamp);
         const newEvent: Event = { 
             ...eventData, 
             id: timestamp, 
@@ -1397,7 +1435,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             authorId: currentUser.id, 
             content: `is hosting a new event: ${newEvent.title}`, 
             timestamp: timestamp,
-            formattedTime: formattedTime, // FIX: Set formattedTime
+            formattedTime: formattedTime,
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
@@ -1506,13 +1544,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const handleComment = (itemId: number, text: string, attachment?: any, parentId?: number) => {
         if (!currentUser) return;
         const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp); // FIX: Calculate formattedTime
+        const formattedTime = formatRelativeTime(timestamp);
         const newComment: Comment = { 
             id: timestamp, 
             userId: currentUser.id, 
             text, 
             timestamp: timestamp,
-            formattedTime: formattedTime, // FIX: Set formattedTime
+            formattedTime: formattedTime,
             likes: 0, 
             attachment,
             authorName: currentUser.name,
@@ -1574,7 +1612,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleShare = (postId: number, targetType: 'profile' | 'group' | 'brand', targetId?: string | number, extraCaption?: string) => {
         if (!currentUser) return;
-        const sourcePost = posts.find(p => p.id === postId); // FIXED: Use posts instead of rankedPosts
+        const sourcePost = posts.find(p => p.id === postId);
         if (!sourcePost) return;
         
         // Send notification to original post author
@@ -1599,14 +1637,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
         
         const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp); // FIX: Calculate formattedTime
+        const formattedTime = formatRelativeTime(timestamp);
         const newSharedPost: PostType = { 
             ...sourcePost, 
             id: timestamp, 
             authorId: currentUser.id, 
             content: extraCaption ? `${extraCaption}\n\n${sourcePost.content || ''}` : sourcePost.content, 
             timestamp: timestamp,
-            formattedTime: formattedTime, // FIX: Set formattedTime
+            formattedTime: formattedTime,
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
@@ -1633,13 +1671,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const handleFeedPost = (data: any) => {
         if (!currentUser) return;
         const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp); // FIX: Calculate formattedTime
+        const formattedTime = formatRelativeTime(timestamp);
         const newPost: PostType = { 
             id: timestamp, 
             authorId: currentUser.id, 
             content: data.content, 
             timestamp: timestamp,
-            formattedTime: formattedTime, // FIX: Set formattedTime
+            formattedTime: formattedTime,
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
@@ -1683,7 +1721,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         // Also create a feed post for the new upload
         if (currentUser) {
             const timestamp = Date.now();
-            const formattedTime = formatRelativeTime(timestamp); // FIX: Calculate formattedTime
+            const formattedTime = formatRelativeTime(timestamp);
             const audioTrack: AudioTrack = {
                 id: song.id,
                 title: song.title,
@@ -1706,7 +1744,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 authorId: currentUser.id,
                 content: `🎵 Just released new music: "${song.title}" by ${song.artist}`,
                 timestamp: timestamp,
-                formattedTime: formattedTime, // FIX: Set formattedTime
+                formattedTime: formattedTime,
                 createdAt: timestamp,
                 reactions: [],
                 comments: [],
@@ -1764,7 +1802,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         // Also create a feed post for the new upload
         if (currentUser) {
             const timestamp = Date.now();
-            const formattedTime = formatRelativeTime(timestamp); // FIX: Calculate formattedTime
+            const formattedTime = formatRelativeTime(timestamp);
             const audioTrack: AudioTrack = {
                 id: episode.id,
                 title: episode.title,
@@ -1787,7 +1825,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 authorId: currentUser.id,
                 content: `🎙️ New podcast episode: "${episode.title}" with ${episode.host || 'Podcast Host'}`,
                 timestamp: timestamp,
-                formattedTime: formattedTime, // FIX: Set formattedTime
+                formattedTime: formattedTime,
                 createdAt: timestamp,
                 reactions: [],
                 comments: [],
@@ -2037,13 +2075,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         if (!currentUser) return;
         
         const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp); // FIX: Calculate formattedTime
+        const formattedTime = formatRelativeTime(timestamp);
         const newComment: Comment = { 
             id: timestamp, 
             userId: currentUser.id, 
             text, 
             timestamp: timestamp,
-            formattedTime: formattedTime, // FIX: Set formattedTime
+            formattedTime: formattedTime,
             likes: 0, 
             attachment,
             authorName: currentUser.name,
@@ -2186,7 +2224,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         )); 
     };
     
-    // FIXED ISSUE #1: handlePostToGroup - Now properly handles images and posts to both group and main feed
     const handlePostToGroup = (groupId: string, content: string, files: File[] | null, type: any, background?: string) => { 
         if (!currentUser) return;
         
@@ -2203,16 +2240,16 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
         
         const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp); // FIX: Calculate formattedTime
+        const formattedTime = formatRelativeTime(timestamp);
         
         const newGroupPost: GroupPost = { 
             id: timestamp,
             authorId: currentUser.id, 
             content, 
-            images: images.length > 0 ? images : undefined, // FIX: Ensure images are properly set
+            images: images.length > 0 ? images : undefined,
             video: video,
             timestamp: timestamp, 
-            formattedTime: formattedTime, // FIX: Set formattedTime
+            formattedTime: formattedTime,
             reactions: [], 
             comments: [], 
             shares: 0,
@@ -2231,23 +2268,23 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: timestamp,
             authorId: currentUser.id, 
             content,
-            images: images.length > 0 ? images : undefined, // FIX: Ensure images are passed
+            images: images.length > 0 ? images : undefined,
             video: video,
             timestamp: timestamp,
-            formattedTime: formattedTime, // FIX: Set formattedTime
+            formattedTime: formattedTime,
             createdAt: timestamp,
             reactions: [], 
             comments: [], 
             shares: 0,
             views: 0,
-            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')), // FIXED: Proper type detection
+            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')),
             visibility: 'Public' as const,
             groupId, 
             groupName: groups.find(g => g.id === groupId)?.name,
             background
         }; 
         
-        console.log("Creating group post:", newFeedPost); // Debug log
+        console.log("Creating group post:", newFeedPost);
         
         // 3. Add to main posts array
         setPosts(prev => [newFeedPost, ...prev]); 
@@ -2274,7 +2311,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const handleCreateGroupEvent = (groupId: string, eventData: Partial<Event>) => {
         if (!currentUser) return;
         const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp); // FIX: Calculate formattedTime
+        const formattedTime = formatRelativeTime(timestamp);
         const newEvent: Event = { 
             ...eventData, 
             id: timestamp, 
@@ -2300,7 +2337,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             authorId: currentUser.id, 
             content: `is hosting a new event in ${groups.find(g => g.id === groupId)?.name}: ${newEvent.title}`, 
             timestamp: timestamp,
-            formattedTime: formattedTime, // FIX: Set formattedTime
+            formattedTime: formattedTime,
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
@@ -2327,7 +2364,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         
         // Create a shared post for the feed
         const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp); // FIX: Calculate formattedTime
+        const formattedTime = formatRelativeTime(timestamp);
         const newSharedPost: PostType = {
             id: timestamp,
             authorId: currentUser.id,
@@ -2335,7 +2372,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             images: groupPost.images,
             video: groupPost.video,
             timestamp: timestamp,
-            formattedTime: formattedTime, // FIX: Set formattedTime
+            formattedTime: formattedTime,
             createdAt: timestamp,
             reactions: [],
             comments: [],
@@ -2578,17 +2615,17 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         );
     };
 
-    // Function to render regular posts with brand support - FIXED: Ensure formattedTime is always present
+    // Function to render regular posts with brand support
     const renderRegularPost = (post: PostType, author: any, isFollowing?: boolean) => {
         const isBrandAuthor = author?.type === 'brand';
         const isFollowingBrand = isBrandAuthor && currentUser ? 
             brands.find(b => b.id === author.id)?.followers.includes(currentUser.id) || false : 
             false;
         
-        // Ensure post has formattedTime - FIX FOR ISSUE #2
+        // Ensure post has formattedTime
         const postWithFormattedTime = {
             ...post,
-            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp)
+            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
         };
         
         return (
@@ -2737,7 +2774,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                         const userPosts = posts.filter(p => p.authorId === selectedUserId);
                                         const enhancedPosts = userPosts.map(post => ({
                                             ...post,
-                                            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp)
+                                            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
                                         }));
                                         
                                         return [
@@ -2843,7 +2880,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                         return (
                                             <Post
                                                 key={activeSinglePostId}
-                                                post={{...post, formattedTime: post.formattedTime || formatRelativeTime(post.timestamp)}}
+                                                post={{...post, formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())}}
                                                 author={author}
                                                 currentUser={currentUser}
                                                 users={users}
@@ -2901,14 +2938,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                             const reel = reels.find(r => r.id === reelId);
                                             if (reel && currentUser) {
                                                 const timestamp = Date.now();
-                                                const formattedTime = formatRelativeTime(timestamp); // FIX: Calculate formattedTime
+                                                const formattedTime = formatRelativeTime(timestamp);
                                                 const newPost: PostType = { 
                                                     id: timestamp, 
                                                     authorId: currentUser.id, 
                                                     content: `Shared a reel: ${reel.caption}`, 
                                                     video: reel.videoUrl,
                                                     timestamp: timestamp,
-                                                    formattedTime: formattedTime, // FIX: Set formattedTime
+                                                    formattedTime: formattedTime,
                                                     createdAt: timestamp, 
                                                     reactions: [], 
                                                     comments: [], 
@@ -2945,13 +2982,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onComment={(reelId, text) => {
                                         if (!currentUser) return;
                                         const timestamp = Date.now();
-                                        const formattedTime = formatRelativeTime(timestamp); // FIX: Calculate formattedTime
+                                        const formattedTime = formatRelativeTime(timestamp);
                                         const newComment = { 
                                             id: timestamp, 
                                             userId: currentUser.id, 
                                             text, 
                                             timestamp: timestamp,
-                                            formattedTime: formattedTime, // FIX: Set formattedTime
+                                            formattedTime: formattedTime,
                                             likes: 0,
                                             authorName: currentUser.name,
                                             authorImage: currentUser.profileImage
@@ -2992,7 +3029,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onLeaveGroup={handleLeaveGroup}
                                     onDeleteGroup={handleDeleteGroup}
                                     onUpdateGroupImage={handleUpdateGroupImage}
-                                    onPostToGroup={handlePostToGroup} // FIXED: Images will now show properly
+                                    onPostToGroup={handlePostToGroup}
                                     onCreateGroupEvent={handleCreateGroupEvent}
                                     onInviteToGroup={handleInviteToGroup}
                                     onProfileClick={(id) => { 
@@ -3213,7 +3250,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     images: groupPost.images,
                                     video: groupPost.video,
                                     timestamp: groupPost.timestamp,
-                                    formattedTime: groupPost.formattedTime || formatRelativeTime(groupPost.timestamp), // FIX: Ensure formattedTime
+                                    formattedTime: groupPost.formattedTime || formatRelativeTime(groupPost.timestamp),
                                     createdAt: groupPost.timestamp,
                                     reactions: groupPost.reactions || [],
                                     comments: groupPost.comments || [],
