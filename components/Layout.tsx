@@ -131,11 +131,27 @@ interface HeaderProps {
     onLogout: () => void;
     onLoginClick: () => void;
     onMarkNotificationsRead: () => void;
+    onNotificationClick: (notification: Notification) => void;
     activeTab: string;
     onNavigate: (view: string) => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onHomeClick, onProfileClick, onReelsClick, onMarketplaceClick, onGroupsClick, currentUser, notifications, users, onLogout, onLoginClick, onMarkNotificationsRead, activeTab, onNavigate }) => {
+export const Header: React.FC<HeaderProps> = ({ 
+    onHomeClick, 
+    onProfileClick, 
+    onReelsClick, 
+    onMarketplaceClick, 
+    onGroupsClick, 
+    currentUser, 
+    notifications, 
+    users, 
+    onLogout, 
+    onLoginClick, 
+    onMarkNotificationsRead, 
+    onNotificationClick,
+    activeTab, 
+    onNavigate 
+}) => {
     const [showNotifications, setShowNotifications] = useState(false);
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [showFullMenu, setShowFullMenu] = useState(false);
@@ -145,7 +161,7 @@ export const Header: React.FC<HeaderProps> = ({ onHomeClick, onProfileClick, onR
     const notifRef = useRef<HTMLDivElement>(null);
     const profileRef = useRef<HTMLDivElement>(null);
     const searchRef = useRef<HTMLDivElement>(null);
-    const unreadCount = notifications.filter(n => !n.read).length;
+    const unreadCount = notifications.filter(n => !n.read && n.senderId !== currentUser?.id).length;
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -173,24 +189,138 @@ export const Header: React.FC<HeaderProps> = ({ onHomeClick, onProfileClick, onR
         setSearchResults(scoredUsers);
     };
 
+    const handleNotificationClick = (notification: Notification) => {
+        setShowNotifications(false);
+        onNotificationClick(notification);
+    };
+
     return (
         <>
             <div className="sticky top-0 z-50 bg-[#242526] shadow-sm h-14 flex items-center justify-between px-4 w-full border-b border-[#3E4042]">
-                <div className="flex items-center gap-2"><div className="flex items-center cursor-pointer gap-2 mr-2" onClick={onHomeClick}><i className="fas fa-globe-americas text-[#1877F2] text-[28px] sm:text-[32px] animate-[spin_10s_linear_infinite]"></i><h1 className="text-[24px] sm:text-[28px] font-bold bg-gradient-to-r from-[#1877F2] to-[#1D8AF2] text-transparent bg-clip-text tracking-tight">UNERA</h1></div></div>
+                <div className="flex items-center gap-2">
+                    <div className="flex items-center cursor-pointer gap-2 mr-2" onClick={onHomeClick}>
+                        <i className="fas fa-globe-americas text-[#1877F2] text-[28px] sm:text-[32px] animate-[spin_10s_linear_infinite]"></i>
+                        <h1 className="text-[24px] sm:text-[28px] font-bold bg-gradient-to-r from-[#1877F2] to-[#1D8AF2] text-transparent bg-clip-text tracking-tight">UNERA</h1>
+                    </div>
+                </div>
                 <div className="flex-1 max-w-[600px] h-full hidden md:flex items-center justify-center gap-1">
-                    <div onClick={onHomeClick} className={`flex-1 h-full flex items-center justify-center cursor-pointer border-b-[3px] ${activeTab === 'home' ? 'border-[#1877F2] text-[#1877F2]' : 'border-transparent text-[#B0B3B8] hover:bg-[#3A3B3C] rounded-lg'}`} title={t('home')}><i className={`fas fa-home text-[24px]`}></i></div>
-                    <div onClick={onReelsClick} className={`flex-1 h-full flex items-center justify-center cursor-pointer border-b-[3px] ${activeTab === 'reels' ? 'border-[#1877F2] text-[#1877F2]' : 'border-transparent text-[#B0B3B8] hover:bg-[#3A3B3C] rounded-lg'}`} title={t('reels')}><i className="fas fa-clapperboard text-[24px]"></i></div>
-                    <div className={`flex-1 h-full flex items-center justify-center cursor-pointer border-b-[3px] border-transparent text-[#B0B3B8] hover:bg-[#3A3B3C] rounded-lg`} title={t('watch')}><i className="fas fa-tv text-[24px]"></i></div>
-                    <div onClick={onMarketplaceClick} className={`flex-1 h-full flex items-center justify-center cursor-pointer border-b-[3px] ${activeTab === 'marketplace' ? 'border-[#1877F2] text-[#1877F2]' : 'border-transparent text-[#B0B3B8] hover:bg-[#3A3B3C] rounded-lg'}`} title={t('marketplace')}><i className="fas fa-store text-[24px]"></i></div>
-                    <div onClick={onGroupsClick} className={`flex-1 h-full flex items-center justify-center cursor-pointer border-b-[3px] ${activeTab === 'groups' ? 'border-[#1877F2] text-[#1877F2]' : 'border-transparent text-[#B0B3B8] hover:bg-[#3A3B3C] rounded-lg'}`} title={t('groups')}><i className="fas fa-users text-[24px]"></i></div>
+                    <div onClick={onHomeClick} className={`flex-1 h-full flex items-center justify-center cursor-pointer border-b-[3px] ${activeTab === 'home' ? 'border-[#1877F2] text-[#1877F2]' : 'border-transparent text-[#B0B3B8] hover:bg-[#3A3B3C] rounded-lg'}`} title={t('home')}>
+                        <i className={`fas fa-home text-[24px]`}></i>
+                    </div>
+                    <div onClick={onReelsClick} className={`flex-1 h-full flex items-center justify-center cursor-pointer border-b-[3px] ${activeTab === 'reels' ? 'border-[#1877F2] text-[#1877F2]' : 'border-transparent text-[#B0B3B8] hover:bg-[#3A3B3C] rounded-lg'}`} title={t('reels')}>
+                        <i className="fas fa-clapperboard text-[24px]"></i>
+                    </div>
+                    <div className={`flex-1 h-full flex items-center justify-center cursor-pointer border-b-[3px] border-transparent text-[#B0B3B8] hover:bg-[#3A3B3C] rounded-lg`} title={t('watch')}>
+                        <i className="fas fa-tv text-[24px]"></i>
+                    </div>
+                    <div onClick={onMarketplaceClick} className={`flex-1 h-full flex items-center justify-center cursor-pointer border-b-[3px] ${activeTab === 'marketplace' ? 'border-[#1877F2] text-[#1877F2]' : 'border-transparent text-[#B0B3B8] hover:bg-[#3A3B3C] rounded-lg'}`} title={t('marketplace')}>
+                        <i className="fas fa-store text-[24px]"></i>
+                    </div>
+                    <div onClick={onGroupsClick} className={`flex-1 h-full flex items-center justify-center cursor-pointer border-b-[3px] ${activeTab === 'groups' ? 'border-[#1877F2] text-[#1877F2]' : 'border-transparent text-[#B0B3B8] hover:bg-[#3A3B3C] rounded-lg'}`} title={t('groups')}>
+                        <i className="fas fa-users text-[24px]"></i>
+                    </div>
                 </div>
                 <div className="flex items-center gap-2 xl:gap-3 justify-end">
                     <div className="flex items-center justify-center w-10 h-10 rounded-full bg-[#3A3B3C] hover:bg-[#4E4F50] cursor-pointer" onClick={() => setShowFullMenu(true)}>
                         <i className="fas fa-bars text-[#E4E6EB] text-[18px]"></i>
                     </div>
-                    <div className="relative mr-1 md:mr-2" ref={searchRef}><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><i className="fas fa-search text-[#B0B3B8]"></i></div><input type="text" className="bg-[#3A3B3C] text-[#E4E6EB] rounded-full py-2 pl-10 pr-4 w-[40px] md:w-[240px] focus:w-[240px] transition-all duration-300 focus:outline-none focus:ring-1 focus:ring-[#1877F2] cursor-pointer md:cursor-text placeholder-transparent md:placeholder-[#B0B3B8] focus:placeholder-[#B0B3B8]" placeholder="Search in UNERA" value={searchQuery} onChange={handleSearchChange} />{searchQuery && <div className="absolute top-12 right-0 w-[280px] bg-[#242526] rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.5)] border border-[#3E4042] z-50 p-2 max-h-[400px] overflow-y-auto">{searchResults.length > 0 ? searchResults.map(user => <div key={user.id} className="flex items-center gap-3 p-2 hover:bg-[#3A3B3C] rounded-lg cursor-pointer transition-colors" onClick={() => { onProfileClick(user.id); setSearchQuery(''); setSearchResults([]); }}><img src={user.profileImage} alt={user.name} className="w-10 h-10 rounded-full object-cover border border-[#3E4042]" /><div className="flex flex-col overflow-hidden"><span className="font-semibold text-[15px] text-[#E4E6EB] truncate">{user.name}</span></div></div>) : <div className="p-4 text-center text-[#B0B3B8] text-sm">No results found</div>}</div>}</div>
+                    <div className="relative mr-1 md:mr-2" ref={searchRef}>
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i className="fas fa-search text-[#B0B3B8]"></i>
+                        </div>
+                        <input 
+                            type="text" 
+                            className="bg-[#3A3B3C] text-[#E4E6EB] rounded-full py-2 pl-10 pr-4 w-[40px] md:w-[240px] focus:w-[240px] transition-all duration-300 focus:outline-none focus:ring-1 focus:ring-[#1877F2] cursor-pointer md:cursor-text placeholder-transparent md:placeholder-[#B0B3B8] focus:placeholder-[#B0B3B8]" 
+                            placeholder="Search in UNERA" 
+                            value={searchQuery} 
+                            onChange={handleSearchChange} 
+                        />
+                        {searchQuery && (
+                            <div className="absolute top-12 right-0 w-[280px] bg-[#242526] rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.5)] border border-[#3E4042] z-50 p-2 max-h-[400px] overflow-y-auto">
+                                {searchResults.length > 0 ? (
+                                    searchResults.map(user => (
+                                        <div 
+                                            key={user.id} 
+                                            className="flex items-center gap-3 p-2 hover:bg-[#3A3B3C] rounded-lg cursor-pointer transition-colors" 
+                                            onClick={() => { 
+                                                onProfileClick(user.id); 
+                                                setSearchQuery(''); 
+                                                setSearchResults([]); 
+                                            }}
+                                        >
+                                            <img src={user.profileImage} alt={user.name} className="w-10 h-10 rounded-full object-cover border border-[#3E4042]" />
+                                            <div className="flex flex-col overflow-hidden">
+                                                <span className="font-semibold text-[15px] text-[#E4E6EB] truncate">{user.name}</span>
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="p-4 text-center text-[#B0B3B8] text-sm">No results found</div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                     
-                    {!currentUser ? <button onClick={onLoginClick} className="bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold py-1.5 px-4 rounded-full transition-colors">{t('login')}</button> : <><div className="hidden xl:flex items-center justify-center w-10 h-10 rounded-full bg-[#3A3B3C] hover:bg-[#4E4F50] cursor-pointer"><i className="fas fa-th text-[#E4E6EB]"></i></div><div className="flex items-center justify-center w-10 h-10 rounded-full bg-[#3A3B3C] hover:bg-[#4E4F50] cursor-pointer relative" onClick={() => { setShowNotifications(!showNotifications); if (!showNotifications) onMarkNotificationsRead(); }} ref={notifRef}><i className="fas fa-bell text-[#E4E6EB] text-lg"></i>{unreadCount > 0 && <div className="absolute -top-1 -right-1 bg-[#E41E3F] text-white text-[11px] font-bold px-1.5 rounded-full">{unreadCount > 9 ? '9+' : unreadCount}</div>}{showNotifications && <NotificationDropdown notifications={notifications} users={users} onNotificationClick={(n) => { setShowNotifications(false); if (n.postId) onNavigate(`post-${n.postId}`); else if (n.senderId) onProfileClick(n.senderId); }} onMarkAllRead={onMarkNotificationsRead} />}</div><div className="relative cursor-pointer" onClick={() => setShowProfileMenu(!showProfileMenu)} ref={profileRef}><img src={currentUser.profileImage} alt="Profile" className="w-10 h-10 rounded-full object-cover border border-[#3E4042]" /><div className="absolute bottom-0 right-0 w-3 h-3 bg-[#3A3B3C] rounded-full flex items-center justify-center border border-[#242526]"><i className="fas fa-chevron-down text-[8px] text-[#E4E6EB]"></i></div>{showProfileMenu && <div className="absolute top-12 right-0 w-[300px] bg-[#242526] rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.5)] border border-[#3E4042] z-50 p-2"><div className="flex items-center gap-3 p-2 hover:bg-[#3A3B3C] rounded-lg cursor-pointer shadow-[0_2px_4px_rgba(0,0,0,0.05)] mb-2" onClick={() => onProfileClick(currentUser.id)}><img src={currentUser.profileImage} alt="" className="w-10 h-10 rounded-full object-cover" /><span className="font-semibold text-[17px] text-[#E4E6EB]">{currentUser.name}</span></div><div className="border-b border-[#3E4042] my-1"></div><div className="flex items-center gap-3 p-2 hover:bg-[#3A3B3C] rounded-lg cursor-pointer" onClick={onLogout}><div className="w-9 h-9 bg-[#3A3B3C] rounded-full flex items-center justify-center"><i className="fas fa-sign-out-alt text-[#E4E6EB]"></i></div><span className="font-medium text-[15px] text-[#E4E6EB]">{t('logout')}</span></div></div>}</div></>}
+                    {!currentUser ? (
+                        <button onClick={onLoginClick} className="bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold py-1.5 px-4 rounded-full transition-colors">
+                            {t('login')}
+                        </button>
+                    ) : (
+                        <>
+                            <div className="hidden xl:flex items-center justify-center w-10 h-10 rounded-full bg-[#3A3B3C] hover:bg-[#4E4F50] cursor-pointer">
+                                <i className="fas fa-th text-[#E4E6EB]"></i>
+                            </div>
+                            <div 
+                                className="flex items-center justify-center w-10 h-10 rounded-full bg-[#3A3B3C] hover:bg-[#4E4F50] cursor-pointer relative" 
+                                onClick={() => { 
+                                    setShowNotifications(!showNotifications); 
+                                    if (!showNotifications) onMarkNotificationsRead(); 
+                                }} 
+                                ref={notifRef}
+                            >
+                                <i className="fas fa-bell text-[#E4E6EB] text-lg"></i>
+                                {unreadCount > 0 && (
+                                    <div className="absolute -top-1 -right-1 bg-[#E41E3F] text-white text-[11px] font-bold px-1.5 rounded-full">
+                                        {unreadCount > 9 ? '9+' : unreadCount}
+                                    </div>
+                                )}
+                                {showNotifications && currentUser && (
+                                    <NotificationDropdown 
+                                        notifications={notifications}
+                                        users={users}
+                                        currentUserId={currentUser.id}
+                                        onNotificationClick={handleNotificationClick}
+                                        onMarkAllRead={onMarkNotificationsRead}
+                                        onNotificationClose={() => setShowNotifications(false)}
+                                    />
+                                )}
+                            </div>
+                            <div className="relative cursor-pointer" onClick={() => setShowProfileMenu(!showProfileMenu)} ref={profileRef}>
+                                <img src={currentUser.profileImage} alt="Profile" className="w-10 h-10 rounded-full object-cover border border-[#3E4042]" />
+                                <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#3A3B3C] rounded-full flex items-center justify-center border border-[#242526]">
+                                    <i className="fas fa-chevron-down text-[8px] text-[#E4E6EB]"></i>
+                                </div>
+                                {showProfileMenu && (
+                                    <div className="absolute top-12 right-0 w-[300px] bg-[#242526] rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.5)] border border-[#3E4042] z-50 p-2">
+                                        <div 
+                                            className="flex items-center gap-3 p-2 hover:bg-[#3A3B3C] rounded-lg cursor-pointer shadow-[0_2px_4px_rgba(0,0,0,0.05)] mb-2" 
+                                            onClick={() => onProfileClick(currentUser.id)}
+                                        >
+                                            <img src={currentUser.profileImage} alt="" className="w-10 h-10 rounded-full object-cover" />
+                                            <span className="font-semibold text-[17px] text-[#E4E6EB]">{currentUser.name}</span>
+                                        </div>
+                                        <div className="border-b border-[#3E4042] my-1"></div>
+                                        <div className="flex items-center gap-3 p-2 hover:bg-[#3A3B3C] rounded-lg cursor-pointer" onClick={onLogout}>
+                                            <div className="w-9 h-9 bg-[#3A3B3C] rounded-full flex items-center justify-center">
+                                                <i className="fas fa-sign-out-alt text-[#E4E6EB]"></i>
+                                            </div>
+                                            <span className="font-medium text-[15px] text-[#E4E6EB]">{t('logout')}</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
             
