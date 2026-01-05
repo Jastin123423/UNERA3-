@@ -280,7 +280,8 @@ const PeopleYouMayKnow: React.FC<{
     suggestedUsers: SuggestedUser[];
     onViewProfile: (userId: number) => void;
     onRemove: (userId: number) => void;
-}> = ({ suggestedUsers, onViewProfile, onRemove }) => {
+    key?: string;
+}> = ({ suggestedUsers, onViewProfile, onRemove, key }) => {
     const { t } = useLanguage();
     
     if (suggestedUsers.length === 0) return null;
@@ -308,7 +309,7 @@ const PeopleYouMayKnow: React.FC<{
                 <div className="flex space-x-4 overflow-x-auto pb-4 scrollbar-hide">
                     {suggestedUsers.slice(0, 6).map((user) => (
                         <div 
-                            key={user.id} 
+                            key={`${key}-${user.id}`} 
                             className="flex-shrink-0 w-44 bg-[#3A3B3C] rounded-xl overflow-hidden border border-[#4E4F50] hover:border-[#1877F2]/50 transition-all duration-300 hover:shadow-lg group"
                         >
                             {/* User Card */}
@@ -478,6 +479,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         ).slice(0, 8); // Limit to 8 suggestions
     });
     
+    // State to track which rotation set we're on
+    const [suggestionRotation, setSuggestionRotation] = useState<number>(0);
+    
     const [currentUser, setCurrentUser] = useState<User | null>(initialData?.currentUser || null);
     const [showRegister, setShowRegister] = useState(false);
     const [showForgotPassword, setShowForgotPassword] = useState(false);
@@ -565,7 +569,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     }, [stories, users]);
 
     // Function to get intelligent suggestions based on current user
-    const getIntelligentSuggestions = useCallback((currentUser: User | null, allUsers: User[]): SuggestedUser[] => {
+    const getIntelligentSuggestions = useCallback((currentUser: User | null, allUsers: User[], rotationIndex: number = 0): SuggestedUser[] => {
         if (!currentUser) return [];
         
         // Filter out current user and already viewed/removed users
@@ -581,7 +585,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         );
         
         // Sort by mutual connections, then by profile completeness
-        return availableUsers.map(user => {
+        const allSuggestions = availableUsers.map(user => {
             // Calculate mutual friends (users who follow both current user and this user)
             const mutualCount = allUsers.filter(u => 
                 u.following.includes(currentUser.id) && 
@@ -611,7 +615,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 work: user.work || '',
                 viewed: false,
                 _completeness: completenessScore,
-                _mutual: mutualCount
+                _mutual: mutualCount,
+                _random: Math.random() // For random rotation
             };
         })
         .filter(user => user.profileImage && (user.work || user.location || user.mutualFriends > 0))
@@ -621,17 +626,24 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             // Then by profile completeness
             return b._completeness - a._completeness;
         })
-        .slice(0, 8) // Limit to 8 best suggestions
-        .map(({ _completeness, _mutual, ...user }) => user); // Remove internal properties
+        .map(({ _completeness, _mutual, _random, ...user }) => user); // Remove internal properties
+        
+        // Apply rotation to show different users each time
+        const rotationSize = 8; // Number of suggestions per rotation
+        const totalRotations = Math.ceil(allSuggestions.length / rotationSize);
+        const currentRotation = rotationIndex % totalRotations;
+        const startIndex = currentRotation * rotationSize;
+        
+        return allSuggestions.slice(startIndex, startIndex + rotationSize);
     }, []);
 
     // Update suggestions when users or currentUser changes
     useEffect(() => {
         if (currentUser && users.length > 0) {
-            const intelligentSuggestions = getIntelligentSuggestions(currentUser, users);
+            const intelligentSuggestions = getIntelligentSuggestions(currentUser, users, suggestionRotation);
             setSuggestedUsers(intelligentSuggestions);
         }
-    }, [currentUser, users, getIntelligentSuggestions]);
+    }, [currentUser, users, getIntelligentSuggestions, suggestionRotation]);
 
     // Enhanced ranked posts with brand boost using the unified rankFeed function
     const rankedPosts = useMemo(() => {
@@ -773,6 +785,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             const removedSuggestions = JSON.parse(localStorage.getItem('universeRemovedSuggestions') || '[]');
             localStorage.setItem('universeRemovedSuggestions', JSON.stringify([...removedSuggestions, userId]));
         }
+        
+        // Rotate to next set of suggestions
+        setSuggestionRotation(prev => prev + 1);
     };
 
     // Load People You May Know data from localStorage
@@ -2936,6 +2951,68 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         );
     };
     
+    // Function to render feed with People You May Know at intervals
+    const renderFeedWithSuggestions = () => {
+        const intervals = [5, 20, 45]; // Show after 5th, 20th, and 45th posts
+        let postCount = 0;
+        let suggestionIndex = 0;
+        const renderedItems = [];
+        
+        for (const post of rankedPosts) {
+            renderedItems.push(renderPostItem(post));
+            postCount++;
+            
+            // Check if we should show People You May Know after this post
+            if (intervals.includes(postCount) && suggestedUsers.length > 0) {
+                // Get a rotated set of suggestions for this interval
+                const rotationKey = `rotation-${suggestionRotation}-interval-${suggestionIndex}`;
+                const rotatedSuggestions = getIntelligentSuggestions(currentUser, users, suggestionRotation + suggestionIndex);
+                
+                if (rotatedSuggestions.length > 0) {
+                    renderedItems.push(
+                        <PeopleYouMayKnow 
+                            key={rotationKey}
+                            suggestedUsers={rotatedSuggestions}
+                            onViewProfile={(userId) => {
+                                handleViewProfile(userId);
+                                // Advance to next rotation when someone views a profile
+                                setSuggestionRotation(prev => prev + 1);
+                            }}
+                            onRemove={(userId) => {
+                                handleRemoveSuggestedUser(userId);
+                                // Advance to next rotation when someone is removed
+                                setSuggestionRotation(prev => prev + 1);
+                            }}
+                        />
+                    );
+                }
+                suggestionIndex++;
+            }
+        }
+        
+        return renderedItems;
+    };
+    
+    // Helper function to render individual post
+    const renderPostItem = (post: PostType) => {
+        const author = getAuthorForPost(post, users, brands);
+        if (!author) return null;
+        
+        let isFollowing = false;
+        if (author.type === 'user' && currentUser) {
+            isFollowing = currentUser.following.includes(author.id);
+        } else if (author.type === 'brand' && currentUser) {
+            const brand = brands.find(b => b.id === author.id);
+            isFollowing = brand ? brand.followers.includes(currentUser.id) : false;
+        }
+        
+        if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
+            return renderMusicPost(post, author);
+        }
+        
+        return renderRegularPost(post, author, isFollowing);
+    };
+    
     return (
         <div className="bg-[#18191A] min-h-screen flex flex-col font-sans">
             {isLoading ? (
@@ -3012,11 +3089,15 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 onCreateEventClick={() => setShowCreateEventModal(true)} 
                                             /> 
                                             
-                                            {/* People You May Know Section - Professional Version */}
+                                            {/* Initial People You May Know Section */}
                                             {suggestedUsers.length > 0 && (
                                                 <PeopleYouMayKnow 
                                                     suggestedUsers={suggestedUsers}
-                                                    onViewProfile={handleViewProfile}
+                                                    onViewProfile={(userId) => {
+                                                        handleViewProfile(userId);
+                                                        // Advance rotation when someone views a profile
+                                                        setSuggestionRotation(prev => prev + 1);
+                                                    }}
                                                     onRemove={handleRemoveSuggestedUser}
                                                 />
                                             )}
@@ -3029,24 +3110,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                             /> 
                                         </>
                                     )}
-                                    {rankedPosts.map(post => {
-                                        const author = getAuthorForPost(post, users, brands);
-                                        if (!author) return null;
-                                        
-                                        let isFollowing = false;
-                                        if (author.type === 'user' && currentUser) {
-                                            isFollowing = currentUser.following.includes(author.id);
-                                        } else if (author.type === 'brand' && currentUser) {
-                                            const brand = brands.find(b => b.id === author.id);
-                                            isFollowing = brand ? brand.followers.includes(currentUser.id) : false;
-                                        }
-                                        
-                                        if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
-                                            return renderMusicPost(post, author);
-                                        }
-                                        
-                                        return renderRegularPost(post, author, isFollowing);
-                                    })}
+                                    
+                                    {/* Feed with People You May Know at intervals */}
+                                    {renderFeedWithSuggestions()}
                                 </div>
                             )}
                             
