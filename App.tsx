@@ -275,86 +275,101 @@ interface SuggestedUser {
     viewed: boolean;
 }
 
-// People You May Know Component
+// People You May Know Component - Professional Version
 const PeopleYouMayKnow: React.FC<{
     suggestedUsers: SuggestedUser[];
     onViewProfile: (userId: number) => void;
-    onFollow: (userId: number) => void;
     onRemove: (userId: number) => void;
-}> = ({ suggestedUsers, onViewProfile, onFollow, onRemove }) => {
+}> = ({ suggestedUsers, onViewProfile, onRemove }) => {
     const { t } = useLanguage();
     
     if (suggestedUsers.length === 0) return null;
     
     return (
-        <div className="bg-[#242526] rounded-lg p-4 mb-6 border border-[#3E4042] shadow-lg">
+        <div className="bg-[#242526] rounded-xl p-4 mb-6 border border-[#3E4042] shadow-lg">
             <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold text-white">People You May Know</h2>
-                <button className="text-[#1877F2] text-sm font-medium hover:bg-[#3A3B3C] px-3 py-1 rounded-md transition-colors">
-                    See All
-                </button>
+                <div className="flex items-center">
+                    <div className="w-8 h-8 bg-gradient-to-r from-[#1877F2] to-[#00B0FF] rounded-full flex items-center justify-center mr-3 shadow-md">
+                        <i className="fas fa-user-plus text-white text-sm"></i>
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-bold text-white">People You May Know</h2>
+                        <p className="text-[#B0B3B8] text-xs mt-0.5">Based on your profile and connections</p>
+                    </div>
+                </div>
+                {suggestedUsers.length > 5 && (
+                    <button className="text-[#1877F2] text-sm font-medium hover:bg-[#3A3B3C] px-3 py-1.5 rounded-lg transition-colors">
+                        See All
+                    </button>
+                )}
             </div>
             
             <div className="relative">
                 <div className="flex space-x-4 overflow-x-auto pb-4 scrollbar-hide">
-                    {suggestedUsers.map((user) => (
+                    {suggestedUsers.slice(0, 6).map((user) => (
                         <div 
                             key={user.id} 
-                            className="flex-shrink-0 w-56 bg-[#3A3B3C] rounded-lg overflow-hidden border border-[#4E4F50] hover:border-[#1877F2] transition-all duration-300 hover:shadow-xl hover:shadow-[#1877F2]/10"
+                            className="flex-shrink-0 w-44 bg-[#3A3B3C] rounded-xl overflow-hidden border border-[#4E4F50] hover:border-[#1877F2]/50 transition-all duration-300 hover:shadow-lg group"
                         >
-                            {/* User Image */}
-                            <div className="relative h-48">
-                                <img 
-                                    src={user.profileImage} 
-                                    alt={user.name}
-                                    className="w-full h-full object-cover"
-                                />
-                                <button 
-                                    onClick={() => onRemove(user.id)}
-                                    className="absolute top-2 right-2 w-8 h-8 bg-[#242526] rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-[#3A3B3C] transition-colors"
-                                    title="Remove suggestion"
-                                >
-                                    ×
-                                </button>
-                            </div>
-                            
-                            {/* User Info */}
+                            {/* User Card */}
                             <div className="p-3">
-                                <h3 className="font-semibold text-white text-base truncate">{user.name}</h3>
-                                
-                                {user.mutualFriends > 0 && (
-                                    <p className="text-[#B0B3B8] text-sm mt-1">
-                                        {user.mutualFriends} mutual friend{user.mutualFriends !== 1 ? 's' : ''}
-                                    </p>
-                                )}
-                                
-                                {user.location && (
-                                    <div className="flex items-center text-[#B0B3B8] text-sm mt-2">
-                                        <span className="mr-2">📍</span>
-                                        <span className="truncate">{user.location}</span>
+                                {/* Profile Image */}
+                                <div className="flex justify-center mb-3 relative">
+                                    <div className="relative">
+                                        <img 
+                                            src={user.profileImage} 
+                                            alt={user.name}
+                                            className="w-16 h-16 rounded-full object-cover border-2 border-[#4E4F50] group-hover:border-[#1877F2] transition-colors"
+                                        />
+                                        {user.mutualFriends > 0 && (
+                                            <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-[#1877F2] rounded-full flex items-center justify-center shadow-md">
+                                                <span className="text-white text-xs font-bold">
+                                                    {user.mutualFriends > 9 ? '9+' : user.mutualFriends}
+                                                </span>
+                                            </div>
+                                        )}
+                                        <button 
+                                            onClick={() => onRemove(user.id)}
+                                            className="absolute -top-1 -right-1 w-6 h-6 bg-[#242526] rounded-full flex items-center justify-center text-[#B0B3B8] hover:text-white hover:bg-[#3A3B3C] transition-colors shadow-md border border-[#3E4042]"
+                                            title="Remove suggestion"
+                                        >
+                                            ×
+                                        </button>
                                     </div>
-                                )}
+                                </div>
                                 
-                                {user.work && (
-                                    <div className="flex items-center text-[#B0B3B8] text-sm mt-1">
-                                        <span className="mr-2">💼</span>
-                                        <span className="truncate">{user.work}</span>
+                                {/* User Info */}
+                                <div className="text-center">
+                                    <h3 className="font-semibold text-white text-sm truncate mb-1">{user.name}</h3>
+                                    
+                                    {user.mutualFriends > 0 && (
+                                        <p className="text-[#B0B3B8] text-xs mb-2">
+                                            {user.mutualFriends} mutual connection{user.mutualFriends !== 1 ? 's' : ''}
+                                        </p>
+                                    )}
+                                    
+                                    {/* Compact Details */}
+                                    <div className="space-y-1 mb-3">
+                                        {user.work && (
+                                            <div className="flex items-center justify-center text-[#B0B3B8] text-xs">
+                                                <i className="fas fa-briefcase mr-1 text-[10px]"></i>
+                                                <span className="truncate">{user.work}</span>
+                                            </div>
+                                        )}
+                                        {user.location && (
+                                            <div className="flex items-center justify-center text-[#B0B3B8] text-xs">
+                                                <i className="fas fa-map-marker-alt mr-1 text-[10px]"></i>
+                                                <span className="truncate">{user.location}</span>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                                
-                                {/* Action Buttons */}
-                                <div className="flex space-x-2 mt-4">
+                                    
+                                    {/* View Profile Button - Professional Blue */}
                                     <button
                                         onClick={() => onViewProfile(user.id)}
-                                        className="flex-1 bg-[#1877F2] text-white font-semibold py-2 px-4 rounded-md hover:bg-[#166FE5] transition-colors text-sm"
+                                        className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white font-semibold py-2 rounded-lg transition-colors text-sm shadow-sm hover:shadow-md"
                                     >
                                         View Profile
-                                    </button>
-                                    <button
-                                        onClick={() => onFollow(user.id)}
-                                        className="flex-1 bg-[#3A3B3C] text-white font-semibold py-2 px-4 rounded-md hover:bg-[#4E4F50] transition-colors text-sm border border-[#4E4F50]"
-                                    >
-                                        Follow
                                     </button>
                                 </div>
                             </div>
@@ -362,20 +377,20 @@ const PeopleYouMayKnow: React.FC<{
                     ))}
                 </div>
                 
-                {/* Scroll indicators */}
-                <div className="flex justify-center space-x-2 mt-4">
-                    {suggestedUsers.slice(0, 5).map((_, index) => (
+                {/* Scroll Indicator */}
+                <div className="flex justify-center space-x-1 mt-3">
+                    {suggestedUsers.slice(0, 3).map((_, index) => (
                         <div 
                             key={index} 
-                            className={`w-2 h-2 rounded-full ${index === 0 ? 'bg-[#1877F2]' : 'bg-[#4E4F50]'}`}
+                            className={`w-1.5 h-1.5 rounded-full ${index === 0 ? 'bg-[#1877F2]' : 'bg-[#4E4F50]'}`}
                         />
                     ))}
                 </div>
             </div>
             
-            <div className="mt-4 pt-4 border-t border-[#3E4042]">
-                <p className="text-[#B0B3B8] text-sm">
-                    Suggestions are based on your profile, activity, and mutual connections.
+            <div className="mt-3 pt-3 border-t border-[#3E4042]">
+                <p className="text-[#B0B3B8] text-xs text-center">
+                    Suggestions update based on new connections and activity
                 </p>
             </div>
         </div>
@@ -440,105 +455,28 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     })));
     
-    // People You May Know state
-    const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([
-        {
-            id: 5,
-            name: "Alex Johnson",
-            username: "alexjohnson",
-            profileImage: "https://randomuser.me/api/portraits/men/32.jpg",
-            mutualFriends: 15,
-            bio: "Software Engineer at TechCorp",
-            location: "San Francisco, CA",
-            education: "Stanford University",
-            work: "TechCorp Inc.",
+    // People You May Know state - Using real UNERA users from INITIAL_USERS
+    const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>(() => {
+        // Get all users except the current user (initially, exclude first user as current user)
+        const availableUsers = INITIAL_USERS.slice(1).map(user => ({
+            id: user.id,
+            name: user.name,
+            username: user.username,
+            profileImage: user.profileImage,
+            mutualFriends: Math.floor(Math.random() * 20) + 1, // Random mutual friends 1-20
+            bio: user.bio || '',
+            location: user.location || '',
+            education: user.education || '',
+            work: user.work || '',
             viewed: false
-        },
-        {
-            id: 6,
-            name: "Sarah Miller",
-            username: "sarahm",
-            profileImage: "https://randomuser.me/api/portraits/women/44.jpg",
-            mutualFriends: 8,
-            bio: "Digital Marketer & Content Creator",
-            location: "New York, NY",
-            education: "NYU Stern",
-            work: "Creative Agency",
-            viewed: false
-        },
-        {
-            id: 7,
-            name: "Michael Chen",
-            username: "mchen",
-            profileImage: "https://randomuser.me/api/portraits/men/67.jpg",
-            mutualFriends: 12,
-            bio: "Product Designer | UI/UX Specialist",
-            location: "Austin, TX",
-            education: "RISD",
-            work: "DesignStudio",
-            viewed: false
-        },
-        {
-            id: 8,
-            name: "Jessica Williams",
-            username: "jessw",
-            profileImage: "https://randomuser.me/api/portraits/women/68.jpg",
-            mutualFriends: 6,
-            bio: "Medical Researcher | PhD in Biochemistry",
-            location: "Boston, MA",
-            education: "Harvard University",
-            work: "Biotech Labs",
-            viewed: false
-        },
-        {
-            id: 9,
-            name: "David Rodriguez",
-            username: "davidr",
-            profileImage: "https://randomuser.me/api/portraits/men/55.jpg",
-            mutualFriends: 20,
-            bio: "Entrepreneur & Startup Founder",
-            location: "Miami, FL",
-            education: "MIT Sloan",
-            work: "Startup Ventures",
-            viewed: false
-        },
-        {
-            id: 10,
-            name: "Emma Thompson",
-            username: "emmat",
-            profileImage: "https://randomuser.me/api/portraits/women/26.jpg",
-            mutualFriends: 10,
-            bio: "Architect & Urban Planner",
-            location: "Chicago, IL",
-            education: "Columbia University",
-            work: "Design Architects",
-            viewed: false
-        },
-        {
-            id: 11,
-            name: "Ryan Park",
-            username: "ryanp",
-            profileImage: "https://randomuser.me/api/portraits/men/45.jpg",
-            mutualFriends: 7,
-            bio: "Data Scientist | AI Researcher",
-            location: "Seattle, WA",
-            education: "Carnegie Mellon",
-            work: "AI Research Lab",
-            viewed: false
-        },
-        {
-            id: 12,
-            name: "Olivia Martinez",
-            username: "oliviam",
-            profileImage: "https://randomuser.me/api/portraits/women/33.jpg",
-            mutualFriends: 18,
-            bio: "Fashion Designer & Stylist",
-            location: "Los Angeles, CA",
-            education: "FIT New York",
-            work: "Fashion House",
-            viewed: false
-        }
-    ]);
+        }));
+        
+        // Filter to show only users with profile data
+        return availableUsers.filter(user => 
+            user.profileImage && 
+            (user.work || user.location || user.mutualFriends > 0)
+        ).slice(0, 8); // Limit to 8 suggestions
+    });
     
     const [currentUser, setCurrentUser] = useState<User | null>(initialData?.currentUser || null);
     const [showRegister, setShowRegister] = useState(false);
@@ -625,6 +563,75 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             return { ...story, user };
         }).sort((a,b) => b.createdAt - a.createdAt);
     }, [stories, users]);
+
+    // Function to get intelligent suggestions based on current user
+    const getIntelligentSuggestions = useCallback((currentUser: User | null, allUsers: User[]): SuggestedUser[] => {
+        if (!currentUser) return [];
+        
+        // Filter out current user and already viewed/removed users
+        const viewedIds = JSON.parse(localStorage.getItem('universeViewedProfiles') || '[]');
+        const removedIds = JSON.parse(localStorage.getItem('universeRemovedSuggestions') || '[]');
+        const alreadyFollowed = currentUser.following || [];
+        
+        const availableUsers = allUsers.filter(user => 
+            user.id !== currentUser.id &&
+            !viewedIds.includes(user.id) &&
+            !removedIds.includes(user.id) &&
+            !alreadyFollowed.includes(user.id)
+        );
+        
+        // Sort by mutual connections, then by profile completeness
+        return availableUsers.map(user => {
+            // Calculate mutual friends (users who follow both current user and this user)
+            const mutualCount = allUsers.filter(u => 
+                u.following.includes(currentUser.id) && 
+                u.following.includes(user.id)
+            ).length;
+            
+            // Calculate profile completeness score
+            let completenessScore = 0;
+            if (user.profileImage && user.profileImage !== '/default-avatar.png') completenessScore += 20;
+            if (user.coverImage) completenessScore += 10;
+            if (user.bio) completenessScore += 15;
+            if (user.work) completenessScore += 15;
+            if (user.education) completenessScore += 15;
+            if (user.location) completenessScore += 10;
+            if (user.website) completenessScore += 10;
+            if (user.isVerified) completenessScore += 5;
+            
+            return {
+                id: user.id,
+                name: user.name,
+                username: user.username,
+                profileImage: user.profileImage,
+                mutualFriends: mutualCount || Math.floor(Math.random() * 15) + 1, // Fallback random
+                bio: user.bio || '',
+                location: user.location || '',
+                education: user.education || '',
+                work: user.work || '',
+                viewed: false,
+                _completeness: completenessScore,
+                _mutual: mutualCount
+            };
+        })
+        .filter(user => user.profileImage && (user.work || user.location || user.mutualFriends > 0))
+        .sort((a, b) => {
+            // First sort by mutual friends
+            if (b._mutual !== a._mutual) return b._mutual - a._mutual;
+            // Then by profile completeness
+            return b._completeness - a._completeness;
+        })
+        .slice(0, 8) // Limit to 8 best suggestions
+        .map(({ _completeness, _mutual, ...user }) => user); // Remove internal properties
+    }, []);
+
+    // Update suggestions when users or currentUser changes
+    useEffect(() => {
+        if (currentUser && users.length > 0) {
+            const intelligentSuggestions = getIntelligentSuggestions(currentUser, users);
+            setSuggestedUsers(intelligentSuggestions);
+        }
+    }, [currentUser, users, getIntelligentSuggestions]);
 
     // Enhanced ranked posts with brand boost using the unified rankFeed function
     const rankedPosts = useMemo(() => {
@@ -745,34 +752,16 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         // Mark the user as viewed and remove from suggestions
         setSuggestedUsers(prev => prev.filter(user => user.id !== userId));
         
+        // Store in localStorage to prevent showing again
+        if (isClient) {
+            const viewedProfiles = JSON.parse(localStorage.getItem('universeViewedProfiles') || '[]');
+            localStorage.setItem('universeViewedProfiles', JSON.stringify([...viewedProfiles, userId]));
+        }
+        
         // Navigate to profile
         setSelectedUserId(userId);
         setView('profile');
         setActiveTab('profile');
-        
-        // Update localStorage
-        if (isClient) {
-            localStorage.setItem('universeViewedProfiles', JSON.stringify([
-                ...(JSON.parse(localStorage.getItem('universeViewedProfiles') || '[]')),
-                userId
-            ]));
-        }
-    };
-
-    const handleFollowSuggestedUser = (userId: number) => {
-        // Call existing follow function
-        handleFollowUser(userId);
-        
-        // Remove from suggestions after following
-        setSuggestedUsers(prev => prev.filter(user => user.id !== userId));
-        
-        // Optional: Add to recently followed in localStorage
-        if (isClient) {
-            localStorage.setItem('universeFollowedProfiles', JSON.stringify([
-                ...(JSON.parse(localStorage.getItem('universeFollowedProfiles') || '[]')),
-                userId
-            ]));
-        }
     };
 
     const handleRemoveSuggestedUser = (userId: number) => {
@@ -781,10 +770,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         
         // Store in localStorage to prevent showing again
         if (isClient) {
-            localStorage.setItem('universeRemovedSuggestions', JSON.stringify([
-                ...(JSON.parse(localStorage.getItem('universeRemovedSuggestions') || '[]')),
-                userId
-            ]));
+            const removedSuggestions = JSON.parse(localStorage.getItem('universeRemovedSuggestions') || '[]');
+            localStorage.setItem('universeRemovedSuggestions', JSON.stringify([...removedSuggestions, userId]));
         }
     };
 
@@ -804,7 +791,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             
             // Load People You May Know filters
             const viewedProfiles = JSON.parse(localStorage.getItem('universeViewedProfiles') || '[]');
-            const followedProfiles = JSON.parse(localStorage.getItem('universeFollowedProfiles') || '[]');
             const removedSuggestions = JSON.parse(localStorage.getItem('universeRemovedSuggestions') || '[]');
             
             if (storedUsers) setUsers(JSON.parse(storedUsers));
@@ -824,10 +810,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             }
             if (storedGroups) setGroups(JSON.parse(storedGroups));
             if (storedNotifications) setNotifications(JSON.parse(storedNotifications));
-            
-            // Filter out already viewed/followed/removed suggestions
-            const allRemovedIds = [...viewedProfiles, ...followedProfiles, ...removedSuggestions];
-            setSuggestedUsers(prev => prev.filter(user => !allRemovedIds.includes(user.id)));
             
             if (storedUser) {
                 const user = JSON.parse(storedUser);
@@ -3030,12 +3012,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 onCreateEventClick={() => setShowCreateEventModal(true)} 
                                             /> 
                                             
-                                            {/* People You May Know Section - Added Here */}
+                                            {/* People You May Know Section - Professional Version */}
                                             {suggestedUsers.length > 0 && (
                                                 <PeopleYouMayKnow 
                                                     suggestedUsers={suggestedUsers}
                                                     onViewProfile={handleViewProfile}
-                                                    onFollow={handleFollowSuggestedUser}
                                                     onRemove={handleRemoveSuggestedUser}
                                                 />
                                             )}
