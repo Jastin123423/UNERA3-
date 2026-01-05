@@ -67,7 +67,6 @@ const formatRelativeTime = (timestamp: number): string => {
     const now = Date.now();
     const diff = now - timestamp;
     
-    // If timestamp is in the future or invalid, return fallback
     if (diff < 0 || !timestamp) return 'Just now';
     
     const diffInSeconds = Math.floor(diff / 1000);
@@ -99,7 +98,6 @@ const formatRelativeTime = (timestamp: number): string => {
 const getSongForPost = (post: PostType, songs: Song[], episodes: Episode[]) => {
     if (!post.audioTrack) return null;
     
-    // Check songs array first
     const song = songs.find(s => s.id === post.audioTrack?.id);
     if (song) {
         return {
@@ -120,7 +118,6 @@ const getSongForPost = (post: PostType, songs: Song[], episodes: Episode[]) => {
         };
     }
     
-    // Check episodes array
     const episode = episodes.find(e => e.id === post.audioTrack?.id);
     if (episode) {
         return {
@@ -148,7 +145,6 @@ const getSongForPost = (post: PostType, songs: Song[], episodes: Episode[]) => {
         };
     }
     
-    // Create song object from audioTrack if not found in arrays
     return {
         id: post.audioTrack.id,
         title: post.audioTrack.title,
@@ -175,7 +171,6 @@ const getSongForPost = (post: PostType, songs: Song[], episodes: Episode[]) => {
 
 // Helper function to get author (user or brand) for a post
 const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
-    // First check if it's a brand post
     if (post.brandId) {
         const brand = brands.find(b => b.id === post.brandId);
         if (brand) {
@@ -191,7 +186,6 @@ const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
         }
     }
     
-    // Check if authorId matches a brand
     const brandByAuthorId = brands.find(b => b.id === post.authorId);
     if (brandByAuthorId) {
         return {
@@ -205,7 +199,6 @@ const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
         };
     }
     
-    // Otherwise it's a user post
     const user = users.find(u => u.id === post.authorId);
     if (user) {
         return {
@@ -219,7 +212,7 @@ const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
 
 // Notification utility functions
 const notificationExists = (notifications: Notification[], userId: number, senderId: number, type: string, postId?: number): boolean => {
-    const recentTime = Date.now() - 300000; // 5 minutes
+    const recentTime = Date.now() - 300000;
     return notifications.some(notif => 
         notif.userId === userId &&
         notif.senderId === senderId &&
@@ -312,9 +305,7 @@ const PeopleYouMayKnow: React.FC<{
                             key={`${key}-${user.id}`} 
                             className="flex-shrink-0 w-44 bg-[#3A3B3C] rounded-xl overflow-hidden border border-[#4E4F50] hover:border-[#1877F2]/50 transition-all duration-300 hover:shadow-lg group"
                         >
-                            {/* User Card */}
                             <div className="p-3">
-                                {/* Profile Image */}
                                 <div className="flex justify-center mb-3 relative">
                                     <div className="relative">
                                         <img 
@@ -339,7 +330,6 @@ const PeopleYouMayKnow: React.FC<{
                                     </div>
                                 </div>
                                 
-                                {/* User Info */}
                                 <div className="text-center">
                                     <h3 className="font-semibold text-white text-sm truncate mb-1">{user.name}</h3>
                                     
@@ -349,7 +339,6 @@ const PeopleYouMayKnow: React.FC<{
                                         </p>
                                     )}
                                     
-                                    {/* Compact Details */}
                                     <div className="space-y-1 mb-3">
                                         {user.work && (
                                             <div className="flex items-center justify-center text-[#B0B3B8] text-xs">
@@ -365,7 +354,6 @@ const PeopleYouMayKnow: React.FC<{
                                         )}
                                     </div>
                                     
-                                    {/* View Profile Button - Professional Blue */}
                                     <button
                                         onClick={() => onViewProfile(user.id)}
                                         className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white font-semibold py-2 rounded-lg transition-colors text-sm shadow-sm hover:shadow-md"
@@ -378,7 +366,6 @@ const PeopleYouMayKnow: React.FC<{
                     ))}
                 </div>
                 
-                {/* Scroll Indicator */}
                 <div className="flex justify-center space-x-1 mt-3">
                     {suggestedUsers.slice(0, 3).map((_, index) => (
                         <div 
@@ -398,7 +385,7 @@ const PeopleYouMayKnow: React.FC<{
     );
 };
 
-// Groups You May Like Component - Professional Version
+// Groups You May Like Component - Professional Version with "View Group" button
 const GroupsYouMayLike: React.FC<{
     suggestedGroups: Group[];
     currentUser: User | null;
@@ -406,7 +393,7 @@ const GroupsYouMayLike: React.FC<{
     onJoinGroup: (groupId: string) => void;
     onRemove: (groupId: string) => void;
     key?: string;
-}> = ({ suggestedGroups, currentUser, onViewGroup, onJoinGroup, onRemove, key }) => {
+}> = ({ suggestedGroups, currentUser, onViewGroup, onRemove, key }) => {
     const { t } = useLanguage();
     
     if (suggestedGroups.length === 0) return null;
@@ -437,7 +424,6 @@ const GroupsYouMayLike: React.FC<{
                             key={`${key}-${group.id}`} 
                             className="flex-shrink-0 w-64 bg-[#3A3B3C] rounded-xl overflow-hidden border border-[#4E4F50] hover:border-[#45BD62]/50 transition-all duration-300 hover:shadow-lg group"
                         >
-                            {/* Group Card */}
                             <div className="h-32 relative">
                                 <img 
                                     src={group.coverImage} 
@@ -457,7 +443,6 @@ const GroupsYouMayLike: React.FC<{
                             </div>
                             
                             <div className="p-3">
-                                {/* Group Profile Image and Info */}
                                 <div className="flex items-start gap-3 mb-3 -mt-8 relative">
                                     <img 
                                         src={group.image} 
@@ -482,25 +467,18 @@ const GroupsYouMayLike: React.FC<{
                                     </div>
                                 </div>
                                 
-                                {/* Join Button - Professional Green */}
+                                {/* Changed from "Join Group" to "View Group" */}
                                 <button
-                                    onClick={() => {
-                                        if (currentUser) {
-                                            onJoinGroup(group.id);
-                                        } else {
-                                            alert("Please login to join groups");
-                                        }
-                                    }}
-                                    className="w-full bg-[#45BD62] hover:bg-[#3CA853] text-white font-semibold py-2 rounded-lg transition-colors text-sm shadow-sm hover:shadow-md"
+                                    onClick={() => onViewGroup(group.id)}
+                                    className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white font-semibold py-2 rounded-lg transition-colors text-sm shadow-sm hover:shadow-md"
                                 >
-                                    {currentUser && group.members.includes(currentUser.id) ? 'Joined' : 'Join Group'}
+                                    View Group
                                 </button>
                             </div>
                         </div>
                     ))}
                 </div>
                 
-                {/* Scroll Indicator */}
                 <div className="flex justify-center space-x-1 mt-3">
                     {suggestedGroups.slice(0, 3).map((_, index) => (
                         <div 
@@ -520,6 +498,95 @@ const GroupsYouMayLike: React.FC<{
     );
 };
 
+// Brand Recommendations Component - Professional Version with "View Brand" button
+const BrandRecommendations: React.FC<{
+    brands: Brand[];
+    currentUser: User | null;
+    onViewBrand: (brandId: number) => void;
+    onRemove: (brandId: number) => void;
+    key?: string;
+}> = ({ brands, currentUser, onViewBrand, onRemove, key }) => {
+    if (brands.length === 0) return null;
+    
+    const recommendedBrands = brands.slice(0, 4); // Show top 4 brands
+    
+    return (
+        <div className="bg-[#242526] rounded-xl p-4 mb-6 border border-[#3E4042] shadow-lg">
+            <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center">
+                    <div className="w-8 h-8 bg-gradient-to-r from-[#F7B928] to-[#FF6B6B] rounded-full flex items-center justify-center mr-3 shadow-md">
+                        <i className="fas fa-briefcase text-white text-sm"></i>
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-bold text-white">Recommended Pages</h2>
+                        <p className="text-[#B0B3B8] text-xs mt-0.5">Brands and pages you might like</p>
+                    </div>
+                </div>
+                <button className="text-[#F7B928] text-sm font-medium hover:bg-[#3A3B3C] px-3 py-1.5 rounded-lg transition-colors">
+                    See All
+                </button>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {recommendedBrands.map((brand) => (
+                    <div 
+                        key={`${key}-${brand.id}`}
+                        className="bg-[#3A3B3C] rounded-xl overflow-hidden border border-[#4E4F50] hover:border-[#F7B928]/50 transition-all duration-300 hover:shadow-lg group"
+                    >
+                        <div className="p-3">
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="relative">
+                                    <img 
+                                        src={brand.profileImage} 
+                                        alt={brand.name}
+                                        className="w-12 h-12 rounded-full object-cover border-2 border-[#4E4F50] group-hover:border-[#F7B928] transition-colors"
+                                    />
+                                    {brand.isVerified && (
+                                        <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#1877F2] rounded-full flex items-center justify-center shadow-md">
+                                            <i className="fas fa-check text-white text-[10px]"></i>
+                                        </div>
+                                    )}
+                                    <button 
+                                        onClick={() => onRemove(brand.id)}
+                                        className="absolute -top-1 -left-1 w-5 h-5 bg-[#242526] rounded-full flex items-center justify-center text-[#B0B3B8] hover:text-white hover:bg-[#3A3B3C] transition-colors shadow-md border border-[#3E4042]"
+                                        title="Remove suggestion"
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="font-bold text-white text-sm truncate">{brand.name}</h3>
+                                    <p className="text-[#B0B3B8] text-xs truncate">{brand.category}</p>
+                                    <p className="text-[#B0B3B8] text-xs">
+                                        {brand.followers?.length || 0} followers • {brand.location}
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <p className="text-[#B0B3B8] text-sm line-clamp-2 mb-3 text-xs">
+                                {brand.description || 'No description available'}
+                            </p>
+                            
+                            <button
+                                onClick={() => onViewBrand(brand.id)}
+                                className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white font-semibold py-2 rounded-lg transition-colors text-sm shadow-sm hover:shadow-md"
+                            >
+                                View Brand
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+            
+            <div className="mt-3 pt-3 border-t border-[#3E4042]">
+                <p className="text-[#B0B3B8] text-xs text-center">
+                    Discover brands and creators relevant to your interests
+                </p>
+            </div>
+        </div>
+    );
+};
+
 // ========== MAIN APP COMPONENT ==========
 export default function App({ initialData, initialPath }: { initialData?: any, initialPath?: string }) {
     const { t } = useLanguage();
@@ -531,7 +598,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const [users, setUsers] = useState<User[]>(initialData?.users || INITIAL_USERS);
     const [posts, setPosts] = useState<PostType[]>(() => {
-        // Ensure all posts have formattedTime on initial load
         const initialPosts = initialData?.posts || INITIAL_POSTS;
         return initialPosts.map(post => ({
             ...post,
@@ -545,7 +611,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const [groups, setGroups] = useState<Group[]>(INITIAL_GROUPS);
     const [brands, setBrands] = useState<Brand[]>(INITIAL_BRANDS);
     
-    // Initialize songs and episodes with proper stats
     const [songs, setSongs] = useState<Song[]>(MOCK_SONGS.map(song => ({
         ...song,
         plays: song.plays || 0,
@@ -611,6 +676,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     // State to track which rotation set we're on
     const [suggestionRotation, setSuggestionRotation] = useState<number>(0);
     const [groupRotation, setGroupRotation] = useState<number>(0);
+    const [brandRotation, setBrandRotation] = useState<number>(0);
     
     const [currentUser, setCurrentUser] = useState<User | null>(initialData?.currentUser || null);
     const [showRegister, setShowRegister] = useState(false);
@@ -621,7 +687,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const clientPath = isClient ? getPath() : serverPath;
     const path = clientPath;
     
-    // Update parsedPath to include users dependency
     const parsedPath = useMemo(() => parsePath(path, users), [path, users]);
     
     const [activeTab, setActiveTab] = useState(parsedPath.view === 'home' ? 'home' : parsedPath.view);
@@ -632,11 +697,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const [initialGroupIdToView, setInitialGroupIdToView] = useState<string | null>(null);
     const [activeTag, setActiveTag] = useState<string | null>(null);
     
-    // Group-specific states
     const [activeGroupComments, setActiveGroupComments] = useState<{groupId: string, postId: number} | null>(null);
     const [activeGroupShare, setActiveGroupShare] = useState<{groupId: string, postId: number} | null>(null);
     
-    // Reel modal state
     const [showCreateReelModal, setShowCreateReelModal] = useState(false);
     
     const [currentAudioTrack, setCurrentAudioTrack] = useState<AudioTrack | null>(null);
@@ -653,7 +716,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const [activeSharePostId, setActiveSharePostId] = useState<number | null>(null);
     const [activeChatUser, setActiveChatUser] = useState<User | null>(null);
     const [notifications, setNotifications] = useState<Notification[]>([
-        // Initial notifications for testing
         {
             id: 1,
             userId: 1,
@@ -698,11 +760,64 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }).sort((a,b) => b.createdAt - a.createdAt);
     }, [stories, users]);
 
+    // Function to get intelligent brand recommendations
+    const getIntelligentBrandRecommendations = useCallback((currentUser: User | null, allBrands: Brand[], rotationIndex: number = 0): Brand[] => {
+        if (!currentUser) return [];
+        
+        // Filter out brands the user already follows
+        const removedBrandIds = JSON.parse(localStorage.getItem('universeRemovedBrandRecommendations') || '[]');
+        const alreadyFollowed = currentUser.following || [];
+        
+        const availableBrands = allBrands.filter(brand => 
+            !brand.followers.includes(currentUser.id) &&
+            !removedBrandIds.includes(brand.id) &&
+            !alreadyFollowed.includes(brand.id)
+        );
+        
+        // Score brands based on various factors
+        const scoredBrands = availableBrands.map(brand => {
+            let score = 0;
+            
+            // 1. Popularity score (more followers = higher score)
+            score += Math.min(brand.followers.length * 0.5, 30);
+            
+            // 2. Verification status (verified brands get boost)
+            if (brand.isVerified) score += 20;
+            
+            // 3. Completion score (has all info)
+            if (brand.profileImage && brand.profileImage !== '/default-avatar.png') score += 10;
+            if (brand.coverImage) score += 10;
+            if (brand.description && brand.description.length > 20) score += 15;
+            if (brand.website) score += 10;
+            if (brand.contactEmail || brand.contactPhone) score += 10;
+            
+            // 4. Category matching (if we had user interests, we'd match here)
+            
+            // 5. Random factor for variety
+            score += Math.random() * 15;
+            
+            return {
+                ...brand,
+                _score: score
+            };
+        })
+        .filter(brand => brand.profileImage && brand.description)
+        .sort((a, b) => b._score - a._score)
+        .map(({ _score, ...brand }) => brand);
+        
+        // Apply rotation
+        const rotationSize = 4;
+        const totalRotations = Math.ceil(scoredBrands.length / rotationSize);
+        const currentRotation = rotationIndex % totalRotations;
+        const startIndex = currentRotation * rotationSize;
+        
+        return scoredBrands.slice(startIndex, startIndex + rotationSize);
+    }, []);
+
     // Function to get intelligent suggestions based on current user
     const getIntelligentSuggestions = useCallback((currentUser: User | null, allUsers: User[], rotationIndex: number = 0): SuggestedUser[] => {
         if (!currentUser) return [];
         
-        // Filter out current user and already viewed/removed users
         const viewedIds = JSON.parse(localStorage.getItem('universeViewedProfiles') || '[]');
         const removedIds = JSON.parse(localStorage.getItem('universeRemovedSuggestions') || '[]');
         const alreadyFollowed = currentUser.following || [];
@@ -714,15 +829,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             !alreadyFollowed.includes(user.id)
         );
         
-        // Sort by mutual connections, then by profile completeness
         const allSuggestions = availableUsers.map(user => {
-            // Calculate mutual friends (users who follow both current user and this user)
             const mutualCount = allUsers.filter(u => 
                 u.following.includes(currentUser.id) && 
                 u.following.includes(user.id)
             ).length;
             
-            // Calculate profile completeness score
             let completenessScore = 0;
             if (user.profileImage && user.profileImage !== '/default-avatar.png') completenessScore += 20;
             if (user.coverImage) completenessScore += 10;
@@ -756,7 +868,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         })
         .map(({ _completeness, _mutual, _random, ...user }) => user);
         
-        // Apply rotation to show different users each time
         const rotationSize = 8;
         const totalRotations = Math.ceil(allSuggestions.length / rotationSize);
         const currentRotation = rotationIndex % totalRotations;
@@ -765,11 +876,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         return allSuggestions.slice(startIndex, startIndex + rotationSize);
     }, []);
 
-    // Function to get intelligent group suggestions based on current user
     const getIntelligentGroupSuggestions = useCallback((currentUser: User | null, allGroups: Group[], rotationIndex: number = 0): Group[] => {
         if (!currentUser) return [];
         
-        // Filter out groups the user is already a member of or has removed
         const removedGroupIds = JSON.parse(localStorage.getItem('universeRemovedGroupSuggestions') || '[]');
         const alreadyMember = allGroups.filter(g => g.members.includes(currentUser.id)).map(g => g.id);
         
@@ -779,31 +888,23 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             !alreadyMember.includes(group.id)
         );
         
-        // Score groups based on various factors
         const scoredGroups = availableGroups.map(group => {
             let score = 0;
             
-            // 1. Popularity score (more members = higher score)
             score += Math.min(group.members.length * 0.5, 25);
-            
-            // 2. Activity score (more posts = higher score)
             score += Math.min((group.posts?.length || 0) * 0.3, 20);
             
-            // 3. Completion score (has image, description, etc.)
             if (group.image && group.image !== '/default-group.png') score += 15;
             if (group.coverImage) score += 10;
             if (group.description && group.description.length > 20) score += 15;
             
-            // 4. Friends in group score
             const friendsInGroup = group.members.filter(memberId => 
                 currentUser.following.includes(memberId)
             ).length;
             score += friendsInGroup * 10;
             
-            // 5. Type preference (public groups get a small boost)
             if (group.type === 'public') score += 5;
             
-            // 6. Random factor for variety
             score += Math.random() * 10;
             
             return {
@@ -814,14 +915,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         })
         .filter(group => group.image && group.description)
         .sort((a, b) => {
-            // Primary sort by score
             if (b._score !== a._score) return b._score - a._score;
-            // Secondary sort by friends in group
             return b._friendsInGroup - a._friendsInGroup;
         })
         .map(({ _score, _friendsInGroup, ...group }) => group);
         
-        // Apply rotation
         const rotationSize = 6;
         const totalRotations = Math.ceil(scoredGroups.length / rotationSize);
         const currentRotation = rotationIndex % totalRotations;
@@ -846,9 +944,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     }, [currentUser, groups, getIntelligentGroupSuggestions, groupRotation]);
 
-    // Enhanced ranked posts with brand boost using the unified rankFeed function
+    // Enhanced ranked posts with brand boost
     const rankedPosts = useMemo(() => {
-        // Ensure all posts have formattedTime
         const processedPosts = posts.map(post => ({
             ...post,
             formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
@@ -886,14 +983,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             visibility: 'Public' 
         }));
         
-        // Combine all posts including brand posts
         const allContent = [...processedPosts, ...productPosts, ...reelPosts];
         
-        // Use the unified rankFeed function that now accepts brands
         return rankFeed(allContent, currentUser, users, brands);
     }, [posts, reels, products, currentUser, users, brands]);
 
-    // ========== FIXED NOTIFICATION MANAGEMENT FUNCTIONS ==========
     const handleCreateNotification = useCallback((
         userId: number,
         senderId: number,
@@ -901,7 +995,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         content: string,
         extraData?: any
     ) => {
-        // CRITICAL FIX: Prevent self-notifications
         if (userId === senderId) {
             console.log(`[Notification] Prevented self-notification: ${senderId} -> ${userId} (${type})`);
             return;
@@ -914,7 +1007,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         const newNotification = createNotification(userId, senderId, type, content, extraData);
         setNotifications(prev => [newNotification, ...prev]);
         
-        // Optional: Play notification sound
         if (typeof Audio !== 'undefined' && currentUser?.id === userId) {
             const audio = new Audio('/notification.mp3');
             audio.volume = 0.3;
@@ -937,10 +1029,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleNotificationClick = (notification: Notification) => {
-        // Mark as read
         handleMarkNotificationRead(notification.id);
         
-        // Handle navigation based on notification type
         if (notification.postId) {
             setActiveSinglePostId(notification.postId);
             setView('single_post');
@@ -958,62 +1048,67 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             setActiveTab('profile');
         }
     };
-    // ========== END NOTIFICATION MANAGEMENT FUNCTIONS ==========
 
     // Handle People You May Know actions
     const handleViewProfile = (userId: number) => {
-        // Mark the user as viewed and remove from suggestions
         setSuggestedUsers(prev => prev.filter(user => user.id !== userId));
         
-        // Store in localStorage to prevent showing again
         if (isClient) {
             const viewedProfiles = JSON.parse(localStorage.getItem('universeViewedProfiles') || '[]');
             localStorage.setItem('universeViewedProfiles', JSON.stringify([...viewedProfiles, userId]));
         }
         
-        // Navigate to profile
         setSelectedUserId(userId);
         setView('profile');
         setActiveTab('profile');
     };
 
     const handleRemoveSuggestedUser = (userId: number) => {
-        // Remove from suggestions
         setSuggestedUsers(prev => prev.filter(user => user.id !== userId));
         
-        // Store in localStorage to prevent showing again
         if (isClient) {
             const removedSuggestions = JSON.parse(localStorage.getItem('universeRemovedSuggestions') || '[]');
             localStorage.setItem('universeRemovedSuggestions', JSON.stringify([...removedSuggestions, userId]));
         }
         
-        // Rotate to next set of suggestions
         setSuggestionRotation(prev => prev + 1);
     };
 
     // Handle Groups You May Like actions
     const handleViewGroup = (groupId: string) => {
-        // Navigate to group
         setInitialGroupIdToView(groupId);
         setView('groups');
         setActiveTab('groups');
     };
 
     const handleRemoveSuggestedGroup = (groupId: string) => {
-        // Remove from suggestions
         setSuggestedGroups(prev => prev.filter(group => group.id !== groupId));
         
-        // Store in localStorage to prevent showing again
         if (isClient) {
             const removedGroupSuggestions = JSON.parse(localStorage.getItem('universeRemovedGroupSuggestions') || '[]');
             localStorage.setItem('universeRemovedGroupSuggestions', JSON.stringify([...removedGroupSuggestions, groupId]));
         }
         
-        // Rotate to next set of group suggestions
         setGroupRotation(prev => prev + 1);
     };
 
-    // Load People You May Know and Groups data from localStorage
+    // Handle Brand Recommendations actions
+    const handleViewBrand = (brandId: number) => {
+        setActiveBrandId(brandId);
+        setView('brands');
+        setActiveTab('brands');
+    };
+
+    const handleRemoveBrandRecommendation = (brandId: number) => {
+        if (isClient) {
+            const removedBrands = JSON.parse(localStorage.getItem('universeRemovedBrandRecommendations') || '[]');
+            localStorage.setItem('universeRemovedBrandRecommendations', JSON.stringify([...removedBrands, brandId]));
+        }
+        
+        setBrandRotation(prev => prev + 1);
+    };
+
+    // Load data from localStorage
     useEffect(() => {
         if (isClient) {
             const storedUser = localStorage.getItem('universeCurrentUser');
@@ -1027,10 +1122,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             const storedGroups = localStorage.getItem('universeGroups');
             const storedNotifications = localStorage.getItem('universeNotifications');
             
-            // Load People You May Know filters
             const viewedProfiles = JSON.parse(localStorage.getItem('universeViewedProfiles') || '[]');
             const removedSuggestions = JSON.parse(localStorage.getItem('universeRemovedSuggestions') || '[]');
             const removedGroupSuggestions = JSON.parse(localStorage.getItem('universeRemovedGroupSuggestions') || '[]');
+            const removedBrandRecommendations = JSON.parse(localStorage.getItem('universeRemovedBrandRecommendations') || '[]');
             
             if (storedUsers) setUsers(JSON.parse(storedUsers));
             if (storedSongs) setSongs(JSON.parse(storedSongs));
@@ -1040,7 +1135,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             if (storedBrands) setBrands(JSON.parse(storedBrands));
             if (storedPosts) {
                 const parsedPosts = JSON.parse(storedPosts);
-                // Ensure all loaded posts have formattedTime
                 const postsWithFormattedTime = parsedPosts.map((post: PostType) => ({
                     ...post,
                     formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
@@ -1059,7 +1153,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setTimeout(() => setIsLoading(false), 800);
     }, [isClient]);
 
-    // Save People You May Know and Groups data to localStorage
+    // Save data to localStorage
     useEffect(() => {
         if (isClient) {
             localStorage.setItem('universeCurrentUser', JSON.stringify(currentUser));
@@ -1157,7 +1251,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setActiveGroupComments(null);
         setActiveGroupShare(null);
 
-        // Handle all menu views
         switch(targetView) {
             case 'home':
                 setView('home');
@@ -1246,7 +1339,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
     
-    // ========== ENHANCED NOTIFICATION FUNCTIONS WITH SELF-NOTIFICATION PREVENTION ==========
+    // ========== ENHANCED NOTIFICATION FUNCTIONS ==========
     const handleFollowUser = (userIdToToggle: number) => {
         if (!currentUser) {
             alert("Please login to follow users.");
@@ -1256,7 +1349,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     
         const isCurrentlyFollowing = currentUser.following.includes(userIdToToggle);
     
-        // Send follow notification if not already following AND not following yourself
         if (!isCurrentlyFollowing && userIdToToggle !== currentUserId) {
             handleCreateNotification(
                 userIdToToggle,
@@ -1312,7 +1404,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setUsers(newUsers);
     };
 
-    // FIXED: Prevent self-notifications when creating posts
     const handleCreatePost = (
         text: string, 
         files: File[] | null, 
@@ -1326,7 +1417,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     ) => {
         if (!currentUser) return;
         
-        // Handle multiple images
         let images: string[] = [];
         let video: string | undefined = undefined;
         
@@ -1363,10 +1453,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         };
         setPosts([newPost, ...posts]);
         
-        // Enhanced notification logic for tagged users with self-notification prevention
         if (taggedUsers && taggedUsers.length > 0) {
             taggedUsers.forEach(userId => {
-                if (userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (userId !== currentUser.id) {
                     handleCreateNotification(
                         userId,
                         currentUser.id,
@@ -1378,7 +1467,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             });
         }
         
-        // Handle mentions in post content with self-notification prevention
         const mentionRegex = /@(\w+(?:\s\w+)?)/g;
         const mentions = [...text.matchAll(mentionRegex)];
         if (mentions.length > 0) {
@@ -1386,7 +1474,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             mentions.forEach(match => {
                 const userName = match[1];
                 const user = users.find(u => u.name.toLowerCase() === userName.toLowerCase());
-                if (user && user.id !== currentUser.id && !taggedUsers?.includes(user.id)) { // PREVENT SELF-NOTIFICATION
+                if (user && user.id !== currentUser.id && !taggedUsers?.includes(user.id)) {
                     mentionedUserIds.add(user.id);
                     
                     handleCreateNotification(
@@ -1401,7 +1489,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    // PROFESSIONAL BRAND MANAGEMENT FUNCTIONS WITH SELF-NOTIFICATION PREVENTION
     const handleCreateBrand = (brandData: Partial<Brand>) => {
         if (!currentUser) {
             alert("Please login to create a brand page.");
@@ -1428,7 +1515,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         
         setBrands(prev => [newBrand, ...prev]);
         
-        // Also add the brand to user's following list
         if (currentUser) {
             setCurrentUser(prev => prev ? {
                 ...prev,
@@ -1445,7 +1531,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         alert("Brand page created successfully! You are now following this page.");
     };
 
-    // FIXED: Prevent self-notifications in brand posts
     const handlePostAsBrand = (
         brandId: number, 
         content: any
@@ -1455,7 +1540,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             return;
         }
         
-        // Destructure all parameters
         const { 
             text, 
             files, 
@@ -1468,7 +1552,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             linkPreview 
         } = content;
         
-        // Verify the current user is admin of this brand
         const brand = brands.find(b => b.id === brandId);
         if (!brand) {
             alert("Brand not found.");
@@ -1480,7 +1563,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             return;
         }
         
-        // Handle multiple images
         let images: string[] = [];
         let video: string | undefined = undefined;
         
@@ -1517,21 +1599,16 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             brandId: brandId
         };
         
-        console.log("Creating brand post with multiple images:", newPost); // Debug log
-        
-        // Add to main posts array
         setPosts(prev => [newPost, ...prev]);
         
-        // Update brand's posts array
         setBrands(prev => prev.map(b => 
             b.id === brandId 
                 ? { ...b, posts: [...(b.posts || []), timestamp] }
                 : b
         ));
         
-        // Notify brand followers (excluding the current user to prevent self-notification)
         brand.followers.forEach(followerId => {
-            if (followerId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+            if (followerId !== currentUser.id) {
                 handleCreateNotification(
                     followerId,
                     currentUser.id,
@@ -1542,10 +1619,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             }
         });
         
-        // Enhanced notification logic for tagged users in brand posts with self-notification prevention
         if (taggedUsers && taggedUsers.length > 0) {
             taggedUsers.forEach(userId => {
-                if (userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (userId !== currentUser.id) {
                     handleCreateNotification(
                         userId,
                         currentUser.id,
@@ -1571,8 +1647,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     ? b.followers.filter(id => id !== currentUser!.id) 
                     : [...b.followers, currentUser!.id];
                 
-                // Send notification to brand admin if following (prevent self-notification)
-                if (!isFollowing && b.adminId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (!isFollowing && b.adminId !== currentUser.id) {
                     handleCreateNotification(
                         b.adminId,
                         currentUser.id,
@@ -1582,7 +1657,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     );
                 }
                 
-                // Update user's following list as well
                 if (currentUser) {
                     const updatedFollowing = isFollowing
                         ? currentUser.following.filter(id => id !== brandId)
@@ -1648,13 +1722,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
         
         if (window.confirm(`Are you sure you want to delete "${brand.name}"? This will also delete all brand posts.`)) {
-            // Remove brand
             setBrands(prev => prev.filter(b => b.id !== brandId));
-            
-            // Remove brand posts
             setPosts(prev => prev.filter(p => p.brandId !== brandId && p.authorId !== brandId));
-            
-            // Remove brand from users' following lists
             setUsers(prev => prev.map(user => ({
                 ...user,
                 following: user.following.filter(id => id !== brandId)
@@ -1722,14 +1791,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             return;
         }
         
-        // Check permissions
         const canDelete = isAdmin || post.authorId === currentUser.id;
         if (!canDelete) {
-            // For brand posts, check if user is brand admin
             if (post.brandId) {
                 const brand = brands.find(b => b.id === post.brandId);
                 if (brand && brand.adminId === currentUser.id) {
-                    // Brand admin can delete brand posts
                 } else {
                     alert("You can only delete your own posts.");
                     return;
@@ -1737,7 +1803,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             } else if (post.groupId) {
                 const group = groups.find(g => g.id === post.groupId);
                 if (group && group.adminId === currentUser.id) {
-                    // Group admin can delete group posts
                 } else {
                     alert("You can only delete your own posts.");
                     return;
@@ -1749,10 +1814,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
         
         if (window.confirm("Are you sure you want to delete this post?")) {
-            // Remove from main posts
             setPosts(prev => prev.filter(p => p.id !== postId));
             
-            // Remove from brand posts if applicable
             if (post.brandId) {
                 setBrands(prev => prev.map(brand => ({
                     ...brand,
@@ -1762,7 +1825,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 })));
             }
             
-            // Also remove from group posts if applicable
             if (post.groupId) {
                 setGroups(prev => prev.map(group => ({
                     ...group,
@@ -1784,12 +1846,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             return;
         }
 
-        // Generate a shareId
         const generateShareId = () => {
             return 'prod_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
         };
 
-        // Create a complete product object
         const newProduct: Product = {
             id: Date.now(),
             title: productData.title || 'Untitled',
@@ -1815,13 +1875,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
         console.log("New product created:", newProduct);
         
-        // Update products state
         setProducts(prev => [...prev, newProduct]);
         
-        // Notify followers about new product (excluding self)
         const followers = currentUser.followers || [];
         followers.forEach(followerId => {
-            if (followerId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+            if (followerId !== currentUser.id) {
                 handleCreateNotification(
                     followerId,
                     currentUser.id,
@@ -1879,8 +1937,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 if (existingLike) {
                     return { ...s, reactions: reactions.filter(r => r.userId !== currentUser!.id) };
                 } else {
-                    // Send notification to story owner (prevent self-notification)
-                    if (s.userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                    if (s.userId !== currentUser.id) {
                         handleCreateNotification(
                             s.userId,
                             currentUser.id,
@@ -1903,8 +1960,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 const replies = s.replies || [];
                 const newReply = { userId: currentUser!.id, text, timestamp: Date.now() };
                 
-                // Send notification to story owner (prevent self-notification)
-                if (s.userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (s.userId !== currentUser.id) {
                     handleCreateNotification(
                         s.userId,
                         currentUser.id,
@@ -1960,8 +2016,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     return { ...ev, interestedIds: ev.interestedIds!.filter(id => id !== currentUser!.id), attendees: [...ev.attendees, currentUser!.id] };
                 }
                 
-                // Send notification to event organizer (prevent self-notification)
-                if (ev.organizerId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (ev.organizerId !== currentUser.id) {
                     handleCreateNotification(
                         ev.organizerId,
                         currentUser.id,
@@ -1977,7 +2032,85 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }));
     };
 
-    // FIXED: Prevent self-notifications for reactions
+    // ENHANCED: Make like and commenting on products working
+    const handleLikeProduct = (productId: number) => {
+        if (!currentUser) return alert("Please login to like products.");
+        
+        setProducts(prev => prev.map(product => {
+            if (product.id === productId) {
+                const ratings = product.ratings || [];
+                const existingRating = ratings.find(r => r.userId === currentUser.id);
+                
+                if (existingRating) {
+                    // Unlike if already liked
+                    return {
+                        ...product,
+                        ratings: ratings.filter(r => r.userId !== currentUser.id)
+                    };
+                } else {
+                    // Like the product
+                    const newRating = {
+                        userId: currentUser.id,
+                        rating: 5, // Like counts as 5-star rating
+                        comment: '',
+                        timestamp: Date.now()
+                    };
+                    
+                    // Notify product seller (prevent self-notification)
+                    if (product.sellerId !== currentUser.id) {
+                        handleCreateNotification(
+                            product.sellerId,
+                            currentUser.id,
+                            'product_like',
+                            `liked your product: "${product.title}"`,
+                            { productId }
+                        );
+                    }
+                    
+                    return {
+                        ...product,
+                        ratings: [...ratings, newRating]
+                    };
+                }
+            }
+            return product;
+        }));
+    };
+
+    const handleCommentOnProduct = (productId: number, text: string) => {
+        if (!currentUser) return alert("Please login to comment on products.");
+        
+        setProducts(prev => prev.map(product => {
+            if (product.id === productId) {
+                const comments = product.comments || [];
+                const newComment = {
+                    userId: currentUser.id,
+                    text,
+                    timestamp: Date.now(),
+                    authorName: currentUser.name,
+                    authorImage: currentUser.profileImage
+                };
+                
+                // Notify product seller (prevent self-notification)
+                if (product.sellerId !== currentUser.id) {
+                    handleCreateNotification(
+                        product.sellerId,
+                        currentUser.id,
+                        'product_comment',
+                        `commented on your product: "${product.title}"`,
+                        { productId }
+                    );
+                }
+                
+                return {
+                    ...product,
+                    comments: [...comments, newComment]
+                };
+            }
+            return product;
+        }));
+    };
+
     const handleReact = (itemId: number, type: ReactionType) => {
         if (!currentUser) return alert("Please login to react.");
         setPosts(prev => prev.map(post => {
@@ -1990,8 +2123,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 } else {
                     newReactions.push({ userId: currentUser!.id, type });
                     
-                    // Send notification to post author (prevent self-reacting notifications)
-                    if (post.authorId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                    if (post.authorId !== currentUser.id) {
                         const content = type === 'like' 
                             ? 'liked your post.' 
                             : `reacted with ${type} to your post.`;
@@ -2011,7 +2143,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }));
     };
 
-    // FIXED: Prevent self-notifications for reel reactions
     const handleReelReact = (reelId: number, type: ReactionType | undefined) => {
         if (!currentUser) return alert("Please login to react.");
         setReels(prev => prev.map(reel => {
@@ -2025,8 +2156,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 } else {
                     newReactions.push({ userId: currentUser!.id, type: type! });
                     
-                    // Send notification to reel owner (prevent self-notification)
-                    if (reel.userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                    if (reel.userId !== currentUser.id) {
                         const content = type === 'like' 
                             ? 'liked your reel.' 
                             : `reacted with ${type} to your reel.`;
@@ -2046,7 +2176,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }));
     };
 
-    // FIXED: Prevent self-notifications for comments
     const handleComment = (itemId: number, text: string, attachment?: any, parentId?: number) => {
         if (!currentUser) return;
         const timestamp = Date.now();
@@ -2067,8 +2196,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             if (p.id === itemId) {
                 const updatedComments = [...p.comments, newComment];
                 
-                // Send notification to post author (prevent self-commenting notifications)
-                if (p.authorId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (p.authorId !== currentUser.id) {
                     handleCreateNotification(
                         p.authorId,
                         currentUser.id,
@@ -2078,7 +2206,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     );
                 }
                 
-                // Handle mentions in comments with self-notification prevention
                 const mentionRegex = /@(\w+(?:\s\w+)?)/g;
                 const mentions = [...text.matchAll(mentionRegex)];
                 if (mentions.length > 0) {
@@ -2086,10 +2213,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     mentions.forEach(match => {
                         const userName = match[1];
                         const user = users.find(u => u.name.toLowerCase() === userName.toLowerCase());
-                        if (user && user.id !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                        if (user && user.id !== currentUser.id) {
                             mentionedUserIds.add(user.id);
                             
-                            // Send mention notification
                             handleCreateNotification(
                                 user.id,
                                 currentUser.id,
@@ -2106,7 +2232,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             return p;
         }));
 
-        // Update comment count for music/podcast posts
         const post = posts.find(p => p.id === itemId);
         if (post && (post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
             const song = getSongForPost(post, songs, episodes);
@@ -2116,14 +2241,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    // FIXED: Prevent self-notifications for shares
     const handleShare = (postId: number, targetType: 'profile' | 'group' | 'brand', targetId?: string | number, extraCaption?: string) => {
         if (!currentUser) return;
         const sourcePost = posts.find(p => p.id === postId);
         if (!sourcePost) return;
         
-        // Send notification to original post author (prevent self-sharing notifications)
-        if (sourcePost.authorId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+        if (sourcePost.authorId !== currentUser.id) {
             handleCreateNotification(
                 sourcePost.authorId,
                 currentUser.id,
@@ -2133,7 +2256,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             );
         }
         
-        // Check if it's a music/podcast post and update share count
         if (sourcePost.type === 'music' || sourcePost.type === 'podcast') {
             if (sourcePost.audioTrack) {
                 const song = getSongForPost(sourcePost, songs, episodes);
@@ -2164,7 +2286,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             setPosts([{ ...newSharedPost, brandId: Number(targetId) }, ...posts]);
         }
         
-        // Update original post share count
         setPosts(prev => prev.map(post => 
             post.id === postId 
                 ? { ...post, shares: (post.shares || 0) + 1 }
@@ -2197,7 +2318,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setPosts([newPost, ...posts]);
     };
 
-    // Handle adding songs from upload - ENHANCED to ensure complete audioTrack data
     const handleAddSong = (song: Song) => {
         console.log("Adding new song to library:", song);
         const newSong = {
@@ -2225,7 +2345,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             return [newSong, ...prev];
         });
         
-        // Also create a feed post for the new upload
         if (currentUser) {
             const timestamp = Date.now();
             const formattedTime = formatRelativeTime(timestamp);
@@ -2264,10 +2383,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             
             setPosts(prev => [newPost, ...prev]);
             
-            // Notify followers about new music (excluding self)
             const followers = currentUser.followers || [];
             followers.forEach(followerId => {
-                if (followerId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (followerId !== currentUser.id) {
                     handleCreateNotification(
                         followerId,
                         currentUser.id,
@@ -2280,7 +2398,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    // Handle adding episodes from upload - ENHANCED to ensure complete audioTrack data
     const handleAddEpisode = (episode: Episode) => {
         console.log("Adding new episode to library:", episode);
         const newEpisode = {
@@ -2308,7 +2425,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             return [newEpisode, ...prev];
         });
         
-        // Also create a feed post for the new upload
         if (currentUser) {
             const timestamp = Date.now();
             const formattedTime = formatRelativeTime(timestamp);
@@ -2354,19 +2470,16 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         handleAddSong(song);
     };
 
-    // Enhanced handlePlayTrack with proper play counting
     const handlePlayTrack = (track: AudioTrack) => { 
         setCurrentAudioTrack(track); 
         setIsAudioPlaying(true); 
         
-        // Add to play history
         setPlayHistory(prev => [...prev, {
             trackId: track.id,
             timestamp: Date.now(),
             duration: track.duration
         }]);
         
-        // Update play count for the track
         if (track.type === 'music') {
             setSongs(prev => prev.map(song => 
                 song.id === track.id 
@@ -2396,7 +2509,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    // Handle like for music/podcast posts with self-notification prevention
     const handleLikeTrack = (trackId: string, isLiked: boolean) => {
         setLikedTracks(prev => 
             isLiked 
@@ -2404,11 +2516,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 : [...prev, trackId]
         );
         
-        // Update song/episode like count
         const track = songs.find(s => s.id === trackId) || episodes.find(e => e.id === trackId);
         if (track) {
             if ('artist' in track) {
-                // It's a song
                 setSongs(prev => prev.map(song => 
                     song.id === trackId 
                         ? { 
@@ -2422,8 +2532,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                         : song
                 ));
                 
-                // Send notification to song uploader if liking (prevent self-notification)
-                if (!isLiked && track.uploaderId && track.uploaderId !== currentUser?.id) { // PREVENT SELF-NOTIFICATION
+                if (!isLiked && track.uploaderId && track.uploaderId !== currentUser?.id) {
                     handleCreateNotification(
                         track.uploaderId,
                         currentUser!.id,
@@ -2433,7 +2542,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     );
                 }
             } else {
-                // It's an episode
                 setEpisodes(prev => prev.map(episode => 
                     episode.id === trackId 
                         ? { 
@@ -2450,9 +2558,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    // Handle comment count for music/podcast posts
     const handleTrackComment = (trackId: string) => {
-        // Update song/episode comment count
         const track = songs.find(s => s.id === trackId) || episodes.find(e => e.id === trackId);
         if (track) {
             if ('artist' in track) {
@@ -2485,9 +2591,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    // Handle share for music/podcast posts
     const handleTrackShare = (trackId: string) => {
-        // Update song/episode share count
         const track = songs.find(s => s.id === trackId) || episodes.find(e => e.id === trackId);
         if (track) {
             if ('artist' in track) {
@@ -2520,7 +2624,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    // ========== MISSING FUNCTIONS ADDED ==========
     const handleDeleteSong = (songId: string) => {
         if (!currentUser || !isAdmin) {
             alert("Only admins can delete songs");
@@ -2579,7 +2682,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
     
-    // ========== ENHANCED GROUP FUNCTIONS WITH SELF-NOTIFICATION PREVENTION ==========
+    // ========== ENHANCED GROUP FUNCTIONS ==========
     const handleGroupComment = (groupId: string, postId: number, text: string, attachment?: any, parentId?: number) => {
         if (!currentUser) return;
         
@@ -2597,15 +2700,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             authorImage: currentUser.profileImage
         };
         
-        // Update the group post with new comment
         setGroups(prev => prev.map(g => {
             if (g.id === groupId) {
                 const updatedPosts = g.posts.map(p => {
                     if (p.id === postId) {
                         const updatedComments = [...(p.comments || []), newComment];
                         
-                        // Send notification to post author (prevent self-notification)
-                        if (p.authorId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                        if (p.authorId !== currentUser.id) {
                             const group = groups.find(gr => gr.id === groupId);
                             handleCreateNotification(
                                 p.authorId,
@@ -2625,7 +2726,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             return g;
         }));
 
-        // Handle mentions in group comments with self-notification prevention
         const mentionRegex = /@(\w+(?:\s\w+)?)/g;
         const mentions = [...text.matchAll(mentionRegex)];
         if (mentions.length > 0) {
@@ -2633,7 +2733,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             mentions.forEach(match => {
                 const userName = match[1];
                 const user = users.find(u => u.name.toLowerCase() === userName.toLowerCase());
-                if (user && user.id !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (user && user.id !== currentUser.id) {
                     mentionedUserIds.add(user.id);
                     
                     const group = groups.find(g => g.id === groupId);
@@ -2661,10 +2761,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 : g
         ));
         
-        // Send notifications to invited users
         const group = groups.find(g => g.id === groupId);
         userIds.forEach(userId => {
-            if (userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+            if (userId !== currentUser.id) {
                 handleCreateNotification(
                     userId,
                     currentUser.id,
@@ -2689,9 +2788,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 : g
         )); 
         
-        // Notify group admin (prevent self-notification)
         const group = groups.find(g => g.id === groupId);
-        if (group && group.adminId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+        if (group && group.adminId !== currentUser.id) {
             handleCreateNotification(
                 group.adminId,
                 currentUser.id,
@@ -2701,7 +2799,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             );
         }
         
-        // Remove from suggestions after joining
         setSuggestedGroups(prev => prev.filter(g => g.id !== groupId));
     };
     
@@ -2738,11 +2835,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         )); 
     };
     
-    // FIXED: Prevent self-notifications in group posts
     const handlePostToGroup = (groupId: string, content: string, files: File[] | null, type: any, background?: string) => { 
         if (!currentUser) return;
         
-        // Handle multiple images
         let images: string[] = [];
         let video: string | undefined = undefined;
         
@@ -2771,14 +2866,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             background: background
         }; 
         
-        // 1. Update group posts
         setGroups(prev => prev.map(g => 
             g.id === groupId 
                 ? { ...g, posts: [newGroupPost, ...g.posts] } 
                 : g
         )); 
         
-        // 2. Create a proper PostType for the main feed with ALL required properties
         const newFeedPost: PostType = { 
             id: timestamp,
             authorId: currentUser.id, 
@@ -2801,14 +2894,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         
         console.log("Creating group post:", newFeedPost);
         
-        // 3. Add to main posts array
         setPosts(prev => [newFeedPost, ...prev]); 
         
-        // Notify group members (excluding the poster to prevent self-notification)
         const group = groups.find(g => g.id === groupId);
         if (group && group.memberPostingAllowed) {
             group.members.forEach(memberId => {
-                if (memberId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (memberId !== currentUser.id) {
                     handleCreateNotification(
                         memberId,
                         currentUser.id,
@@ -2836,17 +2927,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             groupName: groups.find(g => g.id === groupId)?.name
         } as Event;
         
-        // Add event to the group
         setGroups(prev => prev.map(g => 
             g.id === groupId 
                 ? { ...g, events: [...(g.events || []), newEvent] } 
                 : g
         ));
         
-        // Also add to global events
         setEvents(prev => [newEvent, ...prev]);
         
-        // Create a post about the event
         const eventPost: PostType = { 
             id: timestamp + 1, 
             authorId: currentUser.id, 
@@ -2867,18 +2955,15 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setPosts(prev => [eventPost, ...prev]);
     };
     
-    // FIXED: Prevent self-notifications in group shares
     const handleGroupShare = (groupId: string, postId: number, targetType: 'profile' | 'group' | 'brand', targetId?: string | number, extraCaption?: string) => {
         if (!currentUser) return;
         
-        // Find the group post
         const group = groups.find(g => g.id === groupId);
         if (!group) return;
         
         const groupPost = group.posts.find(p => p.id === postId);
         if (!groupPost) return;
         
-        // Create a shared post for the feed
         const timestamp = Date.now();
         const formattedTime = formatRelativeTime(timestamp);
         const newSharedPost: PostType = {
@@ -2901,10 +2986,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             groupName: group.name
         };
         
-        // Add to main feed
         setPosts(prev => [newSharedPost, ...prev]);
         
-        // Update share count in the group post
         setGroups(prev => prev.map(g => {
             if (g.id === groupId) {
                 const updatedPosts = g.posts.map(p => {
@@ -2918,8 +3001,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             return g;
         }));
         
-        // Send notification to original post author (prevent self-notification)
-        if (groupPost.authorId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+        if (groupPost.authorId !== currentUser.id) {
             handleCreateNotification(
                 groupPost.authorId,
                 currentUser.id,
@@ -2950,10 +3032,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         } as Group;
         setGroups(prev => [newGroup, ...prev]);
         
-        // Notify followers about new group (excluding self)
         const followers = currentUser.followers || [];
         followers.forEach(followerId => {
-            if (followerId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+            if (followerId !== currentUser.id) {
                 handleCreateNotification(
                     followerId,
                     currentUser.id,
@@ -2967,7 +3048,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         alert("Group created successfully!");
     };
     
-    // FIXED: Prevent self-notifications for group post reactions
     const handleReactGroupPost = (groupId: string, postId: number, type: ReactionType) => { 
         if (!currentUser) return; 
         setGroups(prev => prev.map(g => {
@@ -2988,8 +3068,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                         } else {
                             newReactions.push({ userId: currentUser!.id, type });
                             
-                            // Send notification to post author (prevent self-notification)
-                            if (p.authorId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                            if (p.authorId !== currentUser.id) {
                                 const group = groups.find(g => g.id === groupId);
                                 handleCreateNotification(
                                     p.authorId,
@@ -3035,7 +3114,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     : g
             )); 
             
-            // Notify removed member
             handleCreateNotification(
                 memberId,
                 currentUser.id,
@@ -3057,7 +3135,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                         : g
                 )); 
                 
-                // Also delete from main feed if it exists
                 setPosts(prev => prev.filter(p => !(p.id === postId && p.groupId === groupId)));
                 
                 alert("Group post deleted successfully!");
@@ -3067,7 +3144,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    // Birthday notification check with self-notification prevention
+    // Birthday notification check
     useEffect(() => {
         const checkBirthdays = () => {
             if (!currentUser) return;
@@ -3076,12 +3153,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             const todayStr = `${today.getMonth() + 1}/${today.getDate()}`;
             
             users.forEach(user => {
-                if (user.birthDate && user.id !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (user.birthDate && user.id !== currentUser.id) {
                     const birthDate = new Date(user.birthDate);
                     const birthStr = `${birthDate.getMonth() + 1}/${birthDate.getDate()}`;
                     
                     if (birthStr === todayStr) {
-                        // Check if birthday notification was already sent today
                         const alreadySent = notifications.some(n => 
                             n.type === 'birthday' && 
                             n.senderId === user.id && 
@@ -3102,7 +3178,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             });
         };
         
-        // Check birthdays on mount and every 24 hours
         checkBirthdays();
         const interval = setInterval(checkBirthdays, 24 * 60 * 60 * 1000);
         
@@ -3139,7 +3214,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             brands.find(b => b.id === author.id)?.followers.includes(currentUser.id) || false : 
             false;
         
-        // Ensure post has formattedTime
         const postWithFormattedTime = {
             ...post,
             formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
@@ -3178,22 +3252,23 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         );
     };
     
-    // Function to render feed with People You May Know and Groups You May Like at intervals
+    // Function to render feed with People You May Know, Groups You May Like, and Brand Recommendations at intervals
     const renderFeedWithSuggestions = () => {
-        const peopleIntervals = [5, 20, 45]; // Show People You May Know after 5th, 20th, and 45th posts
-        const groupIntervals = [8, 25]; // Show Groups You May Like after 8th and 25th posts
+        const peopleIntervals = [5, 20, 45];
+        const groupIntervals = [8, 25];
+        const brandIntervals = [12, 30, 55]; // Brand recommendations after 12th, 30th, and 55th posts
         let postCount = 0;
         let peopleIndex = 0;
         let groupIndex = 0;
+        let brandIndex = 0;
         const renderedItems = [];
         
         for (const post of rankedPosts) {
             renderedItems.push(renderPostItem(post));
             postCount++;
             
-            // Check if we should show People You May Know after this post
+            // People You May Know at intervals
             if (peopleIntervals.includes(postCount) && suggestedUsers.length > 0) {
-                // Get a rotated set of suggestions for this interval
                 const rotationKey = `people-rotation-${suggestionRotation}-interval-${peopleIndex}`;
                 const rotatedSuggestions = getIntelligentSuggestions(currentUser, users, suggestionRotation + peopleIndex);
                 
@@ -3204,12 +3279,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             suggestedUsers={rotatedSuggestions}
                             onViewProfile={(userId) => {
                                 handleViewProfile(userId);
-                                // Advance to next rotation when someone views a profile
                                 setSuggestionRotation(prev => prev + 1);
                             }}
                             onRemove={(userId) => {
                                 handleRemoveSuggestedUser(userId);
-                                // Advance to next rotation when someone is removed
                                 setSuggestionRotation(prev => prev + 1);
                             }}
                         />
@@ -3218,9 +3291,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 peopleIndex++;
             }
             
-            // Check if we should show Groups You May Like after this post
+            // Groups You May Like at intervals
             if (groupIntervals.includes(postCount) && suggestedGroups.length > 0) {
-                // Get a rotated set of group suggestions for this interval
                 const groupRotationKey = `group-rotation-${groupRotation}-interval-${groupIndex}`;
                 const rotatedGroupSuggestions = getIntelligentGroupSuggestions(currentUser, groups, groupRotation + groupIndex);
                 
@@ -3237,6 +3309,28 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     );
                 }
                 groupIndex++;
+            }
+            
+            // Brand Recommendations at intervals (12, 30, 55)
+            if (brandIntervals.includes(postCount) && brands.length > 0) {
+                const brandRotationKey = `brand-rotation-${brandRotation}-interval-${brandIndex}`;
+                const rotatedBrandRecommendations = getIntelligentBrandRecommendations(currentUser, brands, brandRotation + brandIndex);
+                
+                if (rotatedBrandRecommendations.length > 0) {
+                    renderedItems.push(
+                        <BrandRecommendations 
+                            key={brandRotationKey}
+                            brands={rotatedBrandRecommendations}
+                            currentUser={currentUser}
+                            onViewBrand={(brandId) => {
+                                handleViewBrand(brandId);
+                                setBrandRotation(prev => prev + 1);
+                            }}
+                            onRemove={handleRemoveBrandRecommendation}
+                        />
+                    );
+                }
+                brandIndex++;
             }
         }
         
@@ -3339,41 +3433,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 onCreateEventClick={() => setShowCreateEventModal(true)} 
                                             /> 
                                             
-                                            {/* Initial People You May Know Section */}
-                                            {suggestedUsers.length > 0 && (
-                                                <PeopleYouMayKnow 
-                                                    suggestedUsers={suggestedUsers}
-                                                    onViewProfile={(userId) => {
-                                                        handleViewProfile(userId);
-                                                        // Advance rotation when someone views a profile
-                                                        setSuggestionRotation(prev => prev + 1);
-                                                    }}
-                                                    onRemove={handleRemoveSuggestedUser}
-                                                />
-                                            )}
-                                            
-                                            {/* Initial Groups You May Like Section */}
-                                            {suggestedGroups.length > 0 && (
-                                                <GroupsYouMayLike 
-                                                    suggestedGroups={suggestedGroups}
-                                                    currentUser={currentUser}
-                                                    onViewGroup={handleViewGroup}
-                                                    onJoinGroup={handleJoinGroup}
-                                                    onRemove={handleRemoveSuggestedGroup}
-                                                />
-                                            )}
-                                            
-                                            <SuggestedProductsWidget 
-                                                products={products} 
-                                                currentUser={currentUser} 
-                                                onViewProduct={(p) => { setActiveProduct(p); }} 
-                                                onSeeAll={() => handleNavigate('marketplace')} 
-                                            /> 
+                                            {/* Feed with all recommendations at intervals */}
+                                            {renderFeedWithSuggestions()}
                                         </>
                                     )}
-                                    
-                                    {/* Feed with People You May Know and Groups You May Like at intervals */}
-                                    {renderFeedWithSuggestions()}
                                 </div>
                             )}
                             
@@ -3532,6 +3595,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onNavigateHome={() => handleNavigate('home')}
                                     onCreateProduct={handleCreateProduct}
                                     onViewProduct={(product) => setActiveProduct(product)}
+                                    // Pass enhanced product interaction handlers
+                                    onLikeProduct={handleLikeProduct}
+                                    onCommentOnProduct={handleCommentOnProduct}
                                 />
                             )}
                             
@@ -3573,8 +3639,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                         : r
                                                 ));
                                                 
-                                                // Send notification to reel owner (prevent self-notification)
-                                                if (reel.userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                                                if (reel.userId !== currentUser.id) {
                                                     handleCreateNotification(
                                                         reel.userId,
                                                         currentUser.id,
@@ -3611,9 +3676,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 : reel
                                         ));
                                         
-                                        // Send notification to reel owner (prevent self-notification)
                                         const reel = reels.find(r => r.id === reelId);
-                                        if (reel && reel.userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                                        if (reel && reel.userId !== currentUser.id) {
                                             handleCreateNotification(
                                                 reel.userId,
                                                 currentUser.id,
@@ -3964,6 +4028,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             currentUser={currentUser} 
                             onClose={() => setActiveProduct(null)} 
                             onMessage={(sid) => setActiveChatUser(users.find(u => u.id === sid) || null)} 
+                            // Add enhanced product interaction handlers
+                            onLike={() => handleLikeProduct(activeProduct.id)}
+                            onComment={(text) => handleCommentOnProduct(activeProduct.id, text)}
                         />
                     )}
                     {fullScreenImage && (
