@@ -555,7 +555,7 @@ const BrandRecommendations: React.FC<{
                                     <img 
                                         src={brand.profileImage} 
                                         alt={brand.name}
-                                        className="w-12 h-12 rounded-full object-cover border-2 border-[#4E4F50] group-hover:border-[#F7B928] transition-colors"
+                                        className="w-12 h-12 rounded-full object-cover border-2 border-[#4E4042] group-hover:border-[#F7B928] transition-colors"
                                     />
                                     {brand.isVerified && (
                                         <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#1877F2] rounded-full flex items-center justify-center shadow-md">
@@ -1403,7 +1403,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
     
-    // ========== ENHANCED NOTIFICATION FUNCTIONS WITH SELF-NOTIFICATION PREVENTION ==========
+    // ========== FIXED LIKE AND REACT FUNCTIONS ==========
     const handleFollowUser = (userIdToToggle: number) => {
         if (!currentUser) {
             alert("Please login to follow users.");
@@ -1469,7 +1469,205 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setUsers(newUsers);
     };
 
-    // FIXED: Prevent self-notifications when creating posts
+    // FIXED: CRITICAL - Ensure like functionality works for all users, including self
+    const handleReact = (itemId: number, type: ReactionType) => {
+        console.log('handleReact called:', { itemId, type, currentUserId: currentUser?.id });
+        
+        if (!currentUser) {
+            console.log('No current user, returning');
+            return alert("Please login to react.");
+        }
+        
+        // Check if it's a product post (ID > 100000)
+        if (itemId > 100000) {
+            console.log('Product post detected, calling handleLikeProduct');
+            const productId = itemId - 100000;
+            handleLikeProduct(productId);
+            return;
+        }
+        
+        console.log('Updating post reactions...');
+        setPosts(prev => prev.map(post => {
+            if (post.id === itemId) {
+                console.log('Found post:', post.id, 'author:', post.authorId);
+                const existing = post.reactions.find(r => r.userId === currentUser!.id);
+                console.log('Existing reaction:', existing);
+                
+                let newReactions = [...post.reactions];
+                if (existing) {
+                    if (existing.type === type) {
+                        console.log('Removing reaction');
+                        newReactions = newReactions.filter(r => r.userId !== currentUser!.id);
+                    } else {
+                        console.log('Updating reaction type');
+                        newReactions = newReactions.map(r => 
+                            r.userId === currentUser!.id ? { ...r, type } : r
+                        );
+                    }
+                } else {
+                    console.log('Adding new reaction');
+                    newReactions.push({ userId: currentUser!.id, type });
+                    
+                    // Send notification to post author (prevent self-notification)
+                    // CRITICAL FIX: This should NOT block the like functionality
+                    if (post.authorId !== currentUser.id) {
+                        console.log('Sending notification to author:', post.authorId);
+                        const content = type === 'like' 
+                            ? 'liked your post.' 
+                            : `reacted with ${type} to your post.`;
+                        
+                        handleCreateNotification(
+                            post.authorId,
+                            currentUser.id,
+                            `like_${type === 'like' ? 'post' : 'reaction'}`,
+                            content,
+                            { postId: itemId, reactionType: type }
+                        );
+                    } else {
+                        console.log('Self-reaction, skipping notification');
+                    }
+                }
+                
+                const updatedPost = { ...post, reactions: newReactions };
+                console.log('Updated post reactions:', newReactions);
+                return updatedPost;
+            }
+            return post;
+        }));
+    };
+
+    // FIXED: Prevent self-notifications for reel reactions
+    const handleReelReact = (reelId: number, type: ReactionType | undefined) => {
+        if (!currentUser) return alert("Please login to react.");
+        setReels(prev => prev.map(reel => {
+            if (reel.id === reelId) {
+                const existing = reel.reactions.find(r => r.userId === currentUser!.id);
+                let newReactions = [...reel.reactions];
+                if (type === undefined || (existing && existing.type === type)) {
+                    newReactions = newReactions.filter(r => r.userId !== currentUser!.id);
+                } else if (existing) {
+                    newReactions = newReactions.map(r => r.userId === currentUser!.id ? { ...r, type: type! } : r);
+                } else {
+                    newReactions.push({ userId: currentUser!.id, type: type! });
+                    
+                    // Send notification to reel owner (prevent self-notification)
+                    if (reel.userId !== currentUser.id) {
+                        const content = type === 'like' 
+                            ? 'liked your reel.' 
+                            : `reacted with ${type} to your reel.`;
+                        
+                        handleCreateNotification(
+                            reel.userId,
+                            currentUser.id,
+                            'like_reel',
+                            content,
+                            { reelId }
+                        );
+                    }
+                }
+                return { ...reel, reactions: newReactions };
+            }
+            return reel;
+        }));
+    };
+
+    // FIXED: Ensure comment functionality works for all users, including self
+    const handleComment = (itemId: number, text: string, attachment?: any, parentId?: number) => {
+        console.log('handleComment called:', { itemId, text, currentUserId: currentUser?.id });
+        
+        if (!currentUser) {
+            console.log('No current user, returning');
+            return;
+        }
+        
+        // Check if it's a product post (ID > 100000)
+        if (itemId > 100000) {
+            console.log('Product post detected, calling handleCommentOnProduct');
+            const productId = itemId - 100000;
+            handleCommentOnProduct(productId, text);
+            return;
+        }
+        
+        const timestamp = Date.now();
+        const formattedTime = formatRelativeTime(timestamp);
+        const newComment: Comment = { 
+            id: timestamp, 
+            userId: currentUser.id, 
+            text, 
+            timestamp: timestamp,
+            formattedTime: formattedTime,
+            likes: 0, 
+            attachment,
+            authorName: currentUser.name,
+            authorImage: currentUser.profileImage
+        };
+        
+        console.log('Adding comment to post:', itemId);
+        setPosts(prev => prev.map(p => {
+            if (p.id === itemId) {
+                const updatedComments = [...p.comments, newComment];
+                console.log('Updated comments for post', p.id, ':', updatedComments.length);
+                
+                // Send notification to post author (prevent self-commenting notifications)
+                // CRITICAL FIX: This should NOT block the comment functionality
+                if (p.authorId !== currentUser.id) {
+                    console.log('Sending comment notification to author:', p.authorId);
+                    handleCreateNotification(
+                        p.authorId,
+                        currentUser.id,
+                        'comment_post',
+                        'commented on your post.',
+                        { postId: itemId, commentId: newComment.id }
+                    );
+                } else {
+                    console.log('Self-comment, skipping notification');
+                }
+                
+                // Handle mentions in comments with self-notification prevention
+                const mentionRegex = /@(\w+(?:\s\w+)?)/g;
+                const mentions = [...text.matchAll(mentionRegex)];
+                if (mentions.length > 0) {
+                    const mentionedUserIds = new Set<number>();
+                    mentions.forEach(match => {
+                        const userName = match[1];
+                        const user = users.find(u => u.name.toLowerCase() === userName.toLowerCase());
+                        if (user && user.id !== currentUser.id) {
+                            mentionedUserIds.add(user.id);
+                            
+                            // Send mention notification
+                            handleCreateNotification(
+                                user.id,
+                                currentUser.id,
+                                'mention_comment',
+                                'mentioned you in a comment.',
+                                { postId: itemId, commentId: newComment.id }
+                            );
+                        }
+                    });
+                }
+                
+                return { ...p, comments: updatedComments };
+            }
+            return p;
+        }));
+
+        // Update comment count for music/podcast posts
+        const post = posts.find(p => p.id === itemId);
+        if (post && (post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
+            const song = getSongForPost(post, songs, episodes);
+            if (song) {
+                handleTrackComment(song.id);
+            }
+        }
+        
+        // Close comments sheet if it's open
+        if (activeCommentsPostId === itemId) {
+            setActiveCommentsPostId(null);
+        }
+        
+        console.log('Comment added successfully');
+    };
+
     const handleCreatePost = (
         text: string, 
         files: File[] | null, 
@@ -1523,7 +1721,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         // Enhanced notification logic for tagged users with self-notification prevention
         if (taggedUsers && taggedUsers.length > 0) {
             taggedUsers.forEach(userId => {
-                if (userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (userId !== currentUser.id) {
                     handleCreateNotification(
                         userId,
                         currentUser.id,
@@ -1543,7 +1741,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             mentions.forEach(match => {
                 const userName = match[1];
                 const user = users.find(u => u.name.toLowerCase() === userName.toLowerCase());
-                if (user && user.id !== currentUser.id && !taggedUsers?.includes(user.id)) { // PREVENT SELF-NOTIFICATION
+                if (user && user.id !== currentUser.id && !taggedUsers?.includes(user.id)) {
                     mentionedUserIds.add(user.id);
                     
                     handleCreateNotification(
@@ -1674,7 +1872,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             brandId: brandId
         };
         
-        console.log("Creating brand post with multiple images:", newPost); // Debug log
+        console.log("Creating brand post with multiple images:", newPost);
         
         // Add to main posts array
         setPosts(prev => [newPost, ...prev]);
@@ -1688,7 +1886,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         
         // Notify brand followers (excluding the current user to prevent self-notification)
         brand.followers.forEach(followerId => {
-            if (followerId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+            if (followerId !== currentUser.id) {
                 handleCreateNotification(
                     followerId,
                     currentUser.id,
@@ -1702,7 +1900,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         // Enhanced notification logic for tagged users in brand posts with self-notification prevention
         if (taggedUsers && taggedUsers.length > 0) {
             taggedUsers.forEach(userId => {
-                if (userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (userId !== currentUser.id) {
                     handleCreateNotification(
                         userId,
                         currentUser.id,
@@ -1729,7 +1927,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     : [...b.followers, currentUser!.id];
                 
                 // Send notification to brand admin if following (prevent self-notification)
-                if (!isFollowing && b.adminId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (!isFollowing && b.adminId !== currentUser.id) {
                     handleCreateNotification(
                         b.adminId,
                         currentUser.id,
@@ -1978,7 +2176,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         // Notify followers about new product (excluding self)
         const followers = currentUser.followers || [];
         followers.forEach(followerId => {
-            if (followerId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+            if (followerId !== currentUser.id) {
                 handleCreateNotification(
                     followerId,
                     currentUser.id,
@@ -2118,7 +2316,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     return { ...s, reactions: reactions.filter(r => r.userId !== currentUser!.id) };
                 } else {
                     // Send notification to story owner (prevent self-notification)
-                    if (s.userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                    if (s.userId !== currentUser.id) {
                         handleCreateNotification(
                             s.userId,
                             currentUser.id,
@@ -2142,7 +2340,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 const newReply = { userId: currentUser!.id, text, timestamp: Date.now() };
                 
                 // Send notification to story owner (prevent self-notification)
-                if (s.userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (s.userId !== currentUser.id) {
                     handleCreateNotification(
                         s.userId,
                         currentUser.id,
@@ -2199,7 +2397,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 }
                 
                 // Send notification to event organizer (prevent self-notification)
-                if (ev.organizerId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (ev.organizerId !== currentUser.id) {
                     handleCreateNotification(
                         ev.organizerId,
                         currentUser.id,
@@ -2215,167 +2413,18 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }));
     };
 
-    // FIXED: Prevent self-notifications for reactions - UPDATED to handle product posts
-    const handleReact = (itemId: number, type: ReactionType) => {
-        if (!currentUser) return alert("Please login to react.");
-        
-        // Check if it's a product post (ID > 100000)
-        if (itemId > 100000) {
-            const productId = itemId - 100000;
-            handleLikeProduct(productId);
-            return;
-        }
-        
-        setPosts(prev => prev.map(post => {
-            if (post.id === itemId) {
-                const existing = post.reactions.find(r => r.userId === currentUser!.id);
-                let newReactions = [...post.reactions];
-                if (existing) {
-                    if (existing.type === type) newReactions = newReactions.filter(r => r.userId !== currentUser!.id);
-                    else newReactions = newReactions.map(r => r.userId === currentUser!.id ? { ...r, type } : r);
-                } else {
-                    newReactions.push({ userId: currentUser!.id, type });
-                    
-                    // Send notification to post author (prevent self-reacting notifications)
-                    if (post.authorId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
-                        const content = type === 'like' 
-                            ? 'liked your post.' 
-                            : `reacted with ${type} to your post.`;
-                        
-                        handleCreateNotification(
-                            post.authorId,
-                            currentUser.id,
-                            `like_${type === 'like' ? 'post' : 'reaction'}`,
-                            content,
-                            { postId: itemId, reactionType: type }
-                        );
-                    }
-                }
-                return { ...post, reactions: newReactions };
-            }
-            return post;
-        }));
-    };
-
-    // FIXED: Prevent self-notifications for reel reactions
-    const handleReelReact = (reelId: number, type: ReactionType | undefined) => {
-        if (!currentUser) return alert("Please login to react.");
-        setReels(prev => prev.map(reel => {
-            if (reel.id === reelId) {
-                const existing = reel.reactions.find(r => r.userId === currentUser!.id);
-                let newReactions = [...reel.reactions];
-                if (type === undefined || (existing && existing.type === type)) {
-                    newReactions = newReactions.filter(r => r.userId !== currentUser!.id);
-                } else if (existing) {
-                    newReactions = newReactions.map(r => r.userId === currentUser!.id ? { ...r, type: type! } : r);
-                } else {
-                    newReactions.push({ userId: currentUser!.id, type: type! });
-                    
-                    // Send notification to reel owner (prevent self-notification)
-                    if (reel.userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
-                        const content = type === 'like' 
-                            ? 'liked your reel.' 
-                            : `reacted with ${type} to your reel.`;
-                        
-                        handleCreateNotification(
-                            reel.userId,
-                            currentUser.id,
-                            'like_reel',
-                            content,
-                            { reelId }
-                        );
-                    }
-                }
-                return { ...reel, reactions: newReactions };
-            }
-            return reel;
-        }));
-    };
-
-    // FIXED: Prevent self-notifications for comments - UPDATED to handle product posts
-    const handleComment = (itemId: number, text: string, attachment?: any, parentId?: number) => {
-        if (!currentUser) return;
-        
-        // Check if it's a product post (ID > 100000)
-        if (itemId > 100000) {
-            const productId = itemId - 100000;
-            handleCommentOnProduct(productId, text);
-            return;
-        }
-        
-        const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp);
-        const newComment: Comment = { 
-            id: timestamp, 
-            userId: currentUser.id, 
-            text, 
-            timestamp: timestamp,
-            formattedTime: formattedTime,
-            likes: 0, 
-            attachment,
-            authorName: currentUser.name,
-            authorImage: currentUser.profileImage
-        };
-        
-        setPosts(prev => prev.map(p => {
-            if (p.id === itemId) {
-                const updatedComments = [...p.comments, newComment];
-                
-                // Send notification to post author (prevent self-commenting notifications)
-                if (p.authorId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
-                    handleCreateNotification(
-                        p.authorId,
-                        currentUser.id,
-                        'comment_post',
-                        'commented on your post.',
-                        { postId: itemId, commentId: newComment.id }
-                    );
-                }
-                
-                // Handle mentions in comments with self-notification prevention
-                const mentionRegex = /@(\w+(?:\s\w+)?)/g;
-                const mentions = [...text.matchAll(mentionRegex)];
-                if (mentions.length > 0) {
-                    const mentionedUserIds = new Set<number>();
-                    mentions.forEach(match => {
-                        const userName = match[1];
-                        const user = users.find(u => u.name.toLowerCase() === userName.toLowerCase());
-                        if (user && user.id !== currentUser.id) { // PREVENT SELF-NOTIFICATION
-                            mentionedUserIds.add(user.id);
-                            
-                            // Send mention notification
-                            handleCreateNotification(
-                                user.id,
-                                currentUser.id,
-                                'mention_comment',
-                                'mentioned you in a comment.',
-                                { postId: itemId, commentId: newComment.id }
-                            );
-                        }
-                    });
-                }
-                
-                return { ...p, comments: updatedComments };
-            }
-            return p;
-        }));
-
-        // Update comment count for music/podcast posts
-        const post = posts.find(p => p.id === itemId);
-        if (post && (post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
-            const song = getSongForPost(post, songs, episodes);
-            if (song) {
-                handleTrackComment(song.id);
-            }
-        }
-    };
-
     // FIXED: Prevent self-notifications for shares - UPDATED to handle product posts
     const handleShare = (postId: number, targetType: 'profile' | 'group' | 'brand', targetId?: string | number, extraCaption?: string) => {
-        if (!currentUser) return;
+        console.log('handleShare called:', { postId, targetType, targetId, currentUserId: currentUser?.id });
+        
+        if (!currentUser) {
+            console.log('No current user, returning');
+            return;
+        }
         
         // Check if it's a product post (ID > 100000)
         if (postId > 100000) {
+            console.log('Product post detected');
             const productId = postId - 100000;
             const product = products.find(p => p.id === productId);
             if (!product) return;
@@ -2423,7 +2472,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         if (!sourcePost) return;
         
         // Send notification to original post author (prevent self-sharing notifications)
-        if (sourcePost.authorId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+        if (sourcePost.authorId !== currentUser.id) {
             handleCreateNotification(
                 sourcePost.authorId,
                 currentUser.id,
@@ -2567,7 +2616,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             // Notify followers about new music (excluding self)
             const followers = currentUser.followers || [];
             followers.forEach(followerId => {
-                if (followerId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (followerId !== currentUser.id) {
                     handleCreateNotification(
                         followerId,
                         currentUser.id,
@@ -2723,7 +2772,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 ));
                 
                 // Send notification to song uploader if liking (prevent self-notification)
-                if (!isLiked && track.uploaderId && track.uploaderId !== currentUser?.id) { // PREVENT SELF-NOTIFICATION
+                if (!isLiked && track.uploaderId && track.uploaderId !== currentUser?.id) {
                     handleCreateNotification(
                         track.uploaderId,
                         currentUser!.id,
@@ -2905,7 +2954,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                         const updatedComments = [...(p.comments || []), newComment];
                         
                         // Send notification to post author (prevent self-notification)
-                        if (p.authorId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                        if (p.authorId !== currentUser.id) {
                             const group = groups.find(gr => gr.id === groupId);
                             handleCreateNotification(
                                 p.authorId,
@@ -2933,7 +2982,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             mentions.forEach(match => {
                 const userName = match[1];
                 const user = users.find(u => u.name.toLowerCase() === userName.toLowerCase());
-                if (user && user.id !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (user && user.id !== currentUser.id) {
                     mentionedUserIds.add(user.id);
                     
                     const group = groups.find(g => g.id === groupId);
@@ -2964,7 +3013,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         // Send notifications to invited users
         const group = groups.find(g => g.id === groupId);
         userIds.forEach(userId => {
-            if (userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+            if (userId !== currentUser.id) {
                 handleCreateNotification(
                     userId,
                     currentUser.id,
@@ -2991,7 +3040,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         
         // Notify group admin (prevent self-notification)
         const group = groups.find(g => g.id === groupId);
-        if (group && group.adminId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+        if (group && group.adminId !== currentUser.id) {
             handleCreateNotification(
                 group.adminId,
                 currentUser.id,
@@ -3108,7 +3157,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         const group = groups.find(g => g.id === groupId);
         if (group && group.memberPostingAllowed) {
             group.members.forEach(memberId => {
-                if (memberId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (memberId !== currentUser.id) {
                     handleCreateNotification(
                         memberId,
                         currentUser.id,
@@ -3219,7 +3268,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }));
         
         // Send notification to original post author (prevent self-notification)
-        if (groupPost.authorId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+        if (groupPost.authorId !== currentUser.id) {
             handleCreateNotification(
                 groupPost.authorId,
                 currentUser.id,
@@ -3253,7 +3302,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         // Notify followers about new group (excluding self)
         const followers = currentUser.followers || [];
         followers.forEach(followerId => {
-            if (followerId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+            if (followerId !== currentUser.id) {
                 handleCreateNotification(
                     followerId,
                     currentUser.id,
@@ -3289,7 +3338,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             newReactions.push({ userId: currentUser!.id, type });
                             
                             // Send notification to post author (prevent self-notification)
-                            if (p.authorId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                            if (p.authorId !== currentUser.id) {
                                 const group = groups.find(g => g.id === groupId);
                                 handleCreateNotification(
                                     p.authorId,
@@ -3376,7 +3425,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             const todayStr = `${today.getMonth() + 1}/${today.getDate()}`;
             
             users.forEach(user => {
-                if (user.birthDate && user.id !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (user.birthDate && user.id !== currentUser.id) {
                     const birthDate = new Date(user.birthDate);
                     const birthStr = `${birthDate.getMonth() + 1}/${birthDate.getDate()}`;
                     
@@ -3871,7 +3920,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 ));
                                                 
                                                 // Send notification to reel owner (prevent self-notification)
-                                                if (reel.userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                                                if (reel.userId !== currentUser.id) {
                                                     handleCreateNotification(
                                                         reel.userId,
                                                         currentUser.id,
@@ -3910,7 +3959,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                         
                                         // Send notification to reel owner (prevent self-notification)
                                         const reel = reels.find(r => r.id === reelId);
-                                        if (reel && reel.userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                                        if (reel && reel.userId !== currentUser.id) {
                                             handleCreateNotification(
                                                 reel.userId,
                                                 currentUser.id,
