@@ -1,64 +1,24 @@
-import { Env } from "../env"
+export const onRequestPost: PagesFunction = async ({ request, env }) => {
+  const { creator_id, title, description, audio_url, cover_url } = await request.json()
 
-export async function handlePodcasts(req: Request, env: Env) {
-  const url = new URL(req.url)
-  const id = url.pathname.split("/").pop()
+  const result = await env.DB.prepare(`
+    INSERT INTO podcasts (creator_id, title, description, audio_url, cover_url)
+    VALUES (?, ?, ?, ?, ?)
+  `).bind(
+    creator_id,
+    title,
+    description ?? null,
+    audio_url,
+    cover_url ?? null
+  ).run()
 
-  // ------------------------
-  // CREATE PODCAST
-  // POST /api/podcasts
-  // ------------------------
-  if (req.method === "POST") {
-    const body = await req.json()
-    const { creator_id, title, description, audio_url, cover_url } = body
+  return Response.json({ success: true, podcast_id: result.meta.last_row_id })
+}
 
-    if (!creator_id || !title || !audio_url) {
-      return new Response("Missing required fields", { status: 400 })
-    }
+export const onRequestGet: PagesFunction = async ({ env }) => {
+  const { results } = await env.DB
+    .prepare("SELECT * FROM podcasts ORDER BY created_at DESC")
+    .all()
 
-    const query = `
-      INSERT INTO podcasts (creator_id, title, description, audio_url, cover_url)
-      VALUES (?, ?, ?, ?, ?)
-    `
-
-    const result = await env.DB
-      .prepare(query)
-      .bind(
-        creator_id,
-        title,
-        description || null,
-        audio_url,
-        cover_url || null
-      )
-      .run()
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        podcast_id: result.meta.last_row_id
-      }),
-      { headers: { "Content-Type": "application/json" } }
-    )
-  }
-
-  // ------------------------
-  // GET PODCAST
-  // GET /api/podcasts/:id
-  // ------------------------
-  if (req.method === "GET" && id) {
-    const podcast = await env.DB
-      .prepare("SELECT * FROM podcasts WHERE id = ?")
-      .bind(id)
-      .first()
-
-    if (!podcast) {
-      return new Response("Podcast not found", { status: 404 })
-    }
-
-    return new Response(JSON.stringify(podcast), {
-      headers: { "Content-Type": "application/json" }
-    })
-  }
-
-  return new Response("Not Found", { status: 404 })
+  return Response.json(results)
 }
