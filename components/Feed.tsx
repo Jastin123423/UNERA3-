@@ -336,21 +336,75 @@ interface ReactionButtonProps {
 export const ReactionButton: React.FC<ReactionButtonProps> = ({ currentUserReactions, reactionCount, onReact, isGuest }) => {
     const [showDock, setShowDock] = useState(false);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const handleMouseEnter = () => { if(isGuest) return; timerRef.current = setTimeout(() => setShowDock(true), 500); };
-    const handleMouseLeave = () => { if (timerRef.current) clearTimeout(timerRef.current); setTimeout(() => setShowDock(false), 300); };
-    const handleClick = () => { if (isGuest) { alert("Please login to react."); return; } onReact('like'); };
-    const reactionConfig = [{ type: 'like', icon: '👍', color: '#1877F2' }, { type: 'love', icon: '❤️', color: '#F3425F' }, { type: 'haha', icon: '😆', color: '#F7B928' }, { type: 'wow', icon: '😮', color: '#F7B928' }, { type: 'sad', icon: '😢', color: '#F7B928' }, { type: 'angry', icon: '😡', color: '#E41E3F' }] as const;
+    
+    const handleMouseEnter = () => { 
+        if (isGuest) return; 
+        timerRef.current = setTimeout(() => setShowDock(true), 500); 
+    };
+    
+    const handleMouseLeave = () => { 
+        if (timerRef.current) clearTimeout(timerRef.current); 
+        setTimeout(() => setShowDock(false), 300); 
+    };
+    
+    const handleClick = () => { 
+        if (isGuest) { 
+            console.log("ReactionButton: Guest user attempting to react");
+            return; 
+        } 
+        console.log("ReactionButton: Reacting with 'like'");
+        onReact('like'); 
+    };
+    
+    const reactionConfig = [
+        { type: 'like' as const, icon: '👍', color: '#1877F2' }, 
+        { type: 'love' as const, icon: '❤️', color: '#F3425F' }, 
+        { type: 'haha' as const, icon: '😆', color: '#F7B928' }, 
+        { type: 'wow' as const, icon: '😮', color: '#F7B928' }, 
+        { type: 'sad' as const, icon: '😢', color: '#F7B928' }, 
+        { type: 'angry' as const, icon: '😡', color: '#E41E3F' }
+    ] as const;
+    
     const activeReaction = currentUserReactions ? reactionConfig.find(r => r.type === currentUserReactions) : null;
+    
     return (
         <div className="flex-1 relative group" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
             {showDock && (
                 <div className="absolute -top-12 left-0 bg-[#242526] rounded-full shadow-xl p-1.5 flex gap-2 animate-fade-in border border-[#3E4042] z-50">
                     {reactionConfig.map(reaction => (
-                        <div key={reaction.type} className="text-2xl hover:scale-125 transition-transform cursor-pointer hover:-translate-y-2 duration-200" onClick={(e) => { e.stopPropagation(); onReact(reaction.type); setShowDock(false); }}>{reaction.icon}</div>
+                        <div 
+                            key={reaction.type} 
+                            className="text-2xl hover:scale-125 transition-transform cursor-pointer hover:-translate-y-2 duration-200" 
+                            onClick={(e) => { 
+                                e.stopPropagation(); 
+                                console.log(`ReactionButton: Clicked ${reaction.type} reaction`);
+                                onReact(reaction.type); 
+                                setShowDock(false); 
+                            }}
+                        >
+                            {reaction.icon}
+                        </div>
                     ))}
                 </div>
             )}
-            <button onClick={handleClick} className="w-full flex items-center justify-center gap-2 h-10 rounded hover:bg-[#3A3B3C] transition-colors active:scale-95">{activeReaction ? (<><span className="text-[20px]">{activeReaction.icon}</span><span className="text-[17px] font-medium" style={{ color: activeReaction.color }}>{activeReaction.type.charAt(0).toUpperCase() + activeReaction.type.slice(1)}</span></>) : (<><i className="far fa-thumbs-up text-[20px] text-[#B0B3B8]"></i><span className="text-[17px] font-medium text-[#B0B3B8]">Like</span></>)}</button>
+            <button 
+                onClick={handleClick} 
+                className="w-full flex items-center justify-center gap-2 h-10 rounded hover:bg-[#3A3B3C] transition-colors active:scale-95"
+            >
+                {activeReaction ? (
+                    <>
+                        <span className="text-[20px]">{activeReaction.icon}</span>
+                        <span className="text-[17px] font-medium" style={{ color: activeReaction.color }}>
+                            {activeReaction.type.charAt(0).toUpperCase() + activeReaction.type.slice(1)}
+                        </span>
+                    </>
+                ) : (
+                    <>
+                        <i className="far fa-thumbs-up text-[20px] text-[#B0B3B8]"></i>
+                        <span className="text-[17px] font-medium text-[#B0B3B8]">Like</span>
+                    </>
+                )}
+            </button>
         </div>
     );
 };
@@ -922,7 +976,17 @@ export const CommentsSheet: React.FC<CommentsSheetProps> = ({ post, currentUser,
     const [showPicker, setShowPicker] = useState<'emoji' | 'sticker' | null>(null);
     const [replyingTo, setReplyingTo] = useState<{ id: number, name: string } | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
-    const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); if(text.trim()) { onComment(post.id, text, undefined, replyingTo?.id); setText(''); setShowPicker(null); setReplyingTo(null); } };
+    
+    const handleSubmit = (e: React.FormEvent) => { 
+        e.preventDefault(); 
+        if(text.trim()) { 
+            console.log('CommentsSheet: Submitting comment:', { postId: post.id, text, replyingTo });
+            onComment(post.id, text, undefined, replyingTo?.id); 
+            setText(''); 
+            setShowPicker(null); 
+            setReplyingTo(null); 
+        }
+    };
     
     // Use formattedTime from comment or calculate it if missing
     const getCommentTime = (timestamp: number, formattedTime?: string) => {
@@ -1075,6 +1139,26 @@ export const Post: React.FC<PostProps> = ({
     const isOwner = currentUser?.id === post.authorId;
     const isAdmin = currentUser?.role === 'admin';
     const isVideo = post.type === 'video';
+
+    // FIXED: Handle react function properly
+    const handleReact = (type: ReactionType) => {
+        console.log('Post component: handleReact called', { postId: post.id, type, currentUser });
+        if (!currentUser) {
+            console.log('Post component: No current user, showing alert');
+            return; // This will trigger the ReactionButton's isGuest behavior
+        }
+        onReact(post.id, type);
+    };
+
+    // FIXED: Handle comment opening properly
+    const handleOpenComments = () => {
+        console.log('Post component: handleOpenComments called', { postId: post.id, currentUser });
+        if (!currentUser) {
+            console.log('Post component: No current user, cannot open comments');
+            return; // This should show alert from the button click
+        }
+        onOpenComments(post.id);
+    };
 
     // Helper to get all images from post (supports both single image and multi-image arrays)
     const getAllImages = () => {
@@ -1293,7 +1377,7 @@ export const Post: React.FC<PostProps> = ({
                             <span className="hover:underline">{post.reactions.length > 0 ? post.reactions.length : ''}</span>
                         </div>
                         <div className="flex gap-4">
-                            <span className="hover:underline cursor-pointer" onClick={() => onOpenComments(post.id)}>{post.comments.length} comments</span>
+                            <span className="hover:underline cursor-pointer" onClick={handleOpenComments}>{post.comments.length} comments</span>
                             <span className="hover:underline cursor-pointer">{post.shares} shares</span>
                         </div>
                     </div>
@@ -1301,12 +1385,38 @@ export const Post: React.FC<PostProps> = ({
                 
                 {!isVideo && (
                     <div className="px-2 py-1 border-t border-[#3E4042] mx-2 mb-1 flex items-center justify-between">
-                        <ReactionButton currentUserReactions={myReaction} reactionCount={post.reactions.length} onReact={(type) => onReact(post.id, type)} isGuest={!currentUser} />
-                        <button className="flex-1 flex items-center justify-center gap-2 h-10 rounded hover:bg-[#3A3B3C] transition-colors group text-[#B0B3B8]" onClick={() => currentUser ? onOpenComments(post.id) : alert("Login first")}>
+                        {/* FIXED: Use handleReact function and properly pass isGuest flag */}
+                        <ReactionButton 
+                            currentUserReactions={myReaction} 
+                            reactionCount={post.reactions.length} 
+                            onReact={handleReact} 
+                            isGuest={!currentUser} 
+                        />
+                        {/* FIXED: Fixed comment button to properly handle logged out users */}
+                        <button 
+                            className="flex-1 flex items-center justify-center gap-2 h-10 rounded hover:bg-[#3A3B3C] transition-colors group text-[#B0B3B8]" 
+                            onClick={() => {
+                                if (!currentUser) {
+                                    alert("Please login to comment");
+                                    return;
+                                }
+                                handleOpenComments();
+                            }}
+                        >
                             <i className="far fa-comment-alt text-[20px] group-hover:text-[#E4E6EB]"></i>
                             <span className="text-[17px] font-medium group-hover:text-[#E4E6EB]">Comment</span>
                         </button>
-                        <button className="flex-1 flex items-center justify-center gap-2 h-10 rounded hover:bg-[#3A3B3C] transition-colors group text-[#B0B3B8]" onClick={() => onShare(post.id)}>
+                        {/* FIXED: Share button should work for everyone */}
+                        <button 
+                            className="flex-1 flex items-center justify-center gap-2 h-10 rounded hover:bg-[#3A3B3C] transition-colors group text-[#B0B3B8]" 
+                            onClick={() => {
+                                if (!currentUser) {
+                                    alert("Please login to share");
+                                    return;
+                                }
+                                onShare(post.id);
+                            }}
+                        >
                             <i className="fas fa-share text-[20px] group-hover:text-[#E4E6EB]"></i>
                             <span className="text-[17px] font-medium group-hover:text-[#E4E6EB]">Share</span>
                         </button>
