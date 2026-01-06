@@ -1469,71 +1469,214 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setUsers(newUsers);
     };
 
-    // FIXED: CRITICAL - Ensure like functionality works for all users, including self
+    // ========== CRITICAL FIX: Enhanced handleReact function ==========
     const handleReact = (itemId: number, type: ReactionType) => {
-        console.log('handleReact called:', { itemId, type, currentUserId: currentUser?.id });
+        console.log('[DEBUG] handleReact called:', { 
+            itemId, 
+            type, 
+            currentUserId: currentUser?.id,
+            currentUserName: currentUser?.name
+        });
         
         if (!currentUser) {
-            console.log('No current user, returning');
-            return alert("Please login to react.");
+            console.log('[DEBUG] No current user, showing alert');
+            alert("Please login to react.");
+            return;
         }
         
         // Check if it's a product post (ID > 100000)
         if (itemId > 100000) {
-            console.log('Product post detected, calling handleLikeProduct');
+            console.log('[DEBUG] Product post detected, calling handleLikeProduct');
             const productId = itemId - 100000;
             handleLikeProduct(productId);
             return;
         }
         
-        console.log('Updating post reactions...');
-        setPosts(prev => prev.map(post => {
-            if (post.id === itemId) {
-                console.log('Found post:', post.id, 'author:', post.authorId);
-                const existing = post.reactions.find(r => r.userId === currentUser!.id);
-                console.log('Existing reaction:', existing);
-                
-                let newReactions = [...post.reactions];
-                if (existing) {
-                    if (existing.type === type) {
-                        console.log('Removing reaction');
-                        newReactions = newReactions.filter(r => r.userId !== currentUser!.id);
-                    } else {
-                        console.log('Updating reaction type');
-                        newReactions = newReactions.map(r => 
-                            r.userId === currentUser!.id ? { ...r, type } : r
-                        );
-                    }
-                } else {
-                    console.log('Adding new reaction');
-                    newReactions.push({ userId: currentUser!.id, type });
+        // Find the post first
+        const postToUpdate = posts.find(p => p.id === itemId);
+        if (!postToUpdate) {
+            console.log('[DEBUG] Post not found:', itemId);
+            return;
+        }
+        
+        console.log('[DEBUG] Found post:', {
+            postId: postToUpdate.id,
+            authorId: postToUpdate.authorId,
+            currentReactions: postToUpdate.reactions.length,
+            postAuthorName: users.find(u => u.id === postToUpdate.authorId)?.name || 'Unknown'
+        });
+        
+        // Update posts state
+        setPosts(prev => {
+            return prev.map(post => {
+                if (post.id === itemId) {
+                    const existingReaction = post.reactions.find(r => r.userId === currentUser.id);
                     
-                    // Send notification to post author (prevent self-notification)
-                    // CRITICAL FIX: This should NOT block the like functionality
-                    if (post.authorId !== currentUser.id) {
-                        console.log('Sending notification to author:', post.authorId);
-                        const content = type === 'like' 
-                            ? 'liked your post.' 
-                            : `reacted with ${type} to your post.`;
+                    let newReactions = [...post.reactions];
+                    
+                    if (existingReaction) {
+                        // User already has a reaction
+                        if (existingReaction.type === type) {
+                            // Remove reaction if same type clicked
+                            newReactions = newReactions.filter(r => r.userId !== currentUser.id);
+                            console.log('[DEBUG] Removed reaction for post:', post.id);
+                        } else {
+                            // Update reaction type
+                            newReactions = newReactions.map(r => 
+                                r.userId === currentUser.id ? { ...r, type } : r
+                            );
+                            console.log('[DEBUG] Updated reaction type to:', type, 'for post:', post.id);
+                        }
+                    } else {
+                        // Add new reaction
+                        newReactions.push({ userId: currentUser.id, type });
+                        console.log('[DEBUG] Added new reaction:', type, 'for post:', post.id);
                         
+                        // Send notification to post author (prevent self-notification)
+                        if (post.authorId !== currentUser.id) {
+                            console.log('[DEBUG] Sending notification to author:', post.authorId);
+                            const content = type === 'like' 
+                                ? 'liked your post.' 
+                                : `reacted with ${type} to your post.`;
+                            
+                            handleCreateNotification(
+                                post.authorId,
+                                currentUser.id,
+                                `like_${type === 'like' ? 'post' : 'reaction'}`,
+                                content,
+                                { postId: itemId, reactionType: type }
+                            );
+                        } else {
+                            console.log('[DEBUG] Self-reaction, skipping notification');
+                        }
+                    }
+                    
+                    return { ...post, reactions: newReactions };
+                }
+                return post;
+            });
+        });
+    };
+
+    // ========== CRITICAL FIX: Enhanced handleComment function ==========
+    const handleComment = (itemId: number, text: string, attachment?: any, parentId?: number) => {
+        console.log('[DEBUG] handleComment called:', { 
+            itemId, 
+            text: text.substring(0, 50) + (text.length > 50 ? '...' : ''),
+            currentUserId: currentUser?.id,
+            currentUserName: currentUser?.name
+        });
+        
+        if (!currentUser) {
+            console.log('[DEBUG] No current user, returning');
+            alert("Please login to comment.");
+            return;
+        }
+        
+        // Check if it's a product post (ID > 100000)
+        if (itemId > 100000) {
+            console.log('[DEBUG] Product post detected, calling handleCommentOnProduct');
+            const productId = itemId - 100000;
+            handleCommentOnProduct(productId, text);
+            return;
+        }
+        
+        // Find the post first
+        const postToUpdate = posts.find(p => p.id === itemId);
+        if (!postToUpdate) {
+            console.log('[DEBUG] Post not found:', itemId);
+            return;
+        }
+        
+        const timestamp = Date.now();
+        const formattedTime = formatRelativeTime(timestamp);
+        const newComment: Comment = { 
+            id: timestamp, 
+            userId: currentUser.id, 
+            text, 
+            timestamp: timestamp,
+            formattedTime: formattedTime,
+            likes: 0, 
+            attachment,
+            authorName: currentUser.name,
+            authorImage: currentUser.profileImage,
+            parentId
+        };
+        
+        console.log('[DEBUG] Adding comment to post:', {
+            postId: itemId,
+            postAuthorId: postToUpdate.authorId,
+            commentId: newComment.id,
+            commentTextPreview: text.substring(0, 30)
+        });
+        
+        // Update posts state
+        setPosts(prev => {
+            return prev.map(p => {
+                if (p.id === itemId) {
+                    const updatedComments = [...p.comments, newComment];
+                    console.log('[DEBUG] Updated comments for post', p.id, ':', updatedComments.length);
+                    
+                    // Send notification to post author (prevent self-commenting notifications)
+                    if (p.authorId !== currentUser.id) {
+                        console.log('[DEBUG] Sending comment notification to author:', p.authorId);
                         handleCreateNotification(
-                            post.authorId,
+                            p.authorId,
                             currentUser.id,
-                            `like_${type === 'like' ? 'post' : 'reaction'}`,
-                            content,
-                            { postId: itemId, reactionType: type }
+                            'comment_post',
+                            'commented on your post.',
+                            { postId: itemId, commentId: newComment.id }
                         );
                     } else {
-                        console.log('Self-reaction, skipping notification');
+                        console.log('[DEBUG] Self-comment, skipping notification');
                     }
+                    
+                    // Handle mentions in comments with self-notification prevention
+                    const mentionRegex = /@(\w+(?:\s\w+)?)/g;
+                    const mentions = [...text.matchAll(mentionRegex)];
+                    if (mentions.length > 0) {
+                        const mentionedUserIds = new Set<number>();
+                        mentions.forEach(match => {
+                            const userName = match[1];
+                            const user = users.find(u => u.name.toLowerCase() === userName.toLowerCase());
+                            if (user && user.id !== currentUser.id) {
+                                mentionedUserIds.add(user.id);
+                                
+                                // Send mention notification
+                                console.log('[DEBUG] Sending mention notification to user:', user.id);
+                                handleCreateNotification(
+                                    user.id,
+                                    currentUser.id,
+                                    'mention_comment',
+                                    'mentioned you in a comment.',
+                                    { postId: itemId, commentId: newComment.id }
+                                );
+                            }
+                        });
+                    }
+                    
+                    return { ...p, comments: updatedComments };
                 }
-                
-                const updatedPost = { ...post, reactions: newReactions };
-                console.log('Updated post reactions:', newReactions);
-                return updatedPost;
+                return p;
+            });
+        });
+
+        // Update comment count for music/podcast posts
+        const post = posts.find(p => p.id === itemId);
+        if (post && (post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
+            const song = getSongForPost(post, songs, episodes);
+            if (song) {
+                handleTrackComment(song.id);
             }
-            return post;
-        }));
+        }
+        
+        // Close comments sheet if it's open
+        if (activeCommentsPostId === itemId) {
+            console.log('[DEBUG] Closing comments sheet for post:', itemId);
+            setActiveCommentsPostId(null);
+        }
+        
+        console.log('[DEBUG] Comment added successfully to post:', itemId);
     };
 
     // FIXED: Prevent self-notifications for reel reactions
@@ -1569,103 +1712,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             }
             return reel;
         }));
-    };
-
-    // FIXED: Ensure comment functionality works for all users, including self
-    const handleComment = (itemId: number, text: string, attachment?: any, parentId?: number) => {
-        console.log('handleComment called:', { itemId, text, currentUserId: currentUser?.id });
-        
-        if (!currentUser) {
-            console.log('No current user, returning');
-            return;
-        }
-        
-        // Check if it's a product post (ID > 100000)
-        if (itemId > 100000) {
-            console.log('Product post detected, calling handleCommentOnProduct');
-            const productId = itemId - 100000;
-            handleCommentOnProduct(productId, text);
-            return;
-        }
-        
-        const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp);
-        const newComment: Comment = { 
-            id: timestamp, 
-            userId: currentUser.id, 
-            text, 
-            timestamp: timestamp,
-            formattedTime: formattedTime,
-            likes: 0, 
-            attachment,
-            authorName: currentUser.name,
-            authorImage: currentUser.profileImage
-        };
-        
-        console.log('Adding comment to post:', itemId);
-        setPosts(prev => prev.map(p => {
-            if (p.id === itemId) {
-                const updatedComments = [...p.comments, newComment];
-                console.log('Updated comments for post', p.id, ':', updatedComments.length);
-                
-                // Send notification to post author (prevent self-commenting notifications)
-                // CRITICAL FIX: This should NOT block the comment functionality
-                if (p.authorId !== currentUser.id) {
-                    console.log('Sending comment notification to author:', p.authorId);
-                    handleCreateNotification(
-                        p.authorId,
-                        currentUser.id,
-                        'comment_post',
-                        'commented on your post.',
-                        { postId: itemId, commentId: newComment.id }
-                    );
-                } else {
-                    console.log('Self-comment, skipping notification');
-                }
-                
-                // Handle mentions in comments with self-notification prevention
-                const mentionRegex = /@(\w+(?:\s\w+)?)/g;
-                const mentions = [...text.matchAll(mentionRegex)];
-                if (mentions.length > 0) {
-                    const mentionedUserIds = new Set<number>();
-                    mentions.forEach(match => {
-                        const userName = match[1];
-                        const user = users.find(u => u.name.toLowerCase() === userName.toLowerCase());
-                        if (user && user.id !== currentUser.id) {
-                            mentionedUserIds.add(user.id);
-                            
-                            // Send mention notification
-                            handleCreateNotification(
-                                user.id,
-                                currentUser.id,
-                                'mention_comment',
-                                'mentioned you in a comment.',
-                                { postId: itemId, commentId: newComment.id }
-                            );
-                        }
-                    });
-                }
-                
-                return { ...p, comments: updatedComments };
-            }
-            return p;
-        }));
-
-        // Update comment count for music/podcast posts
-        const post = posts.find(p => p.id === itemId);
-        if (post && (post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
-            const song = getSongForPost(post, songs, episodes);
-            if (song) {
-                handleTrackComment(song.id);
-            }
-        }
-        
-        // Close comments sheet if it's open
-        if (activeCommentsPostId === itemId) {
-            setActiveCommentsPostId(null);
-        }
-        
-        console.log('Comment added successfully');
     };
 
     const handleCreatePost = (
@@ -2415,16 +2461,16 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     // FIXED: Prevent self-notifications for shares - UPDATED to handle product posts
     const handleShare = (postId: number, targetType: 'profile' | 'group' | 'brand', targetId?: string | number, extraCaption?: string) => {
-        console.log('handleShare called:', { postId, targetType, targetId, currentUserId: currentUser?.id });
+        console.log('[DEBUG] handleShare called:', { postId, targetType, targetId, currentUserId: currentUser?.id });
         
         if (!currentUser) {
-            console.log('No current user, returning');
+            console.log('[DEBUG] No current user, returning');
             return;
         }
         
         // Check if it's a product post (ID > 100000)
         if (postId > 100000) {
-            console.log('Product post detected');
+            console.log('[DEBUG] Product post detected');
             const productId = postId - 100000;
             const product = products.find(p => p.id === productId);
             if (!product) return;
