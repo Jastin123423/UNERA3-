@@ -1,28 +1,74 @@
-import { Env } from "../env"
+export const onRequestOptions: PagesFunction = async () => {
+  return new Response(null, {
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type"
+    }
+  })
+}
 
-export async function handleBrands(req: Request, env: Env) {
-  const url = new URL(req.url)
-  const id = url.pathname.split("/").pop()
+export const onRequestPost: PagesFunction = async ({ request, env }) => {
+  try {
+    const body = await request.json()
 
-  // GET all brands
-  if (req.method === "GET") {
-    const { results } = await env.DB.prepare("SELECT * FROM brands ORDER BY created_at DESC").all()
-    return new Response(JSON.stringify({ success: true, brands: results }), { headers: { "Content-Type": "application/json" } })
+    const {
+      owner_id,
+      name,
+      description,
+      logo_url,
+      category
+    } = body
+
+    if (!owner_id || !name) {
+      return new Response("Missing required fields", { status: 400 })
+    }
+
+    const result = await env.DB
+      .prepare(`
+        INSERT INTO brands
+        (owner_id, name, description, logo_url, category)
+        VALUES (?, ?, ?, ?, ?)
+      `)
+      .bind(
+        owner_id,
+        name,
+        description ?? null,
+        logo_url ?? null,
+        category ?? null
+      )
+      .run()
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        brand_id: result.meta.last_row_id
+      }),
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*"
+        }
+      }
+    )
+
+  } catch (err: any) {
+    return new Response(
+      JSON.stringify({ error: err.message }),
+      { status: 500 }
+    )
   }
+}
 
-  // CREATE brand
-  if (req.method === "POST") {
-    const body = await req.json()
-    const { owner_id, name, description, logo_url, category } = body
-    if (!owner_id || !name) return new Response("Missing required fields", { status: 400 })
+export const onRequestGet: PagesFunction = async ({ env }) => {
+  const { results } = await env.DB
+    .prepare("SELECT * FROM brands ORDER BY created_at DESC")
+    .all()
 
-    const result = await env.DB.prepare(`
-      INSERT INTO brands (owner_id, name, description, logo_url, category)
-      VALUES (?, ?, ?, ?, ?)
-    `).bind(owner_id, name, description || null, logo_url || null, category || null).run()
-
-    return new Response(JSON.stringify({ success: true, brand_id: result.meta.last_row_id }), { headers: { "Content-Type": "application/json" } })
-  }
-
-  return new Response("Not Found", { status: 404 })
+  return new Response(JSON.stringify(results), {
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*"
+    }
+  })
 }
