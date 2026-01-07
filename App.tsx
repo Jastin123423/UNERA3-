@@ -701,7 +701,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const [showForgotPassword, setShowForgotPassword] = useState(false);
     const [loginError, setLoginError] = useState('');
     
-    // ========== MESSAGING STATES ==========
+    // ========== FIXED MESSAGING STATES ==========
     const [messages, setMessages] = useState<Message[]>([
         {
             id: '1',
@@ -1489,70 +1489,155 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
     
-    // ========== MESSAGING FUNCTIONS ==========
+    // ========== PROFESSIONALLY FIXED MESSAGING FUNCTIONS ==========
     const handleSendMessage = (text: string, attachments?: any[], gifUrl?: string, emoji?: string) => {
-        if (!currentUser || !activeChatUser) return;
+        console.log('[MESSAGE] Sending message:', { 
+            text, 
+            attachments: attachments?.length || 0,
+            gifUrl: !!gifUrl,
+            emoji: !!emoji,
+            currentUserId: currentUser?.id,
+            recipientId: activeChatUser?.id
+        });
+        
+        if (!currentUser || !activeChatUser) {
+            console.error('[MESSAGE] Cannot send message: No current user or active chat user');
+            return;
+        }
+        
+        // Validate message content
+        if (!text && !gifUrl && !emoji && (!attachments || attachments.length === 0)) {
+            console.warn('[MESSAGE] Cannot send empty message');
+            return;
+        }
         
         const timestamp = Date.now();
         const formattedTime = formatRelativeTime(timestamp);
+        
+        // Create message with unique ID
+        const messageId = `msg-${timestamp}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Build message object with proper structure
         const newMessage: Message = {
-            id: `msg-${timestamp}`,
+            id: messageId,
             senderId: currentUser.id,
             receiverId: activeChatUser.id,
-            content: text,
+            content: text || '', // Always ensure content is a string
             timestamp,
             formattedTime,
             status: 'sending' as const,
-            ...(gifUrl && { gifUrl }),
-            ...(emoji && { reaction: emoji }),
-            ...(attachments && attachments.length > 0 && { attachments })
         };
         
-        // Add message to messages list
-        setMessages(prev => [newMessage, ...prev]);
+        // Add optional fields if they exist
+        if (gifUrl) {
+            newMessage.gifUrl = gifUrl;
+        }
         
-        // Simulate sending and update status
-        setTimeout(() => {
+        if (emoji) {
+            newMessage.reaction = emoji;
+        }
+        
+        if (attachments && attachments.length > 0) {
+            newMessage.attachments = attachments;
+        }
+        
+        console.log('[MESSAGE] Created message object:', newMessage);
+        
+        // Add message to state - IMPORTANT: Use functional update to avoid stale state
+        setMessages(prev => {
+            const updatedMessages = [newMessage, ...prev];
+            console.log('[MESSAGE] Messages updated. Total messages:', updatedMessages.length);
+            return updatedMessages;
+        });
+        
+        // Clear typing status
+        handleTyping(currentUser.id, false);
+        
+        // Simulate sending process with status updates
+        const sendingTimeout = setTimeout(() => {
             setMessages(prev => prev.map(msg => 
-                msg.id === newMessage.id 
+                msg.id === messageId 
                     ? { ...msg, status: 'sent' as const }
                     : msg
             ));
+            console.log('[MESSAGE] Message sent:', messageId);
             
-            // Simulate delivery after 1 second
-            setTimeout(() => {
+            // Simulate delivery
+            const deliveryTimeout = setTimeout(() => {
                 setMessages(prev => prev.map(msg => 
-                    msg.id === newMessage.id 
+                    msg.id === messageId 
                         ? { ...msg, status: 'delivered' as const }
                         : msg
                 ));
+                console.log('[MESSAGE] Message delivered:', messageId);
                 
-                // Simulate read after 2 seconds
-                setTimeout(() => {
-                    setMessages(prev => prev.map(msg => 
-                        msg.id === newMessage.id 
-                            ? { ...msg, status: 'read' as const }
-                            : msg
-                    ));
+                // Simulate read if recipient is online
+                const readTimeout = setTimeout(() => {
+                    const recipientStatus = userStatus[activeChatUser.id];
+                    if (recipientStatus?.isOnline) {
+                        setMessages(prev => prev.map(msg => 
+                            msg.id === messageId 
+                                ? { ...msg, status: 'read' as const }
+                                : msg
+                        ));
+                        console.log('[MESSAGE] Message read:', messageId);
+                    }
                 }, 2000);
+                
+                // Store timeout for cleanup
+                window['messageReadTimeout'] = readTimeout;
             }, 1000);
+            
+            // Store timeout for cleanup
+            window['messageDeliveryTimeout'] = deliveryTimeout;
         }, 500);
         
-        // Send notification to recipient
-        handleCreateNotification(
-            activeChatUser.id,
-            currentUser.id,
-            'message',
-            `sent you a message: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`,
-            { metadata: { type: 'message' } }
-        );
+        // Store timeout for cleanup
+        window['messageSendingTimeout'] = sendingTimeout;
+        
+        // Send notification to recipient (if not self-messaging)
+        if (activeChatUser.id !== currentUser.id) {
+            let notificationContent = '';
+            if (gifUrl) {
+                notificationContent = 'sent you a GIF';
+            } else if (emoji) {
+                notificationContent = `sent you ${emoji}`;
+            } else if (text) {
+                const preview = text.length > 50 ? text.substring(0, 50) + '...' : text;
+                notificationContent = `sent you a message: ${preview}`;
+            } else if (attachments && attachments.length > 0) {
+                notificationContent = `sent you ${attachments.length} attachment(s)`;
+            } else {
+                notificationContent = 'sent you a message';
+            }
+            
+            handleCreateNotification(
+                activeChatUser.id,
+                currentUser.id,
+                'message',
+                notificationContent,
+                { 
+                    metadata: { 
+                        type: 'message',
+                        messageId: messageId,
+                        isGif: !!gifUrl,
+                        hasEmoji: !!emoji,
+                        hasAttachments: !!(attachments && attachments.length > 0)
+                    } 
+                }
+            );
+        }
+        
+        console.log('[MESSAGE] Message sent successfully:', messageId);
     };
     
     const handleDeleteMessage = (messageId: string) => {
+        console.log('[MESSAGE] Deleting message:', messageId);
         setMessages(prev => prev.filter(msg => msg.id !== messageId));
     };
     
     const handleReactToMessage = (messageId: string, reaction: string) => {
+        console.log('[MESSAGE] Reacting to message:', { messageId, reaction });
         setMessages(prev => prev.map(msg => 
             msg.id === messageId 
                 ? { ...msg, reaction }
@@ -1561,17 +1646,25 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
     
     const handleTyping = (userId: number, isTyping: boolean) => {
+        console.log('[TYPING] User typing:', { userId, isTyping });
+        
         setUserStatus(prev => ({
             ...prev,
             [userId]: {
                 ...prev[userId],
-                typing: isTyping
+                typing: isTyping,
+                lastSeen: new Date().toISOString()
             }
         }));
         
-        // Auto-clear typing status after 3 seconds
+        // Clear previous timeout if exists
+        if (window['typingTimeout']) {
+            clearTimeout(window['typingTimeout']);
+        }
+        
+        // Set timeout to clear typing status after 3 seconds
         if (isTyping) {
-            setTimeout(() => {
+            window['typingTimeout'] = setTimeout(() => {
                 setUserStatus(prev => ({
                     ...prev,
                     [userId]: {
@@ -1579,11 +1672,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                         typing: false
                     }
                 }));
+                console.log('[TYPING] Cleared typing status for user:', userId);
             }, 3000);
         }
     };
     
     const handleMarkAsRead = (messageId: string) => {
+        console.log('[MESSAGE] Marking as read:', messageId);
         setMessages(prev => prev.map(msg => 
             msg.id === messageId 
                 ? { ...msg, status: 'read' as const }
@@ -1592,7 +1687,32 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
     
     const getUserStatus = (userId: number) => {
-        return userStatus[userId] || { isOnline: false, lastSeen: new Date().toISOString(), typing: false };
+        const status = userStatus[userId] || { 
+            isOnline: false, 
+            lastSeen: new Date(Date.now() - 3600000).toISOString(),
+            typing: false 
+        };
+        
+        // Format last seen time for display
+        const lastSeenDate = new Date(status.lastSeen);
+        const now = new Date();
+        const diffMs = now.getTime() - lastSeenDate.getTime();
+        const diffMins = Math.floor(diffMs / 60000);
+        
+        let formattedLastSeen = status.isOnline 
+            ? 'Online' 
+            : diffMins < 1 
+                ? 'Just now' 
+                : diffMins < 60 
+                    ? `${diffMins}m ago` 
+                    : diffMins < 1440 
+                        ? `${Math.floor(diffMins / 60)}h ago` 
+                        : `${Math.floor(diffMins / 1440)}d ago`;
+        
+        return {
+            ...status,
+            formattedLastSeen
+        };
     };
     
     // Update user online status periodically
@@ -1614,13 +1734,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 users.forEach(user => {
                     if (user.id !== currentUser?.id) {
                         const currentStatus = prev[user.id];
-                        // Randomly change online status for demo
-                        const shouldChange = Math.random() > 0.9;
-                        const isOnline = shouldChange ? Math.random() > 0.5 : (currentStatus?.isOnline || false);
+                        // More realistic online status simulation
+                        const isOnline = currentStatus?.isOnline || Math.random() > 0.6;
                         
                         updated[user.id] = {
                             isOnline,
-                            lastSeen: isOnline ? new Date().toISOString() : (currentStatus?.lastSeen || new Date(Date.now() - Math.random() * 86400000).toISOString()),
+                            lastSeen: isOnline 
+                                ? new Date().toISOString() 
+                                : (currentStatus?.lastSeen || new Date(Date.now() - Math.random() * 86400000).toISOString()),
                             typing: currentStatus?.typing || false
                         };
                     }
@@ -1633,7 +1754,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         updateOnlineStatus();
         const interval = setInterval(updateOnlineStatus, 30000); // Update every 30 seconds
         
-        return () => clearInterval(interval);
+        return () => {
+            clearInterval(interval);
+            // Clear all timeouts
+            if (window['typingTimeout']) clearTimeout(window['typingTimeout']);
+            if (window['messageSendingTimeout']) clearTimeout(window['messageSendingTimeout']);
+            if (window['messageDeliveryTimeout']) clearTimeout(window['messageDeliveryTimeout']);
+            if (window['messageReadTimeout']) clearTimeout(window['messageReadTimeout']);
+        };
     }, [currentUser, users]);
     
     // ========== FIXED LIKE AND REACT FUNCTIONS ==========
@@ -4471,16 +4599,22 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                         />
                     )}
                     
-                    {/* Chat Window */}
+                    {/* Chat Window - FIXED with proper message passing */}
                     {activeChatUser && currentUser && (
                         <ChatWindow 
+                            key={`chat-${currentUser.id}-${activeChatUser.id}`}
                             currentUser={currentUser}
                             recipient={activeChatUser}
-                            messages={messages.filter(msg => 
-                                (msg.senderId === currentUser.id && msg.receiverId === activeChatUser.id) ||
-                                (msg.senderId === activeChatUser.id && msg.receiverId === currentUser.id)
-                            )}
-                            onClose={() => setActiveChatUser(null)}
+                            messages={messages
+                                .filter(msg => 
+                                    (msg.senderId === currentUser.id && msg.receiverId === activeChatUser.id) ||
+                                    (msg.senderId === activeChatUser.id && msg.receiverId === currentUser.id)
+                                )
+                                .sort((a, b) => a.timestamp - b.timestamp)} // Sort ascending for proper display
+                            onClose={() => {
+                                console.log('[CHAT] Closing chat window');
+                                setActiveChatUser(null);
+                            }}
                             onSendMessage={handleSendMessage}
                             onDeleteMessage={handleDeleteMessage}
                             onReactToMessage={handleReactToMessage}
