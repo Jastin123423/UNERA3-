@@ -1,11 +1,27 @@
-
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
-  const { user_id, post_id } = await request.json()
+  try {
+    const { user_id, post_id } = await request.json()
 
-  await env.DB.prepare(`
-    INSERT INTO group_post_likes (user_id, post_id)
-    VALUES (?, ?)
-  `).bind(user_id, post_id).run()
+    if (!user_id || !post_id) {
+      return new Response("Missing fields", { status: 400 })
+    }
 
-  return Response.json({ success: true })
+    await env.DB.prepare(
+      `INSERT INTO group_post_likes (user_id, post_id)
+       VALUES (?, ?)`
+    )
+      .bind(user_id, post_id)
+      .run()
+
+    return new Response(
+      JSON.stringify({ success: true }),
+      { headers: { "Content-Type": "application/json" } }
+    )
+
+  } catch (e: any) {
+    return new Response(
+      JSON.stringify({ error: e.message }),
+      { status: 500 }
+    )
+  }
 }
