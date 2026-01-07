@@ -701,6 +701,87 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const [showForgotPassword, setShowForgotPassword] = useState(false);
     const [loginError, setLoginError] = useState('');
     
+    // ========== MESSAGING STATES ==========
+    const [messages, setMessages] = useState<Message[]>([
+        {
+            id: '1',
+            senderId: 2,
+            receiverId: 1,
+            content: 'Hey there! How are you?',
+            timestamp: Date.now() - 3600000,
+            status: 'read' as const,
+            formattedTime: formatRelativeTime(Date.now() - 3600000)
+        },
+        {
+            id: '2',
+            senderId: 1,
+            receiverId: 2,
+            content: 'I\'m good! Just working on the project.',
+            timestamp: Date.now() - 1800000,
+            status: 'read' as const,
+            formattedTime: formatRelativeTime(Date.now() - 1800000)
+        },
+        {
+            id: '3',
+            senderId: 2,
+            receiverId: 1,
+            content: 'Awesome! Can you share the latest updates?',
+            timestamp: Date.now() - 900000,
+            status: 'delivered' as const,
+            formattedTime: formatRelativeTime(Date.now() - 900000),
+            attachment: {
+                id: 'att1',
+                type: 'document' as const,
+                url: 'https://example.com/document.pdf',
+                name: 'Project_Updates.pdf',
+                size: '2.5 MB'
+            }
+        },
+        {
+            id: '4',
+            senderId: 3,
+            receiverId: 1,
+            content: 'Check out this funny meme! 😂',
+            timestamp: Date.now() - 600000,
+            status: 'read' as const,
+            formattedTime: formatRelativeTime(Date.now() - 600000),
+            gifUrl: 'https://media.giphy.com/media/3o7abAHdYvZdBNnGZq/giphy.gif'
+        },
+        {
+            id: '5',
+            senderId: 1,
+            receiverId: 3,
+            content: 'Haha that\'s hilarious! 😂',
+            timestamp: Date.now() - 300000,
+            status: 'read' as const,
+            formattedTime: formatRelativeTime(Date.now() - 300000)
+        },
+        {
+            id: '6',
+            senderId: 2,
+            receiverId: 1,
+            content: 'Meeting starts in 15 minutes!',
+            timestamp: Date.now() - 120000,
+            status: 'delivered' as const,
+            formattedTime: formatRelativeTime(Date.now() - 120000)
+        }
+    ]);
+    
+    // User online status tracking
+    const [userStatus, setUserStatus] = useState<Record<number, { isOnline: boolean; lastSeen: string; typing: boolean }>>(() => {
+        const statuses: Record<number, { isOnline: boolean; lastSeen: string; typing: boolean }> = {};
+        users.forEach(user => {
+            // Random online status for demo
+            const isOnline = Math.random() > 0.5;
+            statuses[user.id] = {
+                isOnline,
+                lastSeen: new Date(Date.now() - Math.random() * 86400000).toISOString(),
+                typing: false
+            };
+        });
+        return statuses;
+    });
+    
     const serverPath = initialPath || '/';
     const clientPath = isClient ? getPath() : serverPath;
     const path = clientPath;
@@ -770,7 +851,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     ]);
     const [isLoading, setIsLoading] = useState(true);
     const [activeProduct, setActiveProduct] = useState<Product | null>(null);
-    const [messages, setMessages] = useState<Message[]>([]);
     const [activeSinglePostId, setActiveSinglePostId] = useState<number | null>(initialData?.activeSinglePostId || parsedPath.postId || null);
 
     const isAdmin = currentUser?.role === 'admin';
@@ -1179,6 +1259,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             const storedPosts = localStorage.getItem('universePosts');
             const storedGroups = localStorage.getItem('universeGroups');
             const storedNotifications = localStorage.getItem('universeNotifications');
+            const storedMessages = localStorage.getItem('universeMessages');
+            const storedUserStatus = localStorage.getItem('universeUserStatus');
             
             // Load People You May Know filters
             const viewedProfiles = JSON.parse(localStorage.getItem('universeViewedProfiles') || '[]');
@@ -1206,6 +1288,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             }
             if (storedGroups) setGroups(JSON.parse(storedGroups));
             if (storedNotifications) setNotifications(JSON.parse(storedNotifications));
+            if (storedMessages) setMessages(JSON.parse(storedMessages));
+            if (storedUserStatus) setUserStatus(JSON.parse(storedUserStatus));
             
             if (storedUser) {
                 const user = JSON.parse(storedUser);
@@ -1229,8 +1313,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             localStorage.setItem('universePosts', JSON.stringify(posts));
             localStorage.setItem('universeGroups', JSON.stringify(groups));
             localStorage.setItem('universeNotifications', JSON.stringify(notifications));
+            localStorage.setItem('universeMessages', JSON.stringify(messages));
+            localStorage.setItem('universeUserStatus', JSON.stringify(userStatus));
         }
-    }, [currentUser, users, songs, episodes, likedTracks, products, brands, posts, groups, notifications, isClient]);
+    }, [currentUser, users, songs, episodes, likedTracks, products, brands, posts, groups, notifications, messages, userStatus, isClient]);
 
     const handleLogin = (email: string, pass: string) => {
         const user = users.find(u => u.email === email && u.password === pass);
@@ -1402,6 +1488,153 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 setActiveTab('home');
         }
     };
+    
+    // ========== MESSAGING FUNCTIONS ==========
+    const handleSendMessage = (text: string, attachments?: any[], gifUrl?: string, emoji?: string) => {
+        if (!currentUser || !activeChatUser) return;
+        
+        const timestamp = Date.now();
+        const formattedTime = formatRelativeTime(timestamp);
+        const newMessage: Message = {
+            id: `msg-${timestamp}`,
+            senderId: currentUser.id,
+            receiverId: activeChatUser.id,
+            content: text,
+            timestamp,
+            formattedTime,
+            status: 'sending' as const,
+            ...(gifUrl && { gifUrl }),
+            ...(emoji && { reaction: emoji }),
+            ...(attachments && attachments.length > 0 && { attachments })
+        };
+        
+        // Add message to messages list
+        setMessages(prev => [newMessage, ...prev]);
+        
+        // Simulate sending and update status
+        setTimeout(() => {
+            setMessages(prev => prev.map(msg => 
+                msg.id === newMessage.id 
+                    ? { ...msg, status: 'sent' as const }
+                    : msg
+            ));
+            
+            // Simulate delivery after 1 second
+            setTimeout(() => {
+                setMessages(prev => prev.map(msg => 
+                    msg.id === newMessage.id 
+                        ? { ...msg, status: 'delivered' as const }
+                        : msg
+                ));
+                
+                // Simulate read after 2 seconds
+                setTimeout(() => {
+                    setMessages(prev => prev.map(msg => 
+                        msg.id === newMessage.id 
+                            ? { ...msg, status: 'read' as const }
+                            : msg
+                    ));
+                }, 2000);
+            }, 1000);
+        }, 500);
+        
+        // Send notification to recipient
+        handleCreateNotification(
+            activeChatUser.id,
+            currentUser.id,
+            'message',
+            `sent you a message: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`,
+            { metadata: { type: 'message' } }
+        );
+    };
+    
+    const handleDeleteMessage = (messageId: string) => {
+        setMessages(prev => prev.filter(msg => msg.id !== messageId));
+    };
+    
+    const handleReactToMessage = (messageId: string, reaction: string) => {
+        setMessages(prev => prev.map(msg => 
+            msg.id === messageId 
+                ? { ...msg, reaction }
+                : msg
+        ));
+    };
+    
+    const handleTyping = (userId: number, isTyping: boolean) => {
+        setUserStatus(prev => ({
+            ...prev,
+            [userId]: {
+                ...prev[userId],
+                typing: isTyping
+            }
+        }));
+        
+        // Auto-clear typing status after 3 seconds
+        if (isTyping) {
+            setTimeout(() => {
+                setUserStatus(prev => ({
+                    ...prev,
+                    [userId]: {
+                        ...prev[userId],
+                        typing: false
+                    }
+                }));
+            }, 3000);
+        }
+    };
+    
+    const handleMarkAsRead = (messageId: string) => {
+        setMessages(prev => prev.map(msg => 
+            msg.id === messageId 
+                ? { ...msg, status: 'read' as const }
+                : msg
+        ));
+    };
+    
+    const getUserStatus = (userId: number) => {
+        return userStatus[userId] || { isOnline: false, lastSeen: new Date().toISOString(), typing: false };
+    };
+    
+    // Update user online status periodically
+    useEffect(() => {
+        const updateOnlineStatus = () => {
+            setUserStatus(prev => {
+                const updated: Record<number, { isOnline: boolean; lastSeen: string; typing: boolean }> = {};
+                
+                // Update current user as online
+                if (currentUser) {
+                    updated[currentUser.id] = {
+                        isOnline: true,
+                        lastSeen: new Date().toISOString(),
+                        typing: prev[currentUser.id]?.typing || false
+                    };
+                }
+                
+                // Update other users with random online status (for demo)
+                users.forEach(user => {
+                    if (user.id !== currentUser?.id) {
+                        const currentStatus = prev[user.id];
+                        // Randomly change online status for demo
+                        const shouldChange = Math.random() > 0.9;
+                        const isOnline = shouldChange ? Math.random() > 0.5 : (currentStatus?.isOnline || false);
+                        
+                        updated[user.id] = {
+                            isOnline,
+                            lastSeen: isOnline ? new Date().toISOString() : (currentStatus?.lastSeen || new Date(Date.now() - Math.random() * 86400000).toISOString()),
+                            typing: currentStatus?.typing || false
+                        };
+                    }
+                });
+                
+                return updated;
+            });
+        };
+        
+        updateOnlineStatus();
+        const interval = setInterval(updateOnlineStatus, 30000); // Update every 30 seconds
+        
+        return () => clearInterval(interval);
+    }, [currentUser, users]);
     
     // ========== FIXED LIKE AND REACT FUNCTIONS ==========
     const handleFollowUser = (userIdToToggle: number) => {
@@ -3728,6 +3961,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                         onNotificationClick={handleNotificationClick}
                         activeTab={activeTab} 
                         onNavigate={handleNavigate} 
+                        onMessageClick={(userId) => {
+                            const user = users.find(u => u.id === userId);
+                            if (user) {
+                                setActiveChatUser(user);
+                            }
+                        }}
                     />
                     <div className="flex justify-center w-full max-w-[1920px] mx-auto relative flex-1">
                         <div className="sticky top-14 h-[calc(100vh-56px)] z-20 hidden lg:block">
@@ -4185,6 +4424,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             <RightSidebar 
                                 contacts={users.filter(u => u.id !== currentUser?.id)} 
                                 onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                onMessageClick={(userId) => {
+                                    const user = users.find(u => u.id === userId);
+                                    if (user) {
+                                        setActiveChatUser(user);
+                                    }
+                                }}
+                                getUserStatus={getUserStatus}
                             />
                         </div>
                     </div>
@@ -4222,6 +4468,26 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             currentUser={currentUser} 
                             onClose={() => setShowCreateEventModal(false)} 
                             onCreate={handleCreateEvent} 
+                        />
+                    )}
+                    
+                    {/* Chat Window */}
+                    {activeChatUser && currentUser && (
+                        <ChatWindow 
+                            currentUser={currentUser}
+                            recipient={activeChatUser}
+                            messages={messages.filter(msg => 
+                                (msg.senderId === currentUser.id && msg.receiverId === activeChatUser.id) ||
+                                (msg.senderId === activeChatUser.id && msg.receiverId === currentUser.id)
+                            )}
+                            onClose={() => setActiveChatUser(null)}
+                            onSendMessage={handleSendMessage}
+                            onDeleteMessage={handleDeleteMessage}
+                            onReactToMessage={handleReactToMessage}
+                            onTyping={handleTyping}
+                            onMarkAsRead={handleMarkAsRead}
+                            getUserStatus={getUserStatus}
+                            gifApiKey="YOUR_GIPHY_API_KEY" // Add your GIPHY API key here
                         />
                     )}
                     
@@ -4339,15 +4605,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             onPrev={() => {}} 
                             onFollow={handleFollowUser} 
                             isFollowing={currentUser ? currentUser.following.includes(activeStory.userId) : false} 
-                        />
-                    )}
-                    {activeChatUser && currentUser && (
-                        <ChatWindow 
-                            currentUser={currentUser} 
-                            recipient={activeChatUser} 
-                            messages={messages} 
-                            onClose={() => setActiveChatUser(null)} 
-                            onSendMessage={() => {}} 
                         />
                     )}
                     {activeProduct && (
