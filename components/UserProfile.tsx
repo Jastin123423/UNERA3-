@@ -1,943 +1,734 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { User, Message, MessageType } from '../types';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { 
-  faPaperPlane, faSmile, faPaperclip, faImage, faFile, 
-  faVideo, faMusic, faTimes, faSearch, faEllipsisV,
-  faCheck, faCheckDouble, faClock, faThumbsUp,
-  faPlay, faPause, faDownload, faExpand, faCompress
-} from '@fortawesome/free-solid-svg-icons';
-import Picker from 'emoji-picker-react';
-import { EmojiClickData } from 'emoji-picker-react';
+import { User, Post as PostType, ReactionType, Reel, AudioTrack, Song, Episode } from '../types';
+import { CreatePost, Post, CreatePostModal } from './Feed';
 
-// Define GIF type if not in types
-interface Gif {
-  id: string;
-  url: string;
-  title: string;
+// --- EDIT PROFILE MODAL ---
+interface EditProfileModalProps {
+    user: User;
+    onClose: () => void;
+    onSave: (updatedData: Partial<User>) => void;
 }
 
-// Define message attachment type
-interface MessageAttachment {
-  id: string;
-  type: 'image' | 'document' | 'video' | 'audio';
-  url: string;
-  name?: string;
-  size?: string;
-  thumbnail?: string;
-}
-
-interface MessagesProps {
-  currentUser: User;
-  selectedUser: User | null;
-  users: User[];
-  messages: Message[];
-  onSendMessage: (text: string, attachments?: MessageAttachment[], gifUrl?: string, emoji?: string) => void;
-  onSelectUser: (user: User) => void;
-  onDeleteMessage: (messageId: string) => void;
-  onReactToMessage: (messageId: string, reaction: string) => void;
-  onTyping: (userId: number, isTyping: boolean) => void;
-  onMarkAsRead: (messageId: string) => void;
-  getUserStatus: (userId: number) => { isOnline: boolean; lastSeen: string };
-  gifApiKey?: string; // Optional GIPHY API key
-}
-
-export const Messages: React.FC<MessagesProps> = ({
-  currentUser,
-  selectedUser,
-  users,
-  messages,
-  onSendMessage,
-  onSelectUser,
-  onDeleteMessage,
-  onReactToMessage,
-  onTyping,
-  onMarkAsRead,
-  getUserStatus,
-  gifApiKey = 'YOUR_GIPHY_API_KEY' // Default or env variable
-}) => {
-  const [newMessage, setNewMessage] = useState('');
-  const [attachments, setAttachments] = useState<File[]>([]);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [showGifPicker, setShowGifPicker] = useState(false);
-  const [gifs, setGifs] = useState<Gif[]>([]);
-  const [searchGifQuery, setSearchGifQuery] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [typingTimeout, setTypingTimeout] = useState<NodeJS.Timeout>();
-  const [selectedReaction, setSelectedReaction] = useState<string | null>(null);
-  const [showAttachmentsMenu, setShowAttachmentsMenu] = useState(false);
-  const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
-  const [playingAudio, setPlayingAudio] = useState<string | null>(null);
-  const [fullscreenMedia, setFullscreenMedia] = useState<{ type: string; url: string } | null>(null);
-
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
-  const documentInputRef = useRef<HTMLInputElement>(null);
-  const videoInputRef = useRef<HTMLInputElement>(null);
-  const audioInputRef = useRef<HTMLInputElement>(null);
-  const textAreaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Scroll to bottom when new messages arrive
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  // Mark messages as read when opening chat
-  useEffect(() => {
-    if (selectedUser) {
-      messages.forEach(msg => {
-        if (msg.receiverId === currentUser.id && !msg.read) {
-          onMarkAsRead(msg.id);
-        }
-      });
-    }
-  }, [selectedUser, messages]);
-
-  // Fetch trending GIFs
-  useEffect(() => {
-    if (showGifPicker) {
-      fetchTrendingGifs();
-    }
-  }, [showGifPicker]);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  const fetchTrendingGifs = async () => {
-    try {
-      const response = await fetch(
-        `https://api.giphy.com/v1/gifs/trending?api_key=${gifApiKey}&limit=20`
-      );
-      const data = await response.json();
-      const gifList = data.data.map((gif: any) => ({
-        id: gif.id,
-        url: gif.images.fixed_height.url,
-        title: gif.title
-      }));
-      setGifs(gifList);
-    } catch (error) {
-      console.error('Error fetching GIFs:', error);
-    }
-  };
-
-  const searchGifs = async (query: string) => {
-    if (!query.trim()) {
-      fetchTrendingGifs();
-      return;
-    }
-
-    try {
-      const response = await fetch(
-        `https://api.giphy.com/v1/gifs/search?api_key=${gifApiKey}&q=${encodeURIComponent(query)}&limit=20`
-      );
-      const data = await response.json();
-      const gifList = data.data.map((gif: any) => ({
-        id: gif.id,
-        url: gif.images.fixed_height.url,
-        title: gif.title
-      }));
-      setGifs(gifList);
-    } catch (error) {
-      console.error('Error searching GIFs:', error);
-    }
-  };
-
-  const handleSendMessage = () => {
-    if (!newMessage.trim() && attachments.length === 0) return;
-
-    // Prepare attachments for sending
-    const messageAttachments: MessageAttachment[] = attachments.map((file, index) => {
-      const url = URL.createObjectURL(file);
-      const type = getFileType(file.type);
-      
-      return {
-        id: `attachment-${Date.now()}-${index}`,
-        type,
-        url,
-        name: file.name,
-        size: formatFileSize(file.size),
-        thumbnail: type === 'image' || type === 'video' ? url : undefined
-      };
-    });
-
-    onSendMessage(newMessage, messageAttachments);
+const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClose, onSave }) => {
+    const [bio, setBio] = useState(user.bio || '');
+    const [work, setWork] = useState(user.work || '');
+    const [education, setEducation] = useState(user.education || '');
+    const [location, setLocation] = useState(user.location || '');
+    const [website, setWebsite] = useState(user.website || '');
     
-    // Clear inputs
-    setNewMessage('');
-    setAttachments([]);
-    setShowEmojiPicker(false);
-    setShowGifPicker(false);
-    
-    // Revoke object URLs after sending (in real app, upload to server first)
-    setTimeout(() => {
-      messageAttachments.forEach(att => {
-        if (att.url.startsWith('blob:')) {
-          URL.revokeObjectURL(att.url);
-        }
-      });
-    }, 1000);
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
-    const files = e.target.files;
-    if (!files) return;
-
-    const validFiles = Array.from(files).filter(file => {
-      const maxSize = 25 * 1024 * 1024; // 25MB limit
-      if (file.size > maxSize) {
-        alert(`File ${file.name} is too large. Maximum size is 25MB.`);
-        return false;
-      }
-      return true;
-    });
-
-    setAttachments(prev => [...prev, ...validFiles]);
-    e.target.value = ''; // Reset input
-  };
-
-  const getFileType = (mimeType: string): 'image' | 'document' | 'video' | 'audio' => {
-    if (mimeType.startsWith('image/')) return 'image';
-    if (mimeType.startsWith('video/')) return 'video';
-    if (mimeType.startsWith('audio/')) return 'audio';
-    return 'document';
-  };
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const handleEmojiClick = (emojiData: EmojiClickData) => {
-    setNewMessage(prev => prev + emojiData.emoji);
-    if (textAreaRef.current) {
-      textAreaRef.current.focus();
-    }
-  };
-
-  const handleGifSelect = (gif: Gif) => {
-    onSendMessage('', [], gif.url, 'gif');
-    setShowGifPicker(false);
-  };
-
-  const handleTyping = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setNewMessage(e.target.value);
-    
-    // Notify typing status
-    if (selectedUser) {
-      setIsTyping(true);
-      onTyping(currentUser.id, true);
-      
-      if (typingTimeout) {
-        clearTimeout(typingTimeout);
-      }
-      
-      const timeout = setTimeout(() => {
-        setIsTyping(false);
-        onTyping(currentUser.id, false);
-      }, 1000);
-      
-      setTypingTimeout(timeout);
-    }
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
-
-  const removeAttachment = (index: number) => {
-    setAttachments(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const renderMessageContent = (message: Message) => {
-    if (message.gifUrl) {
-      return (
-        <div className="relative group">
-          <img 
-            src={message.gifUrl} 
-            alt="GIF" 
-            className="max-w-[300px] max-h-[300px] rounded-lg cursor-pointer"
-            onClick={() => setFullscreenMedia({ type: 'gif', url: message.gifUrl! })}
-          />
-          <div className="absolute top-2 right-2 hidden group-hover:block">
-            <button
-              onClick={() => setFullscreenMedia({ type: 'gif', url: message.gifUrl! })}
-              className="bg-black/50 text-white p-1 rounded"
-            >
-              <FontAwesomeIcon icon={faExpand} />
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    if (message.attachments && message.attachments.length > 0) {
-      return (
-        <div className="space-y-2">
-          {message.attachments.map(att => (
-            <div key={att.id} className="relative group">
-              {att.type === 'image' && (
-                <img 
-                  src={att.url} 
-                  alt={att.name || 'Image'} 
-                  className="max-w-[300px] max-h-[300px] rounded-lg cursor-pointer"
-                  onClick={() => setFullscreenMedia({ type: 'image', url: att.url })}
-                />
-              )}
-              
-              {att.type === 'video' && (
-                <div className="relative">
-                  <video 
-                    controls 
-                    className="max-w-[300px] max-h-[300px] rounded-lg"
-                    poster={att.thumbnail}
-                  >
-                    <source src={att.url} type="video/mp4" />
-                  </video>
-                  <button
-                    onClick={() => setFullscreenMedia({ type: 'video', url: att.url })}
-                    className="absolute top-2 right-2 bg-black/50 text-white p-1 rounded hidden group-hover:block"
-                  >
-                    <FontAwesomeIcon icon={faExpand} />
-                  </button>
-                </div>
-              )}
-              
-              {att.type === 'audio' && (
-                <div className="flex items-center gap-2 bg-[#3A3B3C] p-3 rounded-lg">
-                  <button
-                    onClick={() => {
-                      if (playingAudio === att.id) {
-                        setPlayingAudio(null);
-                      } else {
-                        setPlayingAudio(att.id);
-                      }
-                    }}
-                    className="bg-[#1877F2] text-white p-2 rounded-full"
-                  >
-                    <FontAwesomeIcon icon={playingAudio === att.id ? faPause : faPlay} />
-                  </button>
-                  <div className="flex-1">
-                    <div className="text-[#E4E6EB] font-medium truncate">
-                      {att.name || 'Audio file'}
-                    </div>
-                    <div className="text-[#B0B3B8] text-sm">{att.size}</div>
-                  </div>
-                  <a 
-                    href={att.url} 
-                    download={att.name}
-                    className="text-[#1877F2] p-2"
-                  >
-                    <FontAwesomeIcon icon={faDownload} />
-                  </a>
-                </div>
-              )}
-              
-              {att.type === 'document' && (
-                <div className="flex items-center gap-3 bg-[#3A3B3C] p-3 rounded-lg">
-                  <div className="bg-[#1877F2] text-white p-3 rounded">
-                    <FontAwesomeIcon icon={faFile} size="lg" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-[#E4E6EB] font-medium truncate">
-                      {att.name || 'Document'}
-                    </div>
-                    <div className="text-[#B0B3B8] text-sm">{att.size}</div>
-                  </div>
-                  <a 
-                    href={att.url} 
-                    download={att.name}
-                    className="text-[#1877F2] p-2"
-                  >
-                    <FontAwesomeIcon icon={faDownload} />
-                  </a>
-                </div>
-              )}
-              
-              <div className="text-[#B0B3B8] text-xs mt-1">
-                {att.name}
-                {att.size && ` • ${att.size}`}
-              </div>
-            </div>
-          ))}
-          {message.content && (
-            <div className="text-[#E4E6EB] mt-2">{message.content}</div>
-          )}
-        </div>
-      );
-    }
-
-    return <div className="text-[#E4E6EB]">{message.content}</div>;
-  };
-
-  const renderMessageStatus = (message: Message) => {
-    if (message.senderId !== currentUser.id) return null;
-
-    const statusStyles = {
-      read: 'text-[#1877F2]',
-      delivered: 'text-[#B0B3B8]',
-      sent: 'text-[#65676B]',
-      sending: 'text-[#65676B] animate-pulse'
+    const handleSave = () => {
+        onSave({
+            bio,
+            work,
+            education,
+            location,
+            website
+        });
+        onClose();
     };
 
     return (
-      <div className={`text-xs mt-1 ${statusStyles[message.status]}`}>
-        {message.status === 'sending' && <FontAwesomeIcon icon={faClock} />}
-        {message.status === 'sent' && <FontAwesomeIcon icon={faCheck} />}
-        {message.status === 'delivered' && <FontAwesomeIcon icon={faCheckDouble} />}
-        {message.status === 'read' && <FontAwesomeIcon icon={faCheckDouble} className={statusStyles.read} />}
-        <span className="ml-1">
-          {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </span>
-      </div>
-    );
-  };
-
-  const renderReactionPicker = () => {
-    const reactions = ['👍', '❤️', '😂', '😮', '😢', '😡'];
-    
-    return (
-      <div className="absolute bottom-full mb-2 left-0 bg-[#242526] border border-[#3E4042] rounded-lg shadow-lg p-2 z-50">
-        <div className="flex gap-2">
-          {reactions.map(reaction => (
-            <button
-              key={reaction}
-              onClick={() => {
-                if (selectedReaction) {
-                  onReactToMessage(selectedReaction, reaction);
-                  setSelectedReaction(null);
-                }
-              }}
-              className="text-2xl hover:scale-125 transition-transform"
-            >
-              {reaction}
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const renderLastSeen = (user: User) => {
-    const status = getUserStatus(user.id);
-    
-    if (status.isOnline) {
-      return (
-        <div className="flex items-center gap-1 text-[#45BD62] text-xs">
-          <div className="w-2 h-2 bg-[#45BD62] rounded-full"></div>
-          <span>Online</span>
-        </div>
-      );
-    }
-    
-    // Facebook-style last seen formatting
-    const lastSeen = new Date(status.lastSeen);
-    const now = new Date();
-    const diffMinutes = Math.floor((now.getTime() - lastSeen.getTime()) / (1000 * 60));
-    
-    let timeText = '';
-    if (diffMinutes < 1) {
-      timeText = 'Just now';
-    } else if (diffMinutes < 60) {
-      timeText = `${diffMinutes}m ago`;
-    } else if (diffMinutes < 1440) { // 24 hours
-      const hours = Math.floor(diffMinutes / 60);
-      timeText = `${hours}h ago`;
-    } else if (diffMinutes < 10080) { // 7 days
-      const days = Math.floor(diffMinutes / 1440);
-      timeText = `${days}d ago`;
-    } else {
-      timeText = lastSeen.toLocaleDateString();
-    }
-    
-    return (
-      <div className="text-[#B0B3B8] text-xs">
-        Last seen {timeText}
-      </div>
-    );
-  };
-
-  return (
-    <div className="flex h-screen bg-[#18191A] text-[#E4E6EB]">
-      {/* Sidebar with conversations */}
-      <div className="w-1/3 md:w-1/4 border-r border-[#3E4042] flex flex-col">
-        <div className="p-4 border-b border-[#3E4042]">
-          <h2 className="text-xl font-bold">Messages</h2>
-          <div className="relative mt-3">
-            <FontAwesomeIcon 
-              icon={faSearch} 
-              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#B0B3B8]"
-            />
-            <input
-              type="text"
-              placeholder="Search messages"
-              className="w-full bg-[#3A3B3C] text-[#E4E6EB] pl-10 pr-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1877F2]"
-            />
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-          {users.map(user => {
-            const userMessages = messages.filter(m => 
-              m.senderId === user.id || m.receiverId === user.id
-            );
-            const lastMessage = userMessages[userMessages.length - 1];
-            const unreadCount = userMessages.filter(m => 
-              m.receiverId === currentUser.id && !m.read
-            ).length;
-            const status = getUserStatus(user.id);
-
-            return (
-              <div
-                key={user.id}
-                onClick={() => onSelectUser(user)}
-                className={`p-4 border-b border-[#3E4042] hover:bg-[#3A3B3C] cursor-pointer transition-colors ${
-                  selectedUser?.id === user.id ? 'bg-[#3A3B3C]' : ''
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <img
-                      src={user.profileImage}
-                      alt={user.name}
-                      className="w-12 h-12 rounded-full"
-                    />
-                    <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#242526] ${
-                      status.isOnline ? 'bg-[#45BD62]' : 'bg-[#B0B3B8]'
-                    }`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-center">
-                      <h3 className="font-semibold truncate">{user.name}</h3>
-                      {lastMessage && (
-                        <span className="text-xs text-[#B0B3B8]">
-                          {new Date(lastMessage.timestamp).toLocaleTimeString([], { 
-                            hour: '2-digit', 
-                            minute: '2-digit' 
-                          })}
-                        </span>
-                      )}
+        <div className="fixed inset-0 z-[150] bg-black/80 flex items-center justify-center p-4 animate-fade-in font-sans">
+            <div className="bg-[#242526] w-full max-w-[600px] rounded-xl border border-[#3E4042] shadow-2xl flex flex-col max-h-[90vh]">
+                <div className="p-4 border-b border-[#3E4042] flex justify-between items-center">
+                    <h2 className="text-xl font-bold text-[#E4E6EB]">Edit Profile</h2>
+                    <div onClick={onClose} className="w-8 h-8 rounded-full bg-[#3A3B3C] hover:bg-[#4E4F50] flex items-center justify-center cursor-pointer">
+                        <i className="fas fa-times text-[#B0B3B8]"></i>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <p className="text-sm text-[#B0B3B8] truncate">
-                        {lastMessage?.content || 'No messages yet'}
-                      </p>
-                      {unreadCount > 0 && (
-                        <span className="bg-[#1877F2] text-white text-xs px-2 py-1 rounded-full min-w-[20px] text-center">
-                          {unreadCount}
-                        </span>
-                      )}
+                </div>
+                
+                <div className="p-4 overflow-y-auto space-y-4">
+                    <div>
+                        <div className="flex justify-between items-center mb-1">
+                             <label className="text-[#E4E6EB] font-bold text-sm">Bio</label>
+                        </div>
+                        <textarea className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-3 text-[#E4E6EB] outline-none focus:border-[#1877F2] text-center" rows={3} value={bio} onChange={e => setBio(e.target.value)} placeholder="Describe yourself..." />
                     </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
 
-      {/* Main chat area */}
-      <div className="flex-1 flex flex-col">
-        {selectedUser ? (
-          <>
-            {/* Chat header */}
-            <div className="p-4 border-b border-[#3E4042] flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <img
-                    src={selectedUser.profileImage}
-                    alt={selectedUser.name}
-                    className="w-10 h-10 rounded-full"
-                  />
-                  <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#242526] ${
-                    getUserStatus(selectedUser.id).isOnline ? 'bg-[#45BD62]' : 'bg-[#B0B3B8]'
-                  }`} />
-                </div>
-                <div>
-                  <h3 className="font-bold flex items-center gap-2">
-                    {selectedUser.name}
-                    {selectedUser.isVerified && (
-                      <i className="fas fa-check-circle text-[#1877F2]"></i>
-                    )}
-                  </h3>
-                  {renderLastSeen(selectedUser)}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button className="p-2 hover:bg-[#3A3B3C] rounded-full">
-                  <FontAwesomeIcon icon={faVideo} />
-                </button>
-                <button className="p-2 hover:bg-[#3A3B3C] rounded-full">
-                  <FontAwesomeIcon icon={faEllipsisV} />
-                </button>
-              </div>
-            </div>
-
-            {/* Messages container */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {messages
-                .filter(m => 
-                  (m.senderId === currentUser.id && m.receiverId === selectedUser.id) ||
-                  (m.senderId === selectedUser.id && m.receiverId === currentUser.id)
-                )
-                .map(message => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.senderId === currentUser.id ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div className="group relative max-w-[70%]">
-                      <div
-                        className={`rounded-lg p-3 ${message.senderId === currentUser.id
-                          ? 'bg-[#1877F2] text-white rounded-tr-none'
-                          : 'bg-[#3A3B3C] rounded-tl-none'
-                        }`}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          setSelectedReaction(message.id);
-                        }}
-                      >
-                        {renderMessageContent(message)}
-                        {renderMessageStatus(message)}
+                    <div className="space-y-4">
+                        <h3 className="text-[#E4E6EB] font-bold text-lg">Details</h3>
                         
-                        {message.reaction && (
-                          <div className="absolute -bottom-2 right-2 bg-[#242526] rounded-full p-1 text-lg">
-                            {message.reaction}
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Message options */}
-                      <div className="absolute top-2 right-2 hidden group-hover:block">
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => setSelectedReaction(message.id)}
-                            className="bg-black/50 text-white p-1 rounded"
-                          >
-                            <FontAwesomeIcon icon={faThumbsUp} />
-                          </button>
-                          <button
-                            onClick={() => setMessageToDelete(message.id)}
-                            className="bg-black/50 text-white p-1 rounded"
-                          >
-                            <FontAwesomeIcon icon={faTimes} />
-                          </button>
+                        <div>
+                            <div className="flex items-center gap-2 mb-1 text-[#B0B3B8]">
+                                <i className="fas fa-briefcase w-5 text-center"></i>
+                                <span className="text-sm">Work</span>
+                            </div>
+                            <input type="text" className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2.5 text-[#E4E6EB] outline-none focus:border-[#1877F2]" value={work} onChange={e => setWork(e.target.value)} placeholder="Add a workplace" />
                         </div>
-                      </div>
-                      
-                      {selectedReaction === message.id && renderReactionPicker()}
+
+                        <div>
+                            <div className="flex items-center gap-2 mb-1 text-[#B0B3B8]">
+                                <i className="fas fa-graduation-cap w-5 text-center"></i>
+                                <span className="text-sm">Education</span>
+                            </div>
+                            <input type="text" className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2.5 text-[#E4E6EB] outline-none focus:border-[#1877F2]" value={education} onChange={e => setEducation(e.target.value)} placeholder="Add a high school or university" />
+                        </div>
+
+                        <div>
+                            <div className="flex items-center gap-2 mb-1 text-[#B0B3B8]">
+                                <i className="fas fa-map-marker-alt w-5 text-center"></i>
+                                <span className="text-sm">Location</span>
+                            </div>
+                            <input type="text" className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2.5 text-[#E4E6EB] outline-none focus:border-[#1877F2]" value={location} onChange={e => setLocation(e.target.value)} placeholder="Add current city" />
+                        </div>
+
+                        <div>
+                            <div className="flex items-center gap-2 mb-1 text-[#B0B3B8]">
+                                <i className="fas fa-link w-5 text-center"></i>
+                                <span className="text-sm">Website</span>
+                            </div>
+                            <input type="text" className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2.5 text-[#E4E6EB] outline-none focus:border-[#1877F2]" value={website} onChange={e => setWebsite(e.target.value)} placeholder="Add website link" />
+                        </div>
                     </div>
-                  </div>
-                ))}
-              
-              {isTyping && selectedUser && (
-                <div className="flex justify-start">
-                  <div className="bg-[#3A3B3C] rounded-lg p-3 rounded-tl-none">
-                    <div className="flex gap-1">
-                      <div className="w-2 h-2 bg-[#B0B3B8] rounded-full animate-pulse"></div>
-                      <div className="w-2 h-2 bg-[#B0B3B8] rounded-full animate-pulse delay-150"></div>
-                      <div className="w-2 h-2 bg-[#B0B3B8] rounded-full animate-pulse delay-300"></div>
-                    </div>
-                  </div>
                 </div>
-              )}
-              
-              <div ref={messagesEndRef} />
+
+                <div className="p-4 border-t border-[#3E4042] bg-[#242526] rounded-b-xl">
+                    <button onClick={handleSave} className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white py-2.5 rounded-lg font-bold shadow-md transition-colors">Save Details</button>
+                </div>
             </div>
+        </div>
+    );
+};
 
-            {/* Attachments preview */}
-            {attachments.length > 0 && (
-              <div className="px-4 py-2 border-t border-[#3E4042]">
-                <div className="flex gap-2 overflow-x-auto pb-2">
-                  {attachments.map((file, index) => (
-                    <div key={index} className="relative group">
-                      {file.type.startsWith('image/') ? (
-                        <img
-                          src={URL.createObjectURL(file)}
-                          alt={file.name}
-                          className="w-20 h-20 object-cover rounded-lg"
-                        />
-                      ) : file.type.startsWith('video/') ? (
-                        <div className="w-20 h-20 bg-[#3A3B3C] rounded-lg flex items-center justify-center">
-                          <FontAwesomeIcon icon={faVideo} className="text-2xl" />
-                        </div>
-                      ) : file.type.startsWith('audio/') ? (
-                        <div className="w-20 h-20 bg-[#3A3B3C] rounded-lg flex items-center justify-center">
-                          <FontAwesomeIcon icon={faMusic} className="text-2xl" />
-                        </div>
-                      ) : (
-                        <div className="w-20 h-20 bg-[#3A3B3C] rounded-lg flex items-center justify-center">
-                          <FontAwesomeIcon icon={faFile} className="text-2xl" />
-                        </div>
-                      )}
-                      <button
-                        onClick={() => removeAttachment(index)}
-                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
-                      >
-                        <FontAwesomeIcon icon={faTimes} />
-                      </button>
-                      <div className="text-xs mt-1 truncate max-w-[80px]">
-                        {file.name}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+interface UserProfileProps {
+    user: User;
+    currentUser: User | null; // Allow null
+    users: User[];
+    posts: PostType[];
+    reels?: Reel[]; // Added Reels prop
+    songs?: Song[];
+    episodes?: Episode[];
+    likedTracks?: string[];
+    onProfileClick: (id: number) => void;
+    onFollow: (id: number) => void;
+    onReact: (postId: number, type: ReactionType) => void;
+    onComment: (postId: number, text: string) => void;
+    onShare: (postId: number) => void;
+    onMessage: (id: number) => void;
+    // UPDATED: Changed to accept multiple files
+    onCreatePost: (text: string, files: File[] | null, type: any, visibility: any, location?: string, feeling?: string, taggedUsers?: number[], background?: string, linkPreview?: any) => void;
+    onUpdateProfileImage: (file: File) => void;
+    onUpdateCoverImage: (file: File) => void;
+    onUpdateUserDetails: (data: Partial<User>) => void;
+    onDeletePost: (postId: number) => void;
+    onEditPost: (postId: number, content: string) => void;
+    getCommentAuthor: (id: number) => User | undefined;
+    onViewImage: (url: string) => void;
+    onCreateEventClick?: () => void;
+    onOpenComments: (postId: number) => void;
+    onVideoClick: (post: PostType) => void;
+    onPlayAudioTrack: (track: AudioTrack) => void;
+    onHashtagClick?: (tag: string) => void;
+    
+    // Admin Actions
+    onVerifyUser?: (id: number) => void;
+    onRestrictUser?: (id: number) => void;
+    onDeleteUser?: (id: number) => void;
+    onMakeModerator?: (id: number) => void;
+    
+    // Music-related props
+    onLikeTrack?: (trackId: string, isLiked: boolean) => void;
+    onTrackComment?: (trackId: string) => void;
+    onTrackShare?: (trackId: string) => void;
+    
+    // Render functions for different post types
+    renderMusicPost?: (post: PostType, author: any) => React.ReactNode;
+    renderRegularPost?: (post: PostType, author: any, isFollowing?: boolean) => React.ReactNode;
+}
 
-            {/* Message input */}
-            <div className="p-4 border-t border-[#3E4042]">
-              <div className="flex items-end gap-2">
-                {/* Attachment menu */}
-                {showAttachmentsMenu && (
-                  <div className="absolute bottom-full mb-2 left-4 bg-[#242526] border border-[#3E4042] rounded-lg shadow-lg p-2 z-50">
-                    <div className="grid grid-cols-4 gap-2">
-                      <button
-                        onClick={() => imageInputRef.current?.click()}
-                        className="flex flex-col items-center p-2 hover:bg-[#3A3B3C] rounded-lg"
-                      >
-                        <FontAwesomeIcon icon={faImage} className="text-xl mb-1" />
-                        <span className="text-xs">Photo</span>
-                      </button>
-                      <button
-                        onClick={() => videoInputRef.current?.click()}
-                        className="flex flex-col items-center p-2 hover:bg-[#3A3B3C] rounded-lg"
-                      >
-                        <FontAwesomeIcon icon={faVideo} className="text-xl mb-1" />
-                        <span className="text-xs">Video</span>
-                      </button>
-                      <button
-                        onClick={() => audioInputRef.current?.click()}
-                        className="flex flex-col items-center p-2 hover:bg-[#3A3B3C] rounded-lg"
-                      >
-                        <FontAwesomeIcon icon={faMusic} className="text-xl mb-1" />
-                        <span className="text-xs">Audio</span>
-                      </button>
-                      <button
-                        onClick={() => documentInputRef.current?.click()}
-                        className="flex flex-col items-center p-2 hover:bg-[#3A3B3C] rounded-lg"
-                      >
-                        <FontAwesomeIcon icon={faFile} className="text-xl mb-1" />
-                        <span className="text-xs">File</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
+// Helper function to get song for post
+const getSongForPost = (post: PostType, songs?: Song[], episodes?: Episode[]) => {
+    if (!post.audioTrack || !songs || !episodes) return null;
+    
+    // Check songs array first
+    const song = songs.find(s => s.id === post.audioTrack?.id);
+    if (song) {
+        return {
+            ...song,
+            type: post.type === 'podcast' ? 'podcast' : 'music',
+            plays: song.plays || post.audioTrack.plays || 0,
+            likes: song.likes || post.audioTrack.likes || 0,
+            shares: song.shares || post.audioTrack.shares || 0,
+            comments: song.comments || 0,
+            stats: {
+                plays: song.plays || post.audioTrack.plays || 0,
+                likes: song.likes || post.audioTrack.likes || 0,
+                shares: song.shares || post.audioTrack.shares || 0,
+                comments: song.comments || 0,
+                downloads: song.stats?.downloads || 0,
+                reelsUse: song.stats?.reelsUse || 0
+            }
+        };
+    }
+    
+    // Check episodes array
+    const episode = episodes.find(e => e.id === post.audioTrack?.id);
+    if (episode) {
+        return {
+            id: episode.id,
+            title: episode.title,
+            artist: episode.host || 'Podcast Host',
+            cover: episode.thumbnail || episode.cover,
+            audioUrl: episode.audioUrl,
+            duration: episode.duration,
+            uploaderId: episode.uploaderId,
+            type: 'podcast',
+            plays: episode.plays || post.audioTrack.plays || 0,
+            likes: episode.likes || post.audioTrack.likes || 0,
+            shares: episode.shares || post.audioTrack.shares || 0,
+            comments: episode.comments || 0,
+            description: episode.description,
+            stats: {
+                plays: episode.plays || post.audioTrack.plays || 0,
+                likes: episode.likes || post.audioTrack.likes || 0,
+                shares: episode.shares || post.audioTrack.shares || 0,
+                comments: episode.comments || 0,
+                downloads: episode.stats?.downloads || 0,
+                reelsUse: episode.stats?.reelsUse || 0
+            }
+        };
+    }
+    
+    return null;
+};
 
-                <button
-                  onClick={() => setShowAttachmentsMenu(!showAttachmentsMenu)}
-                  className="p-3 hover:bg-[#3A3B3C] rounded-full"
-                >
-                  <FontAwesomeIcon icon={faPaperclip} />
-                </button>
+export const UserProfile: React.FC<UserProfileProps> = ({ 
+    user, 
+    currentUser, 
+    users, 
+    posts, 
+    reels = [], 
+    songs = [], 
+    episodes = [],
+    likedTracks = [],
+    onProfileClick, 
+    onFollow, 
+    onReact, 
+    onComment, 
+    onShare, 
+    onMessage, 
+    onCreatePost, 
+    onUpdateProfileImage, 
+    onUpdateCoverImage, 
+    onUpdateUserDetails, 
+    onDeletePost, 
+    onEditPost, 
+    getCommentAuthor, 
+    onViewImage, 
+    onCreateEventClick, 
+    onOpenComments, 
+    onVideoClick, 
+    onPlayAudioTrack, 
+    onHashtagClick, 
+    onVerifyUser, 
+    onRestrictUser, 
+    onDeleteUser, 
+    onMakeModerator,
+    onLikeTrack,
+    onTrackComment,
+    onTrackShare,
+    renderMusicPost,
+    renderRegularPost
+}) => {
+    const [activeTab, setActiveTab] = useState('Posts');
+    const [showCreatePostModal, setShowCreatePostModal] = useState(false);
+    const [showEditProfile, setShowEditProfile] = useState(false);
+    
+    const userPosts = posts.filter(post => post.authorId === user.id);
+    const userReels = reels.filter(reel => reel.userId === user.id);
+    
+    const isCurrentUser = currentUser && user.id === currentUser.id;
+    const isFollowing = currentUser ? currentUser.following.includes(user.id) : false;
+    const followerCount = user.followers.length;
+    const followersList = users.filter(u => user.followers.includes(u.id));
+    const profileInputRef = useRef<HTMLInputElement>(null);
+    const coverInputRef = useRef<HTMLInputElement>(null);
+    
+    const isAdmin = currentUser?.role === 'admin';
 
-                <button
-                  onClick={() => setShowGifPicker(!showGifPicker)}
-                  className="p-3 hover:bg-[#3A3B3C] rounded-full"
-                >
-                  GIF
-                </button>
+    const totalViews = userPosts.reduce((acc, curr) => acc + (curr.views || 0), 0);
+    const totalLikes = userPosts.reduce((acc, curr) => acc + curr.reactions.length, 0) + userReels.reduce((acc, curr) => acc + curr.reactions.length, 0);
+    const totalShares = userPosts.reduce((acc, curr) => acc + curr.shares, 0) + userReels.reduce((acc, curr) => acc + curr.shares, 0);
+    const totalComments = userPosts.reduce((acc, curr) => acc + curr.comments.length, 0) + userReels.reduce((acc, curr) => acc + curr.comments.length, 0);
+    const totalEngagement = totalLikes + totalComments + totalShares;
 
-                <div className="flex-1 relative">
-                  <textarea
-                    ref={textAreaRef}
-                    value={newMessage}
-                    onChange={handleTyping}
-                    onKeyPress={handleKeyPress}
-                    placeholder="Type a message..."
-                    className="w-full bg-[#3A3B3C] text-[#E4E6EB] rounded-lg p-3 pr-12 focus:outline-none focus:ring-2 focus:ring-[#1877F2] resize-none max-h-[120px]"
-                    rows={1}
-                  />
-                  
-                  <button
-                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                    className="absolute right-3 bottom-3 text-[#B0B3B8] hover:text-[#E4E6EB]"
-                  >
-                    <FontAwesomeIcon icon={faSmile} />
-                  </button>
-                </div>
-
-                <button
-                  onClick={handleSendMessage}
-                  disabled={!newMessage.trim() && attachments.length === 0}
-                  className={`p-3 rounded-full ${
-                    newMessage.trim() || attachments.length > 0
-                      ? 'bg-[#1877F2] text-white hover:bg-[#166FE5]'
-                      : 'bg-[#3A3B3C] text-[#B0B3B8] cursor-not-allowed'
-                  }`}
-                >
-                  <FontAwesomeIcon icon={faPaperPlane} />
-                </button>
-              </div>
-
-              {/* Hidden file inputs */}
-              <input
-                type="file"
-                ref={imageInputRef}
-                className="hidden"
-                accept="image/*"
-                multiple
-                onChange={(e) => handleFileSelect(e, 'image')}
-              />
-              <input
-                type="file"
-                ref={videoInputRef}
-                className="hidden"
-                accept="video/*"
-                onChange={(e) => handleFileSelect(e, 'video')}
-              />
-              <input
-                type="file"
-                ref={audioInputRef}
-                className="hidden"
-                accept="audio/*"
-                onChange={(e) => handleFileSelect(e, 'audio')}
-              />
-              <input
-                type="file"
-                ref={documentInputRef}
-                className="hidden"
-                accept=".pdf,.doc,.docx,.txt,.xls,.xlsx,.ppt,.pptx"
-                multiple
-                onChange={(e) => handleFileSelect(e, 'document')}
-              />
-
-              {/* Emoji Picker */}
-              {showEmojiPicker && (
-                <div className="absolute bottom-20 right-4 z-50">
-                  <Picker onEmojiClick={handleEmojiClick} />
-                </div>
-              )}
-
-              {/* GIF Picker */}
-              {showGifPicker && (
-                <div className="absolute bottom-20 left-4 right-4 bg-[#242526] border border-[#3E4042] rounded-lg shadow-lg p-4 z-50 max-h-[400px] overflow-y-auto">
-                  <div className="mb-4">
-                    <input
-                      type="text"
-                      placeholder="Search GIFs..."
-                      value={searchGifQuery}
-                      onChange={(e) => {
-                        setSearchGifQuery(e.target.value);
-                        searchGifs(e.target.value);
-                      }}
-                      className="w-full bg-[#3A3B3C] text-[#E4E6EB] rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-[#1877F2]"
+    // Function to render music/podcast posts
+    const renderMusicPostDefault = (post: PostType, author: any) => {
+        const song = getSongForPost(post, songs, episodes);
+        if (!song) return null;
+        
+        return (
+            <div key={post.id} className="bg-[#242526] rounded-xl border border-[#3E4042] p-4 mb-4">
+                <div className="flex items-center gap-3 mb-4">
+                    <img 
+                        src={author.profileImage} 
+                        alt={author.name} 
+                        className="w-12 h-12 rounded-full cursor-pointer"
+                        onClick={() => onProfileClick(author.id)}
                     />
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {gifs.map(gif => (
-                      <div
-                        key={gif.id}
-                        className="cursor-pointer hover:opacity-80"
-                        onClick={() => handleGifSelect(gif)}
-                      >
-                        <img
-                          src={gif.url}
-                          alt={gif.title}
-                          className="w-full h-32 object-cover rounded-lg"
-                        />
-                      </div>
-                    ))}
-                  </div>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <span 
+                                className="font-bold text-[#E4E6EB] cursor-pointer hover:underline"
+                                onClick={() => onProfileClick(author.id)}
+                            >
+                                {author.name}
+                            </span>
+                            {author.isVerified && <i className="fas fa-check-circle text-[#1877F2]"></i>}
+                        </div>
+                        <div className="text-[#B0B3B8] text-sm">{post.timestamp}</div>
+                    </div>
                 </div>
-              )}
+                
+                {post.content && (
+                    <div className="mb-4 text-[#E4E6EB]">
+                        {post.content}
+                    </div>
+                )}
+                
+                <div className="flex items-center gap-4 border border-[#3E4042] rounded-lg p-4 bg-[#3A3B3C]">
+                    <img 
+                        src={song.cover} 
+                        alt={song.title} 
+                        className="w-16 h-16 rounded-lg object-cover cursor-pointer"
+                        onClick={() => onPlayAudioTrack && onPlayAudioTrack(song)}
+                    />
+                    <div className="flex-1">
+                        <div className="font-bold text-[#E4E6EB]">{song.title}</div>
+                        <div className="text-[#B0B3B8] text-sm">{song.artist}</div>
+                        <div className="flex items-center gap-4 mt-2 text-[#B0B3B8] text-sm">
+                            <div className="flex items-center gap-1">
+                                <i className="fas fa-play"></i>
+                                <span>{song.plays?.toLocaleString() || 0}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <i className="fas fa-heart"></i>
+                                <span>{song.likes?.toLocaleString() || 0}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <i className="fas fa-share"></i>
+                                <span>{song.shares?.toLocaleString() || 0}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button 
+                        className="bg-[#1877F2] text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-[#166FE5]"
+                        onClick={() => onPlayAudioTrack && onPlayAudioTrack(song)}
+                    >
+                        <i className="fas fa-play"></i>
+                    </button>
+                </div>
+                
+                <div className="flex justify-between items-center mt-4 pt-4 border-t border-[#3E4042]">
+                    <button 
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg ${likedTracks.includes(song.id) ? 'text-[#F02849]' : 'text-[#B0B3B8] hover:bg-[#3A3B3C]'}`}
+                        onClick={() => onLikeTrack && onLikeTrack(song.id, likedTracks.includes(song.id))}
+                    >
+                        <i className={`fas fa-heart ${likedTracks.includes(song.id) ? 'text-[#F02849]' : ''}`}></i>
+                        <span>{song.likes?.toLocaleString() || 0}</span>
+                    </button>
+                    <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-[#B0B3B8] hover:bg-[#3A3B3C]">
+                        <i className="far fa-comment"></i>
+                        <span>{song.comments?.toLocaleString() || 0}</span>
+                    </button>
+                    <button 
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-[#B0B3B8] hover:bg-[#3A3B3C]"
+                        onClick={() => onTrackShare && onTrackShare(song.id)}
+                    >
+                        <i className="fas fa-share"></i>
+                        <span>{song.shares?.toLocaleString() || 0}</span>
+                    </button>
+                </div>
             </div>
-          </>
-        ) : (
-          // No chat selected view
-          <div className="flex-1 flex flex-col items-center justify-center">
-            <div className="text-center p-8">
-              <div className="w-24 h-24 bg-[#3A3B3C] rounded-full flex items-center justify-center mx-auto mb-6">
-                <FontAwesomeIcon icon={faPaperPlane} className="text-4xl" />
-              </div>
-              <h3 className="text-2xl font-bold mb-2">Your Messages</h3>
-              <p className="text-[#B0B3B8]">Select a conversation to start messaging</p>
-            </div>
-          </div>
-        )}
-      </div>
+        );
+    };
 
-      {/* Fullscreen Media Viewer */}
-      {fullscreenMedia && (
-        <div className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-4">
-          <button
-            onClick={() => setFullscreenMedia(null)}
-            className="absolute top-4 right-4 text-white text-2xl bg-black/50 p-2 rounded-full"
-          >
-            <FontAwesomeIcon icon={faTimes} />
-          </button>
-          {fullscreenMedia.type === 'image' && (
-            <img
-              src={fullscreenMedia.url}
-              alt="Fullscreen"
-              className="max-w-full max-h-full object-contain"
+    // Function to render regular posts
+    const renderRegularPostDefault = (post: PostType, author: any, isFollowing?: boolean) => {
+        return (
+            <Post 
+                key={post.id} 
+                post={post} 
+                author={author} 
+                currentUser={currentUser} 
+                users={users} 
+                onProfileClick={onProfileClick} 
+                onReact={onReact} 
+                onShare={onShare} 
+                onDelete={onDeletePost} 
+                onEdit={onEditPost} 
+                onHashtagClick={onHashtagClick} 
+                onViewImage={onViewImage} 
+                onOpenComments={onOpenComments}
+                onVideoClick={onVideoClick}
+                onViewProduct={() => {}} 
+                onPlayAudioTrack={onPlayAudioTrack}
+                onFollow={onFollow}
+                isFollowing={isFollowing}
             />
-          )}
-          {fullscreenMedia.type === 'gif' && (
-            <img
-              src={fullscreenMedia.url}
-              alt="GIF"
-              className="max-w-full max-h-full object-contain"
-            />
-          )}
-          {fullscreenMedia.type === 'video' && (
-            <video
-              src={fullscreenMedia.url}
-              controls
-              autoPlay
-              className="max-w-full max-h-full"
-            />
-          )}
+        );
+    };
+
+    // Helper function to get all photos from posts (including multi-image posts)
+    const getAllPhotos = () => {
+        const photos: string[] = [];
+        userPosts.forEach(post => {
+            if (post.type === 'image') {
+                // Handle single image posts
+                if (post.image) {
+                    photos.push(post.image);
+                }
+                // Handle multi-image posts
+                if (post.images && post.images.length > 0) {
+                    photos.push(...post.images);
+                }
+            }
+        });
+        return photos;
+    };
+
+    const renderContent = () => {
+        switch (activeTab) {
+            case 'About': return (
+                <div className="bg-[#242526] p-6 text-[#E4E6EB] rounded-xl border border-[#3E4042] mx-4 md:mx-0">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-2xl font-bold">About</h2>
+                        {isCurrentUser && <button onClick={() => setShowEditProfile(true)} className="text-[#1877F2] font-semibold hover:underline">Edit</button>}
+                    </div>
+                    <p className="text-[#B0B3B8] text-lg italic mb-6">"{user.bio || 'No bio available'}"</p>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="flex flex-col gap-4">
+                            <h3 className="text-xl font-bold">Work & Education</h3>
+                            <div className="flex items-center gap-3">
+                                <i className="fas fa-briefcase text-[#B0B3B8] w-6 text-center"></i>
+                                <span>{user.work ? `Works at ${user.work}` : 'No workplace to show'}</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <i className="fas fa-graduation-cap text-[#B0B3B8] w-6 text-center"></i>
+                                <span>{user.education ? `Studied at ${user.education}` : 'No schools to show'}</span>
+                            </div>
+                        </div>
+                        <div className="flex flex-col gap-4">
+                            <h3 className="text-xl font-bold">Contact & Basic Info</h3>
+                            <div className="flex items-center gap-3">
+                                <i className="fas fa-map-marker-alt text-[#B0B3B8] w-6 text-center"></i>
+                                <span>{user.location || 'No location to show'}</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <i className="fas fa-link text-[#B0B3B8] w-6 text-center"></i>
+                                <span>{user.website ? <a href={user.website.startsWith('http') ? user.website : `https://${user.website}`} target="_blank" rel="noreferrer" className="text-[#1877F2] hover:underline">{user.website}</a> : 'No website'}</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <i className="fas fa-birthday-cake text-[#B0B3B8] w-6 text-center"></i>
+                                <span>{user.birthDate || 'No birth date'}</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <i className="fas fa-venus-mars text-[#B0B3B8] w-6 text-center"></i>
+                                <span>{user.gender || 'Not specified'}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+            case 'Followers': return (
+                <div className="bg-[#242526] p-4 rounded-xl border border-[#3E4042] mx-4 md:mx-0">
+                    <h2 className="text-xl font-bold text-[#E4E6EB] mb-4">Followers</h2>
+                    {followersList.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {followersList.map(follower => (
+                                <div key={follower.id} className="flex items-center gap-3 p-3 border border-[#3E4042] rounded-lg hover:bg-[#3A3B3C] cursor-pointer" onClick={() => onProfileClick(follower.id)}>
+                                    <img src={follower.profileImage} alt="" className="w-16 h-16 rounded-lg object-cover" />
+                                    <div>
+                                        <h4 className="font-semibold text-[#E4E6EB]">{follower.name}</h4>
+                                        <span className="text-[#B0B3B8] text-sm">{follower.location}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : <p className="text-[#B0B3B8]">No followers yet.</p>}
+                </div>
+            );
+            case 'Photos': 
+                const photos = getAllPhotos();
+                return (
+                    <div className="bg-[#242526] p-4 rounded-xl border border-[#3E4042] mx-4 md:mx-0">
+                        <h2 className="text-xl font-bold text-[#E4E6EB] mb-4">Photos ({photos.length})</h2>
+                        {photos.length > 0 ? (
+                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1">
+                                {photos.map((photo, index) => (
+                                    <div key={index} className="aspect-square cursor-pointer overflow-hidden relative group" onClick={() => onViewImage(photo)}>
+                                        <img src={photo} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                    </div>
+                                ))}
+                            </div>
+                        ) : <p className="text-[#B0B3B8]">No photos shared.</p>}
+                    </div>
+                );
+            case 'Reels': 
+                return (
+                    <div className="bg-[#242526] p-4 rounded-xl border border-[#3E4042] mx-4 md:mx-0">
+                        <h2 className="text-xl font-bold text-[#E4E6EB] mb-4">Reels</h2>
+                        {userReels.length > 0 ? (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                                {userReels.map(reel => (
+                                    <div key={reel.id} className="aspect-[9/16] relative bg-black rounded-lg overflow-hidden cursor-pointer group">
+                                        <video src={reel.videoUrl} className="w-full h-full object-cover" />
+                                        <div className="absolute inset-0 bg-black/20 flex items-end p-2">
+                                            <div className="flex items-center gap-1 text-white text-xs font-bold">
+                                                <i className="fas fa-play"></i> {reel.reactions.length * 10 + reel.shares * 5} {/* Mock view count */}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : <div className="text-center py-8 text-[#B0B3B8]">No reels posted yet.</div>}
+                    </div>
+                );
+            case 'Posts': default: return (
+                <div className="max-w-[1095px] mx-auto w-full flex flex-col md:flex-row gap-4 px-0 md:px-4 mt-4">
+                    <div className="w-full md:w-[380px] flex-shrink-0 flex flex-col gap-4 px-4 md:px-0">
+                        {isAdmin && !isCurrentUser && (
+                            <div className="bg-[#242526] rounded-xl p-4 shadow-sm border border-red-900/50">
+                                <h2 className="text-xl font-bold text-red-500 mb-4">Admin Controls</h2>
+                                <div className="flex flex-col gap-2">
+                                    <button onClick={() => onVerifyUser && onVerifyUser(user.id)} className="w-full bg-[#263951] text-[#2D88FF] py-2 rounded font-semibold hover:bg-[#2A3F5A]">
+                                        {user.isVerified ? 'Remove Verification' : 'Verify User'}
+                                    </button>
+                                    <button onClick={() => onRestrictUser && onRestrictUser(user.id)} className="w-full bg-yellow-900/80 text-yellow-300 py-2 rounded font-semibold hover:bg-yellow-800">
+                                        Suspend User (24h)
+                                    </button>
+                                     <button onClick={() => onMakeModerator && onMakeModerator(user.id)} className="w-full bg-[#3A3B3C] text-[#E4E6EB] py-2 rounded font-semibold hover:bg-[#4E4F50]">
+                                        {user.role === 'moderator' ? 'Remove Moderator' : 'Make Moderator'}
+                                    </button>
+                                    <button onClick={() => onDeleteUser && onDeleteUser(user.id)} className="w-full bg-red-900/80 text-white py-2 rounded font-semibold hover:bg-red-800 mt-2">
+                                        Delete Account
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="bg-[#242526] rounded-xl p-4 shadow-sm border border-[#3E4042]">
+                            <h2 className="text-xl font-bold text-[#E4E6EB] mb-4">Intro</h2>
+                            <div className="flex flex-col gap-3 text-[#E4E6EB]">
+                                <div className="text-center mb-2"><p className="text-[15px]">{user.bio}</p></div>
+                                <div className="h-[1px] bg-[#3E4042] w-full my-1"></div>
+                                {user.work && <div className="flex items-center gap-3"><i className="fas fa-briefcase text-[#B0B3B8] w-5 text-center"></i><span>{user.work}</span></div>}
+                                {user.education && <div className="flex items-center gap-3"><i className="fas fa-graduation-cap text-[#B0B3B8] w-5 text-center"></i><span>{user.education}</span></div>}
+                                {user.location && <div className="flex items-center gap-3"><i className="fas fa-map-marker-alt text-[#B0B3B8] w-5 text-center"></i><span>{user.location}</span></div>}
+                                {user.website && <div className="flex items-center gap-3"><i className="fas fa-link text-[#B0B3B8] w-5 text-center"></i><a href={user.website} target="_blank" rel="noreferrer" className="text-[#1877F2] hover:underline truncate">{user.website}</a></div>}
+                                <div className="flex items-center gap-3"><i className="fas fa-rss text-[#B0B3B8] w-5 text-center"></i><span>{followerCount} Followers</span></div>
+                                {isCurrentUser && <button className="w-full bg-[#3A3B3C] hover:bg-[#4E4F50] text-[#E4E6EB] font-semibold py-2 rounded-md transition-colors text-[15px] mt-2" onClick={() => setShowEditProfile(true)}>Edit Details</button>}
+                            </div>
+                        </div>
+                        <div className="bg-[#242526] rounded-xl p-4 shadow-sm border border-[#3E4042]">
+                            <div className="flex justify-between items-center mb-3">
+                                <h2 className="text-xl font-bold text-[#E4E6EB]">Photos</h2>
+                                <span className="text-[#1877F2] cursor-pointer hover:underline" onClick={() => setActiveTab('Photos')}>See all</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-1 rounded-lg overflow-hidden">
+                                {getAllPhotos().slice(0, 9).map((photo, index) => (
+                                    <img key={index} src={photo} className="w-full aspect-square object-cover cursor-pointer hover:opacity-90" alt="" onClick={() => onViewImage(photo)} />
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                        {isCurrentUser && (
+                            <div className="bg-[#242526] rounded-xl p-4 mb-4 border border-[#3E4042] shadow-sm animate-fade-in">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="text-[#E4E6EB] font-bold text-lg">Professional Dashboard</h2>
+                                    <span className="text-[#B0B3B8] text-xs bg-[#3A3B3C] px-2 py-1 rounded border border-[#3E4042]">Private to you</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="bg-[#3A3B3C] p-3 rounded-lg border border-[#3E4042]">
+                                        <div className="text-[#B0B3B8] text-xs font-medium mb-1">Total Views</div>
+                                        <div className="text-[#E4E6EB] font-bold text-xl flex items-center gap-2">
+                                            {totalViews.toLocaleString()} <i className="fas fa-chart-line text-[#45BD62] text-sm"></i>
+                                        </div>
+                                    </div>
+                                    <div className="bg-[#3A3B3C] p-3 rounded-lg border border-[#3E4042]">
+                                        <div className="text-[#B0B3B8] text-xs font-medium mb-1">Engagement</div>
+                                        <div className="text-[#E4E6EB] font-bold text-xl flex items-center gap-2">
+                                            {totalEngagement.toLocaleString()} <i className="fas fa-fire text-[#F02849] text-sm"></i>
+                                        </div>
+                                    </div>
+                                    <div className="bg-[#3A3B3C] p-3 rounded-lg border border-[#3E4042]">
+                                        <div className="text-[#B0B3B8] text-xs font-medium mb-1">Total Likes</div>
+                                        <div className="text-[#E4E6EB] font-bold text-xl flex items-center gap-2">
+                                            {totalLikes.toLocaleString()} <i className="fas fa-thumbs-up text-[#1877F2] text-sm"></i>
+                                        </div>
+                                    </div>
+                                    <div className="bg-[#3A3B3C] p-3 rounded-lg border border-[#3E4042]">
+                                        <div className="text-[#B0B3B8] text-xs font-medium mb-1">Content</div>
+                                        <div className="text-[#E4E6EB] font-bold text-xl">
+                                            {userPosts.length + userReels.length} <span className="text-xs text-[#B0B3B8] font-normal">posts/reels</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {isCurrentUser && currentUser && (
+                            <>
+                                <CreatePost 
+                                    currentUser={currentUser} 
+                                    onProfileClick={onProfileClick} 
+                                    onClick={() => setShowCreatePostModal(true)} 
+                                    onCreateEventClick={onCreateEventClick}
+                                />
+                                {showCreatePostModal && (
+                                    <CreatePostModal 
+                                        currentUser={currentUser} 
+                                        onClose={() => setShowCreatePostModal(false)} 
+                                        onCreatePost={onCreatePost} 
+                                        users={users}
+                                        onCreateEventClick={() => {
+                                            setShowCreatePostModal(false);
+                                            if (onCreateEventClick) onCreateEventClick();
+                                        }}
+                                    />
+                                )}
+                            </>
+                        )}
+                        <div className="bg-[#242526] p-3 mb-4 rounded-xl border border-[#3E4042] flex items-center justify-between mx-4 md:mx-0">
+                            <h3 className="text-xl font-bold text-[#E4E6EB]">Posts</h3>
+                            <div className="flex gap-2">
+                                <button className="bg-[#3A3B3C] px-3 py-1.5 rounded-md text-[#E4E6EB] font-semibold text-sm hover:bg-[#4E4F50]">
+                                    <i className="fas fa-sliders-h mr-1"></i> Filters
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {userPosts.map(post => {
+                            const isFollowingPostAuthor = currentUser ? currentUser.following.includes(post.authorId) : false;
+                            
+                            // Use custom render functions if provided, otherwise use default
+                            if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
+                                if (renderMusicPost) {
+                                    return renderMusicPost(post, user);
+                                }
+                                return renderMusicPostDefault(post, user);
+                            } else {
+                                if (renderRegularPost) {
+                                    return renderRegularPost(post, user, isFollowingPostAuthor);
+                                }
+                                return renderRegularPostDefault(post, user, isFollowingPostAuthor);
+                            }
+                        })}
+                        
+                        {userPosts.length === 0 && (
+                            <div className="text-center py-8 text-[#B0B3B8] font-medium bg-[#242526] rounded-xl mx-4 md:mx-0 border border-[#3E4042]">
+                                No posts available
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+    };
+
+    return (
+        <div className="w-full bg-[#18191A] min-h-screen">
+            <input type="file" ref={profileInputRef} className="hidden" accept="image/*" onChange={(e) => { if (e.target.files && e.target.files[0]) onUpdateProfileImage(e.target.files[0]); }} />
+            <input type="file" ref={coverInputRef} className="hidden" accept="image/*" onChange={(e) => { if (e.target.files && e.target.files[0]) onUpdateCoverImage(e.target.files[0]); }} />
+            
+            <div className="bg-[#242526] shadow-sm">
+                <div className="max-w-[1095px] mx-auto w-full relative">
+                    {/* Cover Photo */}
+                    <div className="h-[200px] md:h-[350px] w-full bg-gray-700 relative group overflow-hidden md:rounded-b-xl">
+                        {user.coverImage ? (
+                            <img src={user.coverImage} alt="Cover" className="w-full h-full object-cover" onClick={() => user.coverImage && onViewImage(user.coverImage)} />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center text-gray-500">No Cover</div>
+                        )}
+                        {isCurrentUser && (
+                            <div className="absolute bottom-4 right-4 bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-md cursor-pointer hover:bg-white/20 font-semibold text-white text-[15px] flex items-center gap-2" onClick={(e) => { e.stopPropagation(); coverInputRef.current?.click(); }}>
+                                <i className="fas fa-camera"></i> <span className="hidden sm:block">Edit cover photo</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Profile Header Info */}
+                    <div className="px-4 pb-0">
+                        <div className="flex flex-col md:flex-row items-center md:items-end -mt-[84px] md:-mt-[30px] relative z-10 mb-4">
+                            <div className="relative">
+                                <div className="w-[168px] h-[168px] rounded-full border-[6px] border-[#242526] bg-[#242526] overflow-hidden cursor-pointer relative group">
+                                    <img src={user.profileImage} alt={user.name} className="w-full h-full object-cover" onClick={() => onViewImage(user.profileImage)} />
+                                    {isCurrentUser && (
+                                        <div className="absolute inset-0 bg-black/40 hidden group-hover:flex items-center justify-center" onClick={(e) => { e.stopPropagation(); profileInputRef.current?.click(); }}>
+                                            <i className="fas fa-camera text-white text-3xl"></i>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            
+                            <div className="flex-1 flex flex-col items-center md:items-start mt-4 md:mt-0 md:ml-6 text-center md:text-left md:mb-4">
+                                <h1 className="text-[32px] font-bold text-[#E4E6EB] leading-tight flex items-center gap-2">
+                                    {user.name} 
+                                    {user.isVerified && <i className="fas fa-check-circle text-[#1877F2] text-[20px]"></i>}
+                                </h1>
+                                <span className="text-[#B0B3B8] font-semibold text-[17px] mt-1">{followerCount} Followers</span>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row items-center gap-2 mt-4 md:mt-0 md:mb-6">
+                                {isCurrentUser ? (
+                                    <>
+                                        <button className="bg-[#1877F2] text-white px-4 py-2 rounded-md font-semibold flex items-center gap-2 hover:bg-[#166FE5] transition-colors">
+                                            <i className="fas fa-plus"></i><span>Add to story</span>
+                                        </button>
+                                        <button className="bg-[#3A3B3C] text-[#E4E6EB] px-4 py-2 rounded-md font-semibold flex items-center gap-2 hover:bg-[#4E4F50] transition-colors" onClick={() => setShowEditProfile(true)}>
+                                            <i className="fas fa-pen"></i><span>Edit profile</span>
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        {currentUser && (
+                                            <>
+                                            <button onClick={() => onFollow(user.id)} className={`${isFollowing ? 'bg-[#3A3B3C] text-[#E4E6EB]' : 'bg-[#1877F2] text-white'} px-6 py-2 rounded-md font-semibold flex items-center gap-2 transition-colors`}>
+                                                {isFollowing ? (
+                                                    <><i className="fas fa-user-check"></i><span>Following</span></>
+                                                ) : (
+                                                    <><i className="fas fa-user-plus"></i><span>Follow</span></>
+                                                )}
+                                            </button>
+                                            <button onClick={() => onMessage(user.id)} className="bg-[#3A3B3C] text-[#E4E6EB] px-6 py-2 rounded-md font-semibold flex items-center gap-2 hover:bg-[#4E4F50] transition-colors">
+                                                <i className="fab fa-facebook-messenger"></i><span>Message</span>
+                                            </button>
+                                            </>
+                                        )}
+                                        <button className="bg-[#3A3B3C] text-[#E4E6EB] px-3 py-2 rounded-md font-semibold hover:bg-[#4E4F50] transition-colors">
+                                            <i className="fas fa-ellipsis-h"></i>
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="h-[1px] bg-[#3E4042] w-full mt-4"></div>
+                        
+                        {/* Tabs */}
+                        <div className="flex items-center gap-1 pt-1 overflow-x-auto">
+                            {['Posts', 'About', 'Followers', 'Photos', 'Reels'].map((tab) => (
+                                <div key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-3 cursor-pointer whitespace-nowrap text-[15px] font-semibold border-b-[3px] transition-colors ${activeTab === tab ? 'text-[#1877F2] border-[#1877F2]' : 'text-[#B0B3B8] border-transparent hover:bg-[#3A3B3C] rounded-t-md'}`}>
+                                    {tab}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {renderContent()}
+
+            {showEditProfile && isCurrentUser && (
+                <EditProfileModal 
+                    user={user}
+                    onClose={() => setShowEditProfile(false)}
+                    onSave={onUpdateUserDetails}
+                />
+            )}
         </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {messageToDelete && (
-        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center">
-          <div className="bg-[#242526] rounded-xl p-6 max-w-sm w-full mx-4">
-            <h3 className="text-xl font-bold mb-2">Delete Message?</h3>
-            <p className="text-[#B0B3B8] mb-6">
-              Are you sure you want to delete this message? This action cannot be undone.
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setMessageToDelete(null)}
-                className="flex-1 bg-[#3A3B3C] hover:bg-[#4E4F50] text-[#E4E6EB] py-2.5 rounded-lg font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  onDeleteMessage(messageToDelete);
-                  setMessageToDelete(null);
-                }}
-                className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-lg font-semibold"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+    );
 };
-
-// Helper component for typing indicator
-const TypingIndicator: React.FC = () => {
-  return (
-    <div className="flex items-center gap-1">
-      <div className="w-2 h-2 bg-[#B0B3B8] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-      <div className="w-2 h-2 bg-[#B0B3B8] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-      <div className="w-2 h-2 bg-[#B0B3B8] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-    </div>
-  );
-};
-
-export default Messages;
