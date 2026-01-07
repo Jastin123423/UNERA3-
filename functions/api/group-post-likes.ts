@@ -7,7 +7,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
 
     await env.DB.prepare(
-      `INSERT INTO group_post_likes (user_id, post_id)
+      `INSERT INTO group_post_likes (user_id, group_post_id)
        VALUES (?, ?)`
     )
       .bind(user_id, post_id)
