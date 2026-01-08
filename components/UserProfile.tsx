@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { User, Post as PostType, ReactionType, Reel, AudioTrack, Song, Episode } from '../types';
 import { CreatePost, Post, CreatePostModal } from './Feed';
 
@@ -90,22 +90,12 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClose, onSa
     );
 };
 
-// Add this interface for message notifications
-interface MessageNotification {
-    count: number;
-    lastMessage?: {
-        content: string;
-        timestamp: number;
-        senderId: number;
-    };
-}
-
 interface UserProfileProps {
     user: User;
-    currentUser: User | null; // Allow null
+    currentUser: User | null;
     users: User[];
     posts: PostType[];
-    reels?: Reel[]; // Added Reels prop
+    reels?: Reel[];
     songs?: Song[];
     episodes?: Episode[];
     likedTracks?: string[];
@@ -115,7 +105,6 @@ interface UserProfileProps {
     onComment: (postId: number, text: string) => void;
     onShare: (postId: number) => void;
     onMessage: (id: number) => void;
-    // UPDATED: Changed to accept multiple files
     onCreatePost: (text: string, files: File[] | null, type: any, visibility: any, location?: string, feeling?: string, taggedUsers?: number[], background?: string, linkPreview?: any) => void;
     onUpdateProfileImage: (file: File) => void;
     onUpdateCoverImage: (file: File) => void;
@@ -147,7 +136,7 @@ interface UserProfileProps {
     
     // Message-related props
     unreadMessageCount?: number;
-    onOpenMessages?: () => void; // New prop to open messages
+    onOpenMessages?: () => void;
     recentMessages?: Array<{
         userId: number;
         userName: string;
@@ -162,7 +151,6 @@ interface UserProfileProps {
 const getSongForPost = (post: PostType, songs?: Song[], episodes?: Episode[]) => {
     if (!post.audioTrack || !songs || !episodes) return null;
     
-    // Check songs array first
     const song = songs.find(s => s.id === post.audioTrack?.id);
     if (song) {
         return {
@@ -183,7 +171,6 @@ const getSongForPost = (post: PostType, songs?: Song[], episodes?: Episode[]) =>
         };
     }
     
-    // Check episodes array
     const episode = episodes.find(e => e.id === post.audioTrack?.id);
     if (episode) {
         return {
@@ -260,7 +247,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     const [activeTab, setActiveTab] = useState('Posts');
     const [showCreatePostModal, setShowCreatePostModal] = useState(false);
     const [showEditProfile, setShowEditProfile] = useState(false);
-    const [showMessagesPreview, setShowMessagesPreview] = useState(false);
     
     const userPosts = posts.filter(post => post.authorId === user.id);
     const userReels = reels.filter(reel => reel.userId === user.id);
@@ -370,7 +356,10 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                         <i className={`fas fa-heart ${likedTracks.includes(song.id) ? 'text-[#F02849]' : ''}`}></i>
                         <span>{song.likes?.toLocaleString() || 0}</span>
                     </button>
-                    <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-[#B0B3B8] hover:bg-[#3A3B3C]">
+                    <button 
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-[#B0B3B8] hover:bg-[#3A3B3C]"
+                        onClick={() => onTrackComment && onTrackComment(song.id)}
+                    >
                         <i className="far fa-comment"></i>
                         <span>{song.comments?.toLocaleString() || 0}</span>
                     </button>
@@ -386,7 +375,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         );
     };
 
-    // Function to render regular posts
+    // Function to render regular posts - FIXED: Added onComment prop
     const renderRegularPostDefault = (post: PostType, author: any, isFollowing?: boolean) => {
         return (
             <Post 
@@ -397,6 +386,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 users={users} 
                 onProfileClick={onProfileClick} 
                 onReact={onReact} 
+                onComment={onComment}  {/* FIXED: Added this line */}
                 onShare={onShare} 
                 onDelete={onDeletePost} 
                 onEdit={onEditPost} 
@@ -412,16 +402,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         );
     };
 
-    // Helper function to get all photos from posts (including multi-image posts)
+    // Helper function to get all photos from posts
     const getAllPhotos = () => {
         const photos: string[] = [];
         userPosts.forEach(post => {
             if (post.type === 'image') {
-                // Handle single image posts
                 if (post.image) {
                     photos.push(post.image);
                 }
-                // Handle multi-image posts
                 if (post.images && post.images.length > 0) {
                     photos.push(...post.images);
                 }
@@ -506,7 +494,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                                 ))}
                             </div>
                         ) : <p className="text-[#B0B3B8]">No photos shared.</p>}
-                    </div>
+                </div>
                 );
             case 'Reels': 
                 return (
@@ -519,7 +507,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                                         <video src={reel.videoUrl} className="w-full h-full object-cover" />
                                         <div className="absolute inset-0 bg-black/20 flex items-end p-2">
                                             <div className="flex items-center gap-1 text-white text-xs font-bold">
-                                                <i className="fas fa-play"></i> {reel.reactions.length * 10 + reel.shares * 5} {/* Mock view count */}
+                                                <i className="fas fa-play"></i> {reel.reactions.length * 10 + reel.shares * 5}
                                             </div>
                                         </div>
                                     </div>
@@ -585,7 +573,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                                     <span className="text-[#B0B3B8] text-xs bg-[#3A3B3C] px-2 py-1 rounded border border-[#3E4042]">Private to you</span>
                                 </div>
                                 
-                                {/* Message Icon with Notification Badge - PRIVATE AREA */}
                                 <div className="mb-4">
                                     <div 
                                         className="flex items-center justify-between p-3 bg-[#3A3B3C] rounded-lg border border-[#3E4042] hover:bg-[#4E4F50] cursor-pointer transition-colors"
@@ -616,7 +603,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                                         <i className="fas fa-chevron-right text-[#B0B3B8]"></i>
                                     </div>
                                     
-                                    {/* Recent Messages Preview */}
                                     {recentMessages.length > 0 && (
                                         <div className="mt-2 ml-3 pl-3 border-l border-[#3E4042]">
                                             {recentMessages.slice(0, 3).map((msg, index) => (
@@ -715,7 +701,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                         {userPosts.map(post => {
                             const isFollowingPostAuthor = currentUser ? currentUser.following.includes(post.authorId) : false;
                             
-                            // Use custom render functions if provided, otherwise use default
                             if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
                                 if (renderMusicPost) {
                                     return renderMusicPost(post, user);
@@ -786,7 +771,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                             <div className="flex flex-col sm:flex-row items-center gap-2 mt-4 md:mt-0 md:mb-6">
                                 {isCurrentUser ? (
                                     <>
-                                        {/* REMOVED "Add to story" button */}
                                         <button className="bg-[#3A3B3C] text-[#E4E6EB] px-4 py-2 rounded-md font-semibold flex items-center gap-2 hover:bg-[#4E4F50] transition-colors" onClick={() => setShowEditProfile(true)}>
                                             <i className="fas fa-pen"></i><span>Edit profile</span>
                                         </button>
