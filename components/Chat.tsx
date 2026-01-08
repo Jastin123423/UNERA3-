@@ -34,11 +34,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const [inputText, setInputText] = useState('');
     const [showStickers, setShowStickers] = useState(false);
     const [showEmojis, setShowEmojis] = useState(false);
-    const [showGifPicker, setShowGifPicker] = useState(false);
-    const [isTyping, setIsTyping] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const typingTimeoutRef = useRef<NodeJS.Timeout>();
 
     const scrollToBottom = () => { 
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); 
@@ -46,36 +42,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     
     useEffect(() => { 
         scrollToBottom(); 
-    }, [messages, showStickers, showEmojis, showGifPicker]);
+    }, [messages, showStickers, showEmojis]);
 
-    // Handle typing indicator
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = e.target.value;
-        setInputText(value);
-        
-        // Show typing indicator when user starts typing
-        if (value.length > 0 && !isTyping) {
-            setIsTyping(true);
-            if (onTyping) {
-                onTyping(true);
-            }
-        }
-        
-        // Clear existing timeout
-        if (typingTimeoutRef.current) {
-            clearTimeout(typingTimeoutRef.current);
-        }
-        
-        // Set timeout to hide typing indicator after 2 seconds of inactivity
-        typingTimeoutRef.current = setTimeout(() => {
-            if (isTyping) {
-                setIsTyping(false);
-                if (onTyping) {
-                    onTyping(false);
+    // Mark unread messages as read when chat opens
+    useEffect(() => {
+        if (onMarkAsRead) {
+            messages.forEach(msg => {
+                if (msg.senderId === recipient.id && msg.status !== 'read') {
+                    onMarkAsRead(msg.id);
                 }
-            }
-        }, 2000);
-    };
+            });
+        }
+    }, [messages, recipient.id, onMarkAsRead]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -84,13 +62,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             setInputText('');
             setShowEmojis(false);
             setShowStickers(false);
-            setShowGifPicker(false);
-            
-            // Clear typing state
-            setIsTyping(false);
-            if (onTyping) {
-                onTyping(false);
-            }
         }
     };
 
@@ -106,21 +77,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
-            const fileUrl = URL.createObjectURL(file);
-            onSendMessage(`Sent a file: ${file.name}`, [{
-                id: Date.now().toString(),
-                type: file.type.startsWith('image/') ? 'image' : 
-                      file.type.startsWith('video/') ? 'video' : 'document',
-                url: fileUrl,
-                name: file.name,
-                size: `${(file.size / 1024 / 1024).toFixed(2)} MB`
-            }]);
+            onSendMessage(`Sent a file: ${file.name}`);
         }
-    };
-
-    const handleGifSelect = (gifUrl: string) => {
-        onSendMessage('', undefined, gifUrl);
-        setShowGifPicker(false);
     };
 
     // Check if message is only emojis (for large rendering)
@@ -172,7 +130,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         <span className="text-[13px] text-[#8696a0] block leading-tight">
                             {getUserStatus ? (
                                 getUserStatus(recipient.id).typing ? 'typing...' : 
-                                getUserStatus(recipient.id).formattedLastSeen || 'online'
+                                (getUserStatus(recipient.id).formattedLastSeen || 'online')
                             ) : 'online'}
                         </span>
                     </div>
@@ -184,23 +142,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 </div>
             </div>
 
-            {/* Messages Area - Black background */}
+            {/* Messages Area */}
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 bg-black bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-repeat bg-contain">
                 <div className="flex flex-col items-center py-6 text-center bg-[#182229]/80 rounded-lg mb-4 p-4 self-center max-w-[80%]">
                     <p className="text-[#FFD279] text-xs uppercase font-bold mb-1">Security</p>
-                    <p className="text-[#8696a0] text-xs">Messages and calls are end-to-end encrypted. No one outside of this chat, not even UNERA, can read or listen to them.</p>
+                    <p className="text-[#8696a0] text-xs">Messages and calls are end-to-end encrypted.</p>
                 </div>
                 
                 {messages.map((msg) => {
                     const isMe = msg.senderId === currentUser.id;
                     const bigEmoji = isOnlyEmojis(msg.content || '');
-                    
-                    // Mark message as read when viewed
-                    useEffect(() => {
-                        if (!isMe && msg.status !== 'read' && onMarkAsRead) {
-                            onMarkAsRead(msg.id);
-                        }
-                    }, [msg, isMe, onMarkAsRead]);
                     
                     return (
                         <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-1 group`}>
@@ -214,49 +165,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                 </div>
                             ) : msg.stickerUrl ? (
                                 <img src={msg.stickerUrl} alt="sticker" className="w-32 h-32 object-contain" />
-                            ) : msg.attachments && msg.attachments.length > 0 ? (
-                                <div className="max-w-[75%]">
-                                    {msg.attachments.map(attachment => (
-                                        <div key={attachment.id} className="bg-[#202c33] rounded-lg p-3 mb-2">
-                                            {attachment.type === 'image' ? (
-                                                <img src={attachment.url} alt={attachment.name} className="max-w-full h-auto rounded" />
-                                            ) : attachment.type === 'video' ? (
-                                                <video src={attachment.url} controls className="max-w-full h-auto rounded" />
-                                            ) : (
-                                                <div className="flex items-center gap-3">
-                                                    <i className="fas fa-file text-2xl text-[#8696a0]"></i>
-                                                    <div>
-                                                        <p className="text-[#E9EDEF] text-sm">{attachment.name}</p>
-                                                        <p className="text-[#8696a0] text-xs">{attachment.size}</p>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                    {msg.content && (
-                                        <div className="px-3 py-1.5 rounded-lg text-[17px] bg-[#202c33] text-[#E9EDEF] mt-2">
-                                            <span>{msg.content}</span>
-                                        </div>
-                                    )}
-                                    <div className="text-[11px] text-[#8696a0] text-right mt-1 flex items-center justify-end gap-1">
-                                        {formatMessageTime(msg.timestamp)}
-                                        {isMe && getStatusIcon(msg.status)}
-                                    </div>
-                                </div>
-                            ) : msg.reaction ? (
-                                <div className={`px-3 py-1.5 rounded-lg text-2xl ${isMe ? 'bg-[#005c4b]' : 'bg-[#202c33]'}`}>
-                                    {msg.reaction}
-                                    <div className="text-[11px] text-[#8696a0] text-right mt-1">
-                                        {formatMessageTime(msg.timestamp)}
-                                    </div>
-                                </div>
                             ) : (
                                 <div className={`max-w-[75%] px-3 py-1.5 rounded-lg text-[17px] shadow-sm relative ${isMe ? 'bg-[#005c4b] text-[#E9EDEF] rounded-tr-none' : 'bg-[#202c33] text-[#E9EDEF] rounded-tl-none'} ${bigEmoji ? 'bg-transparent !p-0 shadow-none' : ''}`}>
                                     {bigEmoji ? (
                                         <span className="text-6xl">{msg.content}</span>
                                     ) : (
                                         <>
-                                            {/* FIXED: Changed msg.text to msg.content */}
                                             <span>{msg.content}</span>
                                             <div className="text-[11px] text-[#8696a0] text-right mt-1 flex items-center justify-end gap-1">
                                                 {formatMessageTime(msg.timestamp)}
@@ -269,43 +183,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         </div>
                     );
                 })}
-                {isTyping && !isMe && (
-                    <div className="flex justify-start mb-1">
-                        <div className="bg-[#202c33] text-[#E9EDEF] rounded-tl-none rounded-lg px-3 py-1.5 max-w-[75%]">
-                            <div className="flex gap-1">
-                                <div className="w-2 h-2 bg-[#8696a0] rounded-full animate-bounce"></div>
-                                <div className="w-2 h-2 bg-[#8696a0] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                                <div className="w-2 h-2 bg-[#8696a0] rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-                            </div>
-                        </div>
-                    </div>
-                )}
                 <div ref={messagesEndRef} />
             </div>
 
             {/* Pickers Area */}
             {showStickers && <StickerPicker onSelect={handleStickerSelect} />}
             {showEmojis && <EmojiPicker onSelect={handleEmojiSelect} />}
-            {showGifPicker && gifApiKey && (
-                <div className="absolute bottom-16 left-0 right-0 bg-[#202c33] p-3 max-h-64 overflow-y-auto">
-                    <div className="flex justify-between items-center mb-2">
-                        <span className="text-[#E9EDEF] text-sm">Search GIFs</span>
-                        <i className="fas fa-times text-[#8696a0] cursor-pointer" onClick={() => setShowGifPicker(false)}></i>
-                    </div>
-                    <p className="text-[#8696a0] text-xs">GIF feature placeholder - implement with GIPHY API</p>
-                </div>
-            )}
 
             {/* Footer Input */}
             <div className="p-2 bg-[#202c33] flex items-end gap-2">
                 <div className="flex gap-3 mb-3 ml-2">
                     <i 
                         className={`far fa-smile text-2xl cursor-pointer ${showEmojis ? 'text-[#00a884]' : 'text-[#8696a0]'}`}
-                        onClick={() => { setShowEmojis(!showEmojis); setShowStickers(false); setShowGifPicker(false); }}
-                    ></i>
-                    <i 
-                        className={`fas fa-gift text-2xl cursor-pointer ${showGifPicker ? 'text-[#00a884]' : 'text-[#8696a0]'}`}
-                        onClick={() => { setShowGifPicker(!showGifPicker); setShowStickers(false); setShowEmojis(false); }}
+                        onClick={() => { setShowEmojis(!showEmojis); setShowStickers(false); }}
                     ></i>
                     <i className="fas fa-plus text-[#8696a0] text-2xl cursor-pointer" onClick={() => fileInputRef.current?.click()}></i>
                 </div>
@@ -314,8 +204,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     <input 
                         type="text" 
                         value={inputText} 
-                        onChange={handleInputChange} 
-                        onFocus={() => { setShowStickers(false); setShowEmojis(false); setShowGifPicker(false); }}
+                        onChange={(e) => setInputText(e.target.value)} 
+                        onFocus={() => { setShowStickers(false); setShowEmojis(false); }}
                         placeholder="Message" 
                         className="w-full bg-transparent px-4 py-2 text-[17px] outline-none text-[#d1d7db] placeholder-[#8696a0]" 
                     />
@@ -323,7 +213,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                          <i className="fas fa-paperclip text-[#8696a0] text-xl cursor-pointer" onClick={() => fileInputRef.current?.click()}></i>
                          <i 
                             className={`fas fa-sticky-note text-xl cursor-pointer ${showStickers ? 'text-[#00a884]' : 'text-[#8696a0]'}`}
-                            onClick={() => { setShowStickers(!showStickers); setShowEmojis(false); setShowGifPicker(false); }}
+                            onClick={() => { setShowStickers(!showStickers); setShowEmojis(false); }}
                         ></i>
                     </div>
                 </div>
@@ -341,7 +231,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     )}
                 </button>
                 
-                <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*,application/pdf" multiple onChange={handleFileChange} />
+                <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
             </div>
         </div>
     );
