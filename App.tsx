@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { User, Post as PostType, ReactionType, Reel, AudioTrack, Song, Episode } from '../types';
-import { CreatePost, Post, CreatePostModal } from './Feed';
+import { CreatePost, Post, CreatePostModal } from './Feeds.tsx';
 
 // --- EDIT PROFILE MODAL ---
 interface EditProfileModalProps {
