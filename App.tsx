@@ -1,146 +1,104 @@
 
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Login, Register, ForgotPassword } from './components/Auth';
+import { Header, Sidebar, RightSidebar, MenuOverlay } from './components/Layout';
+import { CreatePost, Post, CommentsSheet, ShareSheet, CreatePostModal, SuggestedProductsWidget } from './components/Feed';
+import { StoryReel, StoryViewer, CreateStoryModal } from './components/Story';
+import { UserProfile } from './components/UserProfile';
+import { MarketplacePage, ProductDetailModal } from './components/Marketplace';
+import { ReelsFeed, CreateReelModal } from './components/Reels';
+import { ChatWindow } from './components/Chat';
+import { ImageViewer } from './components/Common';
+import { EventsPage, BirthdaysPage, SuggestedProfilesPage, SettingsPage, MemoriesPage } from './components/MenuPages';
+import { HelpSupportPage } from './components/HelpSupport';
+import { CreateEventModal } from './components/Events';
+import { BrandsPage } from './components/Brands';
+import { MusicSystem, GlobalAudioPlayer, MusicFeedPost } from './components/MusicSystem'; 
+import { GroupsPage } from './components/Groups';
+import { ToolsPage } from './components/Tools';
+import { PrivacyPolicyPage } from './components/PrivacyPolicy';
+import { TermsOfServicePage } from './components/TermsOfService';
+import { useLanguage } from './contexts/LanguageContext';
+import { User, Post as PostType, Story, Reel, Notification, Message, Event, Product, Comment, ReactionType, LinkPreview, Group, GroupPost, AudioTrack, Brand, Song, Episode } from './types';
+import { INITIAL_USERS, INITIAL_POSTS, INITIAL_STORIES, INITIAL_REELS, INITIAL_EVENTS, INITIAL_GROUPS, INITIAL_BRANDS, MOCK_SONGS, MOCK_EPISODES } from './constants';
+import { rankFeed } from './utils/ranking';
 
-import React, { useState, useRef, useEffect } from 'react';
-import { User, Post as PostType, ReactionType, Reel, AudioTrack, Song, Episode } from '../types';
-import { CreatePost, Post, CreatePostModal } from './Feeds.tsx';
-
-// --- EDIT PROFILE MODAL ---
-interface EditProfileModalProps {
-    user: User;
-    onClose: () => void;
-    onSave: (updatedData: Partial<User>) => void;
-}
-
-const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClose, onSave }) => {
-    const [bio, setBio] = useState(user.bio || '');
-    const [work, setWork] = useState(user.work || '');
-    const [education, setEducation] = useState(user.education || '');
-    const [location, setLocation] = useState(user.location || '');
-    const [website, setWebsite] = useState(user.website || '');
-    
-    const handleSave = () => {
-        onSave({
-            bio,
-            work,
-            education,
-            location,
-            website
-        });
-        onClose();
-    };
-
-    return (
-        <div className="fixed inset-0 z-[150] bg-black/80 flex items-center justify-center p-4 animate-fade-in font-sans">
-            <div className="bg-[#242526] w-full max-w-[600px] rounded-xl border border-[#3E4042] shadow-2xl flex flex-col max-h-[90vh]">
-                <div className="p-4 border-b border-[#3E4042] flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-[#E4E6EB]">Edit Profile</h2>
-                    <div onClick={onClose} className="w-8 h-8 rounded-full bg-[#3A3B3C] hover:bg-[#4E4F50] flex items-center justify-center cursor-pointer">
-                        <i className="fas fa-times text-[#B0B3B8]"></i>
-                    </div>
-                </div>
-                
-                <div className="p-4 overflow-y-auto space-y-4">
-                    <div>
-                        <div className="flex justify-between items-center mb-1">
-                             <label className="text-[#E4E6EB] font-bold text-sm">Bio</label>
-                        </div>
-                        <textarea className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-3 text-[#E4E6EB] outline-none focus:border-[#1877F2] text-center" rows={3} value={bio} onChange={e => setBio(e.target.value)} placeholder="Describe yourself..." />
-                    </div>
-
-                    <div className="space-y-4">
-                        <h3 className="text-[#E4E6EB] font-bold text-lg">Details</h3>
-                        
-                        <div>
-                            <div className="flex items-center gap-2 mb-1 text-[#B0B3B8]">
-                                <i className="fas fa-briefcase w-5 text-center"></i>
-                                <span className="text-sm">Work</span>
-                            </div>
-                            <input type="text" className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2.5 text-[#E4E6EB] outline-none focus:border-[#1877F2]" value={work} onChange={e => setWork(e.target.value)} placeholder="Add a workplace" />
-                        </div>
-
-                        <div>
-                            <div className="flex items-center gap-2 mb-1 text-[#B0B3B8]">
-                                <i className="fas fa-graduation-cap w-5 text-center"></i>
-                                <span className="text-sm">Education</span>
-                            </div>
-                            <input type="text" className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2.5 text-[#E4E6EB] outline-none focus:border-[#1877F2]" value={education} onChange={e => setEducation(e.target.value)} placeholder="Add a high school or university" />
-                        </div>
-
-                        <div>
-                            <div className="flex items-center gap-2 mb-1 text-[#B0B3B8]">
-                                <i className="fas fa-map-marker-alt w-5 text-center"></i>
-                                <span className="text-sm">Location</span>
-                            </div>
-                            <input type="text" className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2.5 text-[#E4E6EB] outline-none focus:border-[#1877F2]" value={location} onChange={e => setLocation(e.target.value)} placeholder="Add current city" />
-                        </div>
-
-                        <div>
-                            <div className="flex items-center gap-2 mb-1 text-[#B0B3B8]">
-                                <i className="fas fa-link w-5 text-center"></i>
-                                <span className="text-sm">Website</span>
-                            </div>
-                            <input type="text" className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2.5 text-[#E4E6EB] outline-none focus:border-[#1877F2]" value={website} onChange={e => setWebsite(e.target.value)} placeholder="Add website link" />
-                        </div>
-                    </div>
-                </div>
-
-                <div className="p-4 border-t border-[#3E4042] bg-[#242526] rounded-b-xl">
-                    <button onClick={handleSave} className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white py-2.5 rounded-lg font-bold shadow-md transition-colors">Save Details</button>
-                </div>
-            </div>
-        </div>
-    );
+// ========== UTILITY FUNCTIONS ==========
+const getPath = () => {
+    if (typeof window !== 'undefined') {
+        return window.location.pathname;
+    }
+    return '/';
 };
 
-interface UserProfileProps {
-    user: User;
-    currentUser: User | null; // Allow null
-    users: User[];
-    posts: PostType[];
-    reels?: Reel[]; // Added Reels prop
-    songs?: Song[];
-    episodes?: Episode[];
-    likedTracks?: string[];
-    onProfileClick: (id: number) => void;
-    onFollow: (id: number) => void;
-    onReact: (postId: number, type: ReactionType) => void;
-    onComment: (postId: number, text: string) => void;
-    onShare: (postId: number) => void;
-    onMessage: (id: number) => void;
-    // UPDATED: Changed to accept multiple files
-    onCreatePost: (text: string, files: File[] | null, type: any, visibility: any, location?: string, feeling?: string, taggedUsers?: number[], background?: string, linkPreview?: any) => void;
-    onUpdateProfileImage: (file: File) => void;
-    onUpdateCoverImage: (file: File) => void;
-    onUpdateUserDetails: (data: Partial<User>) => void;
-    onDeletePost: (postId: number) => void;
-    onEditPost: (postId: number, content: string) => void;
-    getCommentAuthor: (id: number) => User | undefined;
-    onViewImage: (url: string) => void;
-    onCreateEventClick?: () => void;
-    onOpenComments: (postId: number) => void;
-    onVideoClick: (post: PostType) => void;
-    onPlayAudioTrack: (track: AudioTrack) => void;
-    onHashtagClick?: (tag: string) => void;
+const parsePath = (path: string, users: User[]) => {
+    if (path.startsWith('/@')) {
+        const username = path.substring(2);
+        const user = users.find(u => u.username === username || u.id.toString() === username);
+        return { view: 'profile', username, userId: user?.id };
+    }
+    if (path.startsWith('/post/')) {
+        return { view: 'single_post', postId: parseInt(path.substring(6), 10) };
+    }
     
-    // Admin Actions
-    onVerifyUser?: (id: number) => void;
-    onRestrictUser?: (id: number) => void;
-    onDeleteUser?: (id: number) => void;
-    onMakeModerator?: (id: number) => void;
+    // Main menu routes
+    if (path === '/marketplace') return { view: 'marketplace' };
+    if (path === '/reels') return { view: 'reels' };
+    if (path === '/groups') return { view: 'groups' };
+    if (path === '/brands') return { view: 'brands' };
+    if (path === '/events') return { view: 'events' };
+    if (path === '/birthdays') return { view: 'birthdays' };
+    if (path === '/profiles') return { view: 'suggested_profiles' };
+    if (path === '/suggested') return { view: 'suggested_profiles' };
+    if (path === '/memories') return { view: 'memories' };
+    if (path === '/music') return { view: 'music' };
+    if (path === '/tools') return { view: 'tools' };
     
-    // Music-related props
-    onLikeTrack?: (trackId: string, isLiked: boolean) => void;
-    onTrackComment?: (trackId: string) => void;
-    onTrackShare?: (trackId: string) => void;
+    // Bottom menu routes
+    if (path === '/help') return { view: 'help_support' };
+    if (path === '/settings') return { view: 'settings' };
+    if (path === '/privacy') return { view: 'privacy_policy' };
+    if (path === '/terms') return { view: 'terms_of_service' };
     
-    // Render functions for different post types
-    renderMusicPost?: (post: PostType, author: any) => React.ReactNode;
-    renderRegularPost?: (post: PostType, author: any, isFollowing?: boolean) => React.ReactNode;
-}
+    return { view: 'home' };
+};
+
+// Enhanced Facebook-style relative time formatter with precise calculations
+const formatRelativeTime = (timestamp: number): string => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    
+    // If timestamp is in the future or invalid, return fallback
+    if (diff < 0 || !timestamp) return 'Just now';
+    
+    const diffInSeconds = Math.floor(diff / 1000);
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    const diffInDays = Math.floor(diffInHours / 24);
+    const diffInWeeks = Math.floor(diffInDays / 7);
+    const diffInMonths = Math.floor(diffInDays / 30);
+    const diffInYears = Math.floor(diffInDays / 365);
+    
+    if (diffInSeconds < 60) {
+        return diffInSeconds < 10 ? 'Just now' : `${diffInSeconds}s`;
+    } else if (diffInMinutes < 60) {
+        return `${diffInMinutes}m`;
+    } else if (diffInHours < 24) {
+        return `${diffInHours}h`;
+    } else if (diffInDays < 7) {
+        return `${diffInDays}d`;
+    } else if (diffInDays < 30) {
+        return `${diffInWeeks}w`;
+    } else if (diffInDays < 365) {
+        return `${diffInMonths}mo`;
+    } else {
+        return `${diffInYears}y`;
+    }
+};
 
 // Helper function to get song for post
-const getSongForPost = (post: PostType, songs?: Song[], episodes?: Episode[]) => {
-    if (!post.audioTrack || !songs || !episodes) return null;
+const getSongForPost = (post: PostType, songs: Song[], episodes: Episode[]) => {
+    if (!post.audioTrack) return null;
     
     // Check songs array first
     const song = songs.find(s => s.id === post.audioTrack?.id);
@@ -157,8 +115,8 @@ const getSongForPost = (post: PostType, songs?: Song[], episodes?: Episode[]) =>
                 likes: song.likes || post.audioTrack.likes || 0,
                 shares: song.shares || post.audioTrack.shares || 0,
                 comments: song.comments || 0,
-                downloads: song.stats?.downloads || 0,
-                reelsUse: song.stats?.reelsUse || 0
+                downloads: 0,
+                reelsUse: 0
             }
         };
     }
@@ -185,552 +143,4233 @@ const getSongForPost = (post: PostType, songs?: Song[], episodes?: Episode[]) =>
                 likes: episode.likes || post.audioTrack.likes || 0,
                 shares: episode.shares || post.audioTrack.shares || 0,
                 comments: episode.comments || 0,
-                downloads: episode.stats?.downloads || 0,
-                reelsUse: episode.stats?.reelsUse || 0
+                downloads: 0,
+                reelsUse: 0
             }
+        };
+    }
+    
+    // Create song object from audioTrack if not found in arrays
+    return {
+        id: post.audioTrack.id,
+        title: post.audioTrack.title,
+        artist: post.audioTrack.artist,
+        cover: post.audioTrack.cover || '/default-cover.jpg',
+        audioUrl: post.audioTrack.url,
+        duration: post.audioTrack.duration,
+        uploaderId: post.audioTrack.uploaderId,
+        type: post.type === 'podcast' ? 'podcast' : 'music',
+        plays: post.audioTrack.plays || 0,
+        likes: post.audioTrack.likes || 0,
+        shares: post.audioTrack.shares || 0,
+        comments: 0,
+        stats: {
+            plays: post.audioTrack.plays || 0,
+            likes: post.audioTrack.likes || 0,
+            shares: post.audioTrack.shares || 0,
+            comments: 0,
+            downloads: 0,
+            reelsUse: 0
+        }
+    };
+};
+
+// Helper function to get author (user or brand) for a post
+const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
+    // First check if it's a brand post
+    if (post.brandId) {
+        const brand = brands.find(b => b.id === post.brandId);
+        if (brand) {
+            return {
+                ...brand,
+                type: 'brand' as const,
+                name: brand.name,
+                profileImage: brand.profileImage,
+                isVerified: brand.isVerified,
+                id: brand.id,
+                followers: brand.followers || []
+            };
+        }
+    }
+    
+    // Check if authorId matches a brand
+    const brandByAuthorId = brands.find(b => b.id === post.authorId);
+    if (brandByAuthorId) {
+        return {
+            ...brandByAuthorId,
+            type: 'brand' as const,
+            name: brandByAuthorId.name,
+            profileImage: brandByAuthorId.profileImage,
+            isVerified: brandByAuthorId.isVerified,
+            id: brandByAuthorId.id,
+            followers: brandByAuthorId.followers || []
+        };
+    }
+    
+    // Otherwise it's a user post
+    const user = users.find(u => u.id === post.authorId);
+    if (user) {
+        return {
+            ...user,
+            type: 'user' as const
         };
     }
     
     return null;
 };
 
-export const UserProfile: React.FC<UserProfileProps> = ({ 
-    user, 
-    currentUser, 
-    users, 
-    posts, 
-    reels = [], 
-    songs = [], 
-    episodes = [],
-    likedTracks = [],
-    onProfileClick, 
-    onFollow, 
-    onReact, 
-    onComment, 
-    onShare, 
-    onMessage, 
-    onCreatePost, 
-    onUpdateProfileImage, 
-    onUpdateCoverImage, 
-    onUpdateUserDetails, 
-    onDeletePost, 
-    onEditPost, 
-    getCommentAuthor, 
-    onViewImage, 
-    onCreateEventClick, 
-    onOpenComments, 
-    onVideoClick, 
-    onPlayAudioTrack, 
-    onHashtagClick, 
-    onVerifyUser, 
-    onRestrictUser, 
-    onDeleteUser, 
-    onMakeModerator,
-    onLikeTrack,
-    onTrackComment,
-    onTrackShare,
-    renderMusicPost,
-    renderRegularPost
-}) => {
-    const [activeTab, setActiveTab] = useState('Posts');
+// Notification utility functions
+const notificationExists = (notifications: Notification[], userId: number, senderId: number, type: string, postId?: number): boolean => {
+    const recentTime = Date.now() - 300000; // 5 minutes
+    return notifications.some(notif => 
+        notif.userId === userId &&
+        notif.senderId === senderId &&
+        notif.type === type &&
+        (postId ? notif.postId === postId : true) &&
+        notif.timestamp > recentTime
+    );
+};
+
+const createNotification = (
+    userId: number,
+    senderId: number,
+    type: string,
+    content: string,
+    extraData?: {
+        postId?: number;
+        commentId?: number;
+        reactionType?: ReactionType;
+        groupId?: string;
+        brandId?: number;
+        eventId?: number;
+        productId?: number;
+        storyId?: number;
+        reelId?: number;
+        songId?: string;
+        episodeId?: string;
+        metadata?: any;
+    }
+): Notification => {
+    return {
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        userId,
+        senderId,
+        type: type as any,
+        content,
+        timestamp: Date.now(),
+        read: false,
+        ...extraData,
+    };
+};
+
+// Suggested User Interface
+interface SuggestedUser {
+    id: number;
+    name: string;
+    username?: string;
+    profileImage: string;
+    mutualFriends: number;
+    bio?: string;
+    location?: string;
+    education?: string;
+    work?: string;
+    viewed: boolean;
+}
+
+// People You May Know Component - Professional Version
+const PeopleYouMayKnow: React.FC<{
+    suggestedUsers: SuggestedUser[];
+    onViewProfile: (userId: number) => void;
+    onRemove: (userId: number) => void;
+    key?: string;
+}> = ({ suggestedUsers, onViewProfile, onRemove, key }) => {
+    const { t } = useLanguage();
+    
+    if (suggestedUsers.length === 0) return null;
+    
+    return (
+        <div className="bg-[#242526] rounded-xl p-4 mb-6 border border-[#3E4042] shadow-lg">
+            <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center">
+                    <div className="w-8 h-8 bg-gradient-to-r from-[#1877F2] to-[#00B0FF] rounded-full flex items-center justify-center mr-3 shadow-md">
+                        <i className="fas fa-user-plus text-white text-sm"></i>
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-bold text-white">People You May Know</h2>
+                        <p className="text-[#B0B3B8] text-xs mt-0.5">Based on your profile and connections</p>
+                    </div>
+                </div>
+                {suggestedUsers.length > 5 && (
+                    <button className="text-[#1877F2] text-sm font-medium hover:bg-[#3A3B3C] px-3 py-1.5 rounded-lg transition-colors">
+                        See All
+                    </button>
+                )}
+            </div>
+            
+            <div className="relative">
+                <div className="flex space-x-4 overflow-x-auto pb-4 scrollbar-hide">
+                    {suggestedUsers.slice(0, 6).map((user) => (
+                        <div 
+                            key={`${key}-${user.id}`} 
+                            className="flex-shrink-0 w-44 bg-[#3A3B3C] rounded-xl overflow-hidden border border-[#4E4F50] hover:border-[#1877F2]/50 transition-all duration-300 hover:shadow-lg group"
+                        >
+                            {/* User Card */}
+                            <div className="p-3">
+                                {/* Profile Image */}
+                                <div className="flex justify-center mb-3 relative">
+                                    <div className="relative">
+                                        <img 
+                                            src={user.profileImage} 
+                                            alt={user.name}
+                                            className="w-16 h-16 rounded-full object-cover border-2 border-[#4E4F50] group-hover:border-[#1877F2] transition-colors"
+                                        />
+                                        {user.mutualFriends > 0 && (
+                                            <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-[#1877F2] rounded-full flex items-center justify-center shadow-md">
+                                                <span className="text-white text-xs font-bold">
+                                                    {user.mutualFriends > 9 ? '9+' : user.mutualFriends}
+                                                </span>
+                                            </div>
+                                        )}
+                                        <button 
+                                            onClick={() => onRemove(user.id)}
+                                            className="absolute -top-1 -right-1 w-6 h-6 bg-[#242526] rounded-full flex items-center justify-center text-[#B0B3B8] hover:text-white hover:bg-[#3A3B3C] transition-colors shadow-md border border-[#3E4042]"
+                                            title="Remove suggestion"
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                {/* User Info */}
+                                <div className="text-center">
+                                    <h3 className="font-semibold text-white text-sm truncate mb-1">{user.name}</h3>
+                                    
+                                    {user.mutualFriends > 0 && (
+                                        <p className="text-[#B0B3B8] text-xs mb-2">
+                                            {user.mutualFriends} mutual connection{user.mutualFriends !== 1 ? 's' : ''}
+                                        </p>
+                                    )}
+                                    
+                                    {/* Compact Details */}
+                                    <div className="space-y-1 mb-3">
+                                        {user.work && (
+                                            <div className="flex items-center justify-center text-[#B0B3B8] text-xs">
+                                                <i className="fas fa-briefcase mr-1 text-[10px]"></i>
+                                                <span className="truncate">{user.work}</span>
+                                            </div>
+                                        )}
+                                        {user.location && (
+                                            <div className="flex items-center justify-center text-[#B0B3B8] text-xs">
+                                                <i className="fas fa-map-marker-alt mr-1 text-[10px]"></i>
+                                                <span className="truncate">{user.location}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {/* View Profile Button - Professional Blue */}
+                                    <button
+                                        onClick={() => onViewProfile(user.id)}
+                                        className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white font-semibold py-2 rounded-lg transition-colors text-sm shadow-sm hover:shadow-md"
+                                    >
+                                        View Profile
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                
+                {/* Scroll Indicator */}
+                <div className="flex justify-center space-x-1 mt-3">
+                    {suggestedUsers.slice(0, 3).map((_, index) => (
+                        <div 
+                            key={index} 
+                            className={`w-1.5 h-1.5 rounded-full ${index === 0 ? 'bg-[#1877F2]' : 'bg-[#4E4F50]'}`}
+                        />
+                    ))}
+                </div>
+            </div>
+            
+            <div className="mt-3 pt-3 border-t border-[#3E4042]">
+                <p className="text-[#B0B3B8] text-xs text-center">
+                    Suggestions update based on new connections and activity
+                </p>
+            </div>
+        </div>
+    );
+};
+
+// Groups You May Like Component - Professional Version
+const GroupsYouMayLike: React.FC<{
+    suggestedGroups: Group[];
+    currentUser: User | null;
+    onViewGroup: (groupId: string) => void;
+    onJoinGroup: (groupId: string) => void;
+    onRemove: (groupId: string) => void;
+    key?: string;
+}> = ({ suggestedGroups, currentUser, onViewGroup, onJoinGroup, onRemove, key }) => {
+    const { t } = useLanguage();
+    
+    if (suggestedGroups.length === 0) return null;
+    
+    return (
+        <div className="bg-[#242526] rounded-xl p-4 mb-6 border border-[#3E4042] shadow-lg">
+            <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center">
+                    <div className="w-8 h-8 bg-gradient-to-r from-[#45BD62] to-[#2ABBA7] rounded-full flex items-center justify-center mr-3 shadow-md">
+                        <i className="fas fa-users text-white text-sm"></i>
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-bold text-white">Groups You May Like</h2>
+                        <p className="text-[#B0B3B8] text-xs mt-0.5">Based on your interests and connections</p>
+                    </div>
+                </div>
+                {suggestedGroups.length > 5 && (
+                    <button className="text-[#45BD62] text-sm font-medium hover:bg-[#3A3B3C] px-3 py-1.5 rounded-lg transition-colors">
+                        See All
+                    </button>
+                )}
+            </div>
+            
+            <div className="relative">
+                <div className="flex space-x-4 overflow-x-auto pb-4 scrollbar-hide">
+                    {suggestedGroups.slice(0, 6).map((group) => (
+                        <div 
+                            key={`${key}-${group.id}`} 
+                            className="flex-shrink-0 w-64 bg-[#3A3B3C] rounded-xl overflow-hidden border border-[#4E4F50] hover:border-[#45BD62]/50 transition-all duration-300 hover:shadow-lg group"
+                        >
+                            {/* Group Card */}
+                            <div className="h-32 relative">
+                                <img 
+                                    src={group.coverImage} 
+                                    alt={group.name}
+                                    className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+                                />
+                                <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-xs text-white font-bold uppercase">
+                                    {group.type}
+                                </div>
+                                <button 
+                                    onClick={() => onRemove(group.id)}
+                                    className="absolute top-2 left-2 w-6 h-6 bg-[#242526] rounded-full flex items-center justify-center text-[#B0B3B8] hover:text-white hover:bg-[#3A3B3C] transition-colors shadow-md border border-[#3E4042]"
+                                    title="Remove suggestion"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                            
+                            <div className="p-3">
+                                {/* Group Profile Image and Info */}
+                                <div className="flex items-start gap-3 mb-3 -mt-8 relative">
+                                    <img 
+                                        src={group.image} 
+                                        alt={group.name}
+                                        className="w-16 h-16 rounded-xl border-4 border-[#242526] object-cover bg-[#242526] shadow-md group-hover:border-[#45BD62] transition-colors"
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                        <h3 
+                                            className="font-bold text-white text-sm truncate mb-1 cursor-pointer hover:text-[#45BD62] transition-colors"
+                                            onClick={() => onViewGroup(group.id)}
+                                        >
+                                            {group.name}
+                                        </h3>
+                                        <p className="text-[#B0B3B8] text-xs truncate mb-2">{group.description}</p>
+                                        <div className="flex items-center text-[#B0B3B8] text-xs">
+                                            <i className="fas fa-users mr-1 text-[10px]"></i>
+                                            <span>{group.members.length} members</span>
+                                            <span className="mx-1">•</span>
+                                            <i className="fas fa-comments mr-1 text-[10px]"></i>
+                                            <span>{group.posts?.length || 0} posts</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                {/* View Group Button */}
+                                <button
+                                    onClick={() => onViewGroup(group.id)}
+                                    className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white font-semibold py-2 rounded-lg transition-colors text-sm shadow-sm hover:shadow-md"
+                                >
+                                    View Group
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                
+                {/* Scroll Indicator */}
+                <div className="flex justify-center space-x-1 mt-3">
+                    {suggestedGroups.slice(0, 3).map((_, index) => (
+                        <div 
+                            key={index} 
+                            className={`w-1.5 h-1.5 rounded-full ${index === 0 ? 'bg-[#45BD62]' : 'bg-[#4E4F50]'}`}
+                        />
+                    ))}
+                </div>
+            </div>
+            
+            <div className="mt-3 pt-3 border-t border-[#3E4042]">
+                <p className="text-[#B0B3B8] text-xs text-center">
+                    Discover communities that match your interests
+                </p>
+            </div>
+        </div>
+    );
+};
+
+// Brand Recommendations Component
+const BrandRecommendations: React.FC<{
+    brands: Brand[];
+    currentUser: User | null;
+    onViewBrand: (brandId: number) => void;
+    onRemove: (brandId: number) => void;
+    key?: string;
+}> = ({ brands, currentUser, onViewBrand, onRemove, key }) => {
+    if (brands.length === 0) return null;
+    
+    const recommendedBrands = brands.slice(0, 4);
+    
+    return (
+        <div className="bg-[#242526] rounded-xl p-4 mb-6 border border-[#3E4042] shadow-lg">
+            <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center">
+                    <div className="w-8 h-8 bg-gradient-to-r from-[#F7B928] to-[#FF6B6B] rounded-full flex items-center justify-center mr-3 shadow-md">
+                        <i className="fas fa-briefcase text-white text-sm"></i>
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-bold text-white">Recommended Pages</h2>
+                        <p className="text-[#B0B3B8] text-xs mt-0.5">Brands and pages you might like</p>
+                    </div>
+                </div>
+                <button className="text-[#F7B928] text-sm font-medium hover:bg-[#3A3B3C] px-3 py-1.5 rounded-lg transition-colors">
+                    See All
+                </button>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {recommendedBrands.map((brand) => (
+                    <div 
+                        key={`${key}-${brand.id}`}
+                        className="bg-[#3A3B3C] rounded-xl overflow-hidden border border-[#4E4F50] hover:border-[#F7B928]/50 transition-all duration-300 hover:shadow-lg group"
+                    >
+                        <div className="p-3">
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="relative">
+                                    <img 
+                                        src={brand.profileImage} 
+                                        alt={brand.name}
+                                        className="w-12 h-12 rounded-full object-cover border-2 border-[#4E4042] group-hover:border-[#F7B928] transition-colors"
+                                    />
+                                    {brand.isVerified && (
+                                        <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#1877F2] rounded-full flex items-center justify-center shadow-md">
+                                            <i className="fas fa-check text-white text-[10px]"></i>
+                                        </div>
+                                    )}
+                                    <button 
+                                        onClick={() => onRemove(brand.id)}
+                                        className="absolute -top-1 -left-1 w-5 h-5 bg-[#242526] rounded-full flex items-center justify-center text-[#B0B3B8] hover:text-white hover:bg-[#3A3B3C] transition-colors shadow-md border border-[#3E4042]"
+                                        title="Remove suggestion"
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="font-bold text-white text-sm truncate">{brand.name}</h3>
+                                    <p className="text-[#B0B3B8] text-xs truncate">{brand.category}</p>
+                                    <p className="text-[#B0B3B8] text-xs">
+                                        {brand.followers?.length || 0} followers • {brand.location}
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <p className="text-[#B0B3B8] text-sm line-clamp-2 mb-3 text-xs">
+                                {brand.description || 'No description available'}
+                            </p>
+                            
+                            <button
+                                onClick={() => onViewBrand(brand.id)}
+                                className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white font-semibold py-2 rounded-lg transition-colors text-sm shadow-sm hover:shadow-md"
+                            >
+                                View Brand
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+            
+            <div className="mt-3 pt-3 border-t border-[#3E4042]">
+                <p className="text-[#B0B3B8] text-xs text-center">
+                    Discover brands and creators relevant to your interests
+                </p>
+            </div>
+        </div>
+    );
+};
+
+// ========== MAIN APP COMPONENT ==========
+export default function App({ initialData, initialPath }: { initialData?: any, initialPath?: string }) {
+    const { t } = useLanguage();
+
+    const [isClient, setIsClient] = useState(false);
+    useEffect(() => {
+        setIsClient(true);
+    }, []);
+
+    const [users, setUsers] = useState<User[]>(initialData?.users || INITIAL_USERS);
+    const [posts, setPosts] = useState<PostType[]>(() => {
+        // Ensure all posts have formattedTime on initial load
+        const initialPosts = initialData?.posts || INITIAL_POSTS;
+        return initialPosts.map(post => ({
+            ...post,
+            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+        }));
+    });
+    const [stories, setStories] = useState<Story[]>(INITIAL_STORIES.map(s => ({...s, createdAt: Date.now(), user: (initialData?.users || INITIAL_USERS).find((u: User) => u.id === s.userId)}))); 
+    const [reels, setReels] = useState<Reel[]>(INITIAL_REELS);
+    const [events, setEvents] = useState<Event[]>(INITIAL_EVENTS);
+    const [products, setProducts] = useState<Product[]>([]);
+    const [groups, setGroups] = useState<Group[]>(INITIAL_GROUPS);
+    const [brands, setBrands] = useState<Brand[]>(INITIAL_BRANDS);
+    
+    // Initialize songs and episodes with proper stats
+    const [songs, setSongs] = useState<Song[]>(MOCK_SONGS.map(song => ({
+        ...song,
+        plays: song.plays || 0,
+        likes: song.likes || 0,
+        shares: song.shares || 0,
+        comments: song.comments || 0,
+        stats: song.stats || {
+            plays: song.plays || 0,
+            likes: song.likes || 0,
+            shares: song.shares || 0,
+            comments: song.comments || 0,
+            downloads: 0,
+            reelsUse: 0
+        }
+    })));
+    
+    const [episodes, setEpisodes] = useState<Episode[]>(MOCK_EPISODES.map(episode => ({
+        ...episode,
+        plays: episode.plays || 0,
+        likes: episode.likes || 0,
+        shares: episode.shares || 0,
+        comments: episode.comments || 0,
+        stats: episode.stats || {
+            plays: episode.plays || 0,
+            likes: episode.likes || 0,
+            shares: episode.shares || 0,
+            comments: episode.comments || 0,
+            downloads: 0,
+            reelsUse: 0
+        }
+    })));
+    
+    // People You May Know state
+    const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>(() => {
+        const availableUsers = INITIAL_USERS.slice(1).map(user => ({
+            id: user.id,
+            name: user.name,
+            username: user.username,
+            profileImage: user.profileImage,
+            mutualFriends: Math.floor(Math.random() * 20) + 1,
+            bio: user.bio || '',
+            location: user.location || '',
+            education: user.education || '',
+            work: user.work || '',
+            viewed: false
+        }));
+        
+        return availableUsers.filter(user => 
+            user.profileImage && 
+            (user.work || user.location || user.mutualFriends > 0)
+        ).slice(0, 8);
+    });
+    
+    // Groups You May Like state
+    const [suggestedGroups, setSuggestedGroups] = useState<Group[]>(() => {
+        return INITIAL_GROUPS.filter(group => 
+            group.image && 
+            group.description &&
+            group.members.length > 0
+        ).slice(0, 6);
+    });
+    
+    // State to track which rotation set we're on
+    const [suggestionRotation, setSuggestionRotation] = useState<number>(0);
+    const [groupRotation, setGroupRotation] = useState<number>(0);
+    const [brandRotation, setBrandRotation] = useState<number>(0);
+    
+    const [currentUser, setCurrentUser] = useState<User | null>(initialData?.currentUser || null);
+    const [showRegister, setShowRegister] = useState(false);
+    const [showForgotPassword, setShowForgotPassword] = useState(false);
+    const [loginError, setLoginError] = useState('');
+    
+    const serverPath = initialPath || '/';
+    const clientPath = isClient ? getPath() : serverPath;
+    const path = clientPath;
+    
+    // Update parsedPath to include users dependency
+    const parsedPath = useMemo(() => parsePath(path, users), [path, users]);
+    
+    const [activeTab, setActiveTab] = useState(parsedPath.view === 'home' ? 'home' : parsedPath.view);
+    const [view, setView] = useState(initialData?.view || parsedPath.view);
+    const [selectedUserId, setSelectedUserId] = useState<number | null>(initialData?.selectedUserId || parsedPath.userId || null);
+    const [activeReelId, setActiveReelId] = useState<number | null>(null);
+    const [activeBrandId, setActiveBrandId] = useState<number | null>(null);
+    const [initialGroupIdToView, setInitialGroupIdToView] = useState<string | null>(null);
+    const [activeTag, setActiveTag] = useState<string | null>(null);
+    
+    // Group-specific states
+    const [activeGroupComments, setActiveGroupComments] = useState<{groupId: string, postId: number} | null>(null);
+    const [activeGroupShare, setActiveGroupShare] = useState<{groupId: string, postId: number} | null>(null);
+    
+    // Reel modal state
+    const [showCreateReelModal, setShowCreateReelModal] = useState(false);
+    
+    const [currentAudioTrack, setCurrentAudioTrack] = useState<AudioTrack | null>(null);
+    const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+    const [likedTracks, setLikedTracks] = useState<string[]>([]);
+    const [playHistory, setPlayHistory] = useState<{trackId: string, timestamp: number, duration: number}[]>([]);
+
     const [showCreatePostModal, setShowCreatePostModal] = useState(false);
-    const [showEditProfile, setShowEditProfile] = useState(false);
-    
-    const userPosts = posts.filter(post => post.authorId === user.id);
-    const userReels = reels.filter(reel => reel.userId === user.id);
-    
-    const isCurrentUser = currentUser && user.id === currentUser.id;
-    const isFollowing = currentUser ? currentUser.following.includes(user.id) : false;
-    const followerCount = user.followers.length;
-    const followersList = users.filter(u => user.followers.includes(u.id));
-    const profileInputRef = useRef<HTMLInputElement>(null);
-    const coverInputRef = useRef<HTMLInputElement>(null);
-    
+    const [showCreateStoryModal, setShowCreateStoryModal] = useState(false);
+    const [showCreateEventModal, setShowCreateEventModal] = useState(false);
+    const [activeStory, setActiveStory] = useState<Story | null>(null);
+    const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+    const [activeCommentsPostId, setActiveCommentsPostId] = useState<number | null>(null);
+    const [activeSharePostId, setActiveSharePostId] = useState<number | null>(null);
+    const [activeChatUser, setActiveChatUser] = useState<User | null>(null);
+    const [notifications, setNotifications] = useState<Notification[]>([
+        // Initial notifications for testing
+        {
+            id: 1,
+            userId: 1,
+            senderId: 2,
+            type: 'follow',
+            content: 'started following you.',
+            timestamp: Date.now() - 3600000,
+            read: false
+        },
+        {
+            id: 2,
+            userId: 1,
+            senderId: 3,
+            type: 'like',
+            content: 'liked your post.',
+            postId: 1,
+            timestamp: Date.now() - 1800000,
+            read: false
+        },
+        {
+            id: 3,
+            userId: 1,
+            senderId: 4,
+            type: 'comment',
+            content: 'commented on your post.',
+            postId: 1,
+            timestamp: Date.now() - 900000,
+            read: true
+        }
+    ]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [activeProduct, setActiveProduct] = useState<Product | null>(null);
+    const [messages, setMessages] = useState<Message[]>([]);
+    const [activeSinglePostId, setActiveSinglePostId] = useState<number | null>(initialData?.activeSinglePostId || parsedPath.postId || null);
+
     const isAdmin = currentUser?.role === 'admin';
 
-    const totalViews = userPosts.reduce((acc, curr) => acc + (curr.views || 0), 0);
-    const totalLikes = userPosts.reduce((acc, curr) => acc + curr.reactions.length, 0) + userReels.reduce((acc, curr) => acc + curr.reactions.length, 0);
-    const totalShares = userPosts.reduce((acc, curr) => acc + curr.shares, 0) + userReels.reduce((acc, curr) => acc + curr.shares, 0);
-    const totalComments = userPosts.reduce((acc, curr) => acc + curr.comments.length, 0) + userReels.reduce((acc, curr) => acc + curr.comments.length, 0);
-    const totalEngagement = totalLikes + totalComments + totalShares;
+    const storiesWithUsers = useMemo(() => {
+        return stories.map(story => {
+            const user = users.find(u => u.id === story.userId);
+            return { ...story, user };
+        }).sort((a,b) => b.createdAt - a.createdAt);
+    }, [stories, users]);
 
+    // Function to get intelligent suggestions based on current user
+    const getIntelligentSuggestions = useCallback((currentUser: User | null, allUsers: User[], rotationIndex: number = 0): SuggestedUser[] => {
+        if (!currentUser) return [];
+        
+        // Filter out current user and already viewed/removed users
+        const viewedIds = JSON.parse(localStorage.getItem('universeViewedProfiles') || '[]');
+        const removedIds = JSON.parse(localStorage.getItem('universeRemovedSuggestions') || '[]');
+        const alreadyFollowed = currentUser.following || [];
+        
+        const availableUsers = allUsers.filter(user => 
+            user.id !== currentUser.id &&
+            !viewedIds.includes(user.id) &&
+            !removedIds.includes(user.id) &&
+            !alreadyFollowed.includes(user.id)
+        );
+        
+        // Sort by mutual connections, then by profile completeness
+        const allSuggestions = availableUsers.map(user => {
+            // Calculate mutual friends (users who follow both current user and this user)
+            const mutualCount = allUsers.filter(u => 
+                u.following.includes(currentUser.id) && 
+                u.following.includes(user.id)
+            ).length;
+            
+            // Calculate profile completeness score
+            let completenessScore = 0;
+            if (user.profileImage && user.profileImage !== '/default-avatar.png') completenessScore += 20;
+            if (user.coverImage) completenessScore += 10;
+            if (user.bio) completenessScore += 15;
+            if (user.work) completenessScore += 15;
+            if (user.education) completenessScore += 15;
+            if (user.location) completenessScore += 10;
+            if (user.website) completenessScore += 10;
+            if (user.isVerified) completenessScore += 5;
+            
+            return {
+                id: user.id,
+                name: user.name,
+                username: user.username,
+                profileImage: user.profileImage,
+                mutualFriends: mutualCount || Math.floor(Math.random() * 15) + 1,
+                bio: user.bio || '',
+                location: user.location || '',
+                education: user.education || '',
+                work: user.work || '',
+                viewed: false,
+                _completeness: completenessScore,
+                _mutual: mutualCount,
+                _random: Math.random()
+            };
+        })
+        .filter(user => user.profileImage && (user.work || user.location || user.mutualFriends > 0))
+        .sort((a, b) => {
+            if (b._mutual !== a._mutual) return b._mutual - a._mutual;
+            return b._completeness - a._completeness;
+        })
+        .map(({ _completeness, _mutual, _random, ...user }) => user);
+        
+        // Apply rotation to show different users each time
+        const rotationSize = 8;
+        const totalRotations = Math.ceil(allSuggestions.length / rotationSize);
+        const currentRotation = rotationIndex % totalRotations;
+        const startIndex = currentRotation * rotationSize;
+        
+        return allSuggestions.slice(startIndex, startIndex + rotationSize);
+    }, []);
+
+    // Function to get intelligent group suggestions based on current user
+    const getIntelligentGroupSuggestions = useCallback((currentUser: User | null, allGroups: Group[], rotationIndex: number = 0): Group[] => {
+        if (!currentUser) return [];
+        
+        // Filter out groups the user is already a member of or has removed
+        const removedGroupIds = JSON.parse(localStorage.getItem('universeRemovedGroupSuggestions') || '[]');
+        const alreadyMember = allGroups.filter(g => g.members.includes(currentUser.id)).map(g => g.id);
+        
+        const availableGroups = allGroups.filter(group => 
+            !group.members.includes(currentUser.id) &&
+            !removedGroupIds.includes(group.id) &&
+            !alreadyMember.includes(group.id)
+        );
+        
+        // Score groups based on various factors
+        const scoredGroups = availableGroups.map(group => {
+            let score = 0;
+            
+            // 1. Popularity score (more members = higher score)
+            score += Math.min(group.members.length * 0.5, 25);
+            
+            // 2. Activity score (more posts = higher score)
+            score += Math.min((group.posts?.length || 0) * 0.3, 20);
+            
+            // 3. Completion score (has image, description, etc.)
+            if (group.image && group.image !== '/default-group.png') score += 15;
+            if (group.coverImage) score += 10;
+            if (group.description && group.description.length > 20) score += 15;
+            
+            // 4. Friends in group score
+            const friendsInGroup = group.members.filter(memberId => 
+                currentUser.following.includes(memberId)
+            ).length;
+            score += friendsInGroup * 10;
+            
+            // 5. Type preference (public groups get a small boost)
+            if (group.type === 'public') score += 5;
+            
+            // 6. Random factor for variety
+            score += Math.random() * 10;
+            
+            return {
+                ...group,
+                _score: score,
+                _friendsInGroup: friendsInGroup
+            };
+        })
+        .filter(group => group.image && group.description)
+        .sort((a, b) => {
+            // Primary sort by score
+            if (b._score !== a._score) return b._score - a._score;
+            // Secondary sort by friends in group
+            return b._friendsInGroup - a._friendsInGroup;
+        })
+        .map(({ _score, _friendsInGroup, ...group }) => group);
+        
+        // Apply rotation
+        const rotationSize = 6;
+        const totalRotations = Math.ceil(scoredGroups.length / rotationSize);
+        const currentRotation = rotationIndex % totalRotations;
+        const startIndex = currentRotation * rotationSize;
+        
+        return scoredGroups.slice(startIndex, startIndex + rotationSize);
+    }, []);
+
+    // Function to get intelligent brand recommendations
+    const getIntelligentBrandRecommendations = useCallback((currentUser: User | null, allBrands: Brand[], rotationIndex: number = 0): Brand[] => {
+        if (!currentUser) return [];
+        
+        const removedBrandIds = JSON.parse(localStorage.getItem('universeRemovedBrandRecommendations') || '[]');
+        const alreadyFollowed = currentUser.following || [];
+        
+        const availableBrands = allBrands.filter(brand => 
+            !brand.followers.includes(currentUser.id) &&
+            !removedBrandIds.includes(brand.id) &&
+            !alreadyFollowed.includes(brand.id)
+        );
+        
+        const scoredBrands = availableBrands.map(brand => {
+            let score = 0;
+            
+            score += Math.min(brand.followers.length * 0.5, 30);
+            if (brand.isVerified) score += 20;
+            if (brand.profileImage && brand.profileImage !== '/default-avatar.png') score += 10;
+            if (brand.coverImage) score += 10;
+            if (brand.description && brand.description.length > 20) score += 15;
+            if (brand.website) score += 10;
+            if (brand.contactEmail || brand.contactPhone) score += 10;
+            
+            score += Math.random() * 15;
+            
+            return {
+                ...brand,
+                _score: score
+            };
+        })
+        .filter(brand => brand.profileImage && brand.description)
+        .sort((a, b) => b._score - a._score)
+        .map(({ _score, ...brand }) => brand);
+        
+        const rotationSize = 4;
+        const totalRotations = Math.ceil(scoredBrands.length / rotationSize);
+        const currentRotation = rotationIndex % totalRotations;
+        const startIndex = currentRotation * rotationSize;
+        
+        return scoredBrands.slice(startIndex, startIndex + rotationSize);
+    }, []);
+
+    // Update suggestions when users or currentUser changes
+    useEffect(() => {
+        if (currentUser && users.length > 0) {
+            const intelligentSuggestions = getIntelligentSuggestions(currentUser, users, suggestionRotation);
+            setSuggestedUsers(intelligentSuggestions);
+        }
+    }, [currentUser, users, getIntelligentSuggestions, suggestionRotation]);
+
+    // Update group suggestions when groups or currentUser changes
+    useEffect(() => {
+        if (currentUser && groups.length > 0) {
+            const intelligentGroupSuggestions = getIntelligentGroupSuggestions(currentUser, groups, groupRotation);
+            setSuggestedGroups(intelligentGroupSuggestions);
+        }
+    }, [currentUser, groups, getIntelligentGroupSuggestions, groupRotation]);
+
+    // Enhanced ranked posts with brand boost using the unified rankFeed function
+    const rankedPosts = useMemo(() => {
+        // Ensure all posts have formattedTime
+        const processedPosts = posts.map(post => ({
+            ...post,
+            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+        }));
+        
+        // Create product posts with proper product data
+        const productPosts: PostType[] = products.map(p => ({ 
+            id: p.id + 100000, 
+            authorId: p.sellerId, 
+            content: `Just listed a new item: ${p.title}`, 
+            timestamp: p.date,
+            formattedTime: formatRelativeTime(p.date),
+            createdAt: p.date, 
+            reactions: p.ratings?.map(r => ({ userId: r.userId, type: 'like' as ReactionType })) || [], 
+            comments: p.comments?.map(c => ({
+                id: Date.now() + Math.random(),
+                userId: c.userId,
+                text: c.text,
+                timestamp: c.timestamp,
+                formattedTime: formatRelativeTime(c.timestamp),
+                likes: 0,
+                authorName: c.authorName,
+                authorImage: c.authorImage
+            })) || [],
+            shares: 0, 
+            views: p.views, 
+            type: 'product' as const, 
+            visibility: 'Public' as const, 
+            product: p, 
+            productId: p.id 
+        }));
+        const reelPosts: PostType[] = reels.map(reel => ({ 
+            id: reel.id + 200000, 
+            authorId: reel.userId, 
+            content: reel.caption, 
+            video: reel.videoUrl, 
+            timestamp: reel.createdAt,
+            formattedTime: formatRelativeTime(reel.createdAt),
+            createdAt: reel.createdAt, 
+            reactions: reel.reactions, 
+            comments: reel.comments, 
+            shares: reel.shares, 
+            views: (reel.reactions.length * 10) + (reel.shares * 5) + (reel.comments.length * 3), 
+            type: 'video' as const, 
+            visibility: 'Public' as const
+        }));
+        
+        // Combine all posts including brand posts
+        const allContent = [...processedPosts, ...productPosts, ...reelPosts];
+        
+        // Use the unified rankFeed function that now accepts brands
+        return rankFeed(allContent, currentUser, users, brands);
+    }, [posts, reels, products, currentUser, users, brands]);
+
+    // ========== FIXED NOTIFICATION MANAGEMENT FUNCTIONS ==========
+    const handleCreateNotification = useCallback((
+        userId: number,
+        senderId: number,
+        type: string,
+        content: string,
+        extraData?: any
+    ) => {
+        // CRITICAL FIX: Prevent self-notifications
+        if (userId === senderId) {
+            console.log(`[Notification] Prevented self-notification: ${senderId} -> ${userId} (${type})`);
+            return;
+        }
+        
+        if (notificationExists(notifications, userId, senderId, type, extraData?.postId)) {
+            return;
+        }
+        
+        const newNotification = createNotification(userId, senderId, type, content, extraData);
+        setNotifications(prev => [newNotification, ...prev]);
+        
+        // Optional: Play notification sound
+        if (typeof Audio !== 'undefined' && currentUser?.id === userId) {
+            const audio = new Audio('/notification.mp3');
+            audio.volume = 0.3;
+            audio.play().catch(() => {});
+        }
+    }, [notifications, currentUser?.id]);
+
+    const handleMarkNotificationRead = (notificationId: number) => {
+        setNotifications(prev => 
+            prev.map(notif => 
+                notif.id === notificationId ? { ...notif, read: true } : notif
+            )
+        );
+    };
+
+    const handleMarkAllNotificationsRead = () => {
+        setNotifications(prev => 
+            prev.map(notif => ({ ...notif, read: true }))
+        );
+    };
+
+    const handleNotificationClick = (notification: Notification) => {
+        // Mark as read
+        handleMarkNotificationRead(notification.id);
+        
+        // Handle navigation based on notification type
+        if (notification.postId) {
+            setActiveSinglePostId(notification.postId);
+            setView('single_post');
+        } else if (notification.groupId) {
+            setInitialGroupIdToView(notification.groupId);
+            setView('groups');
+            setActiveTab('groups');
+        } else if (notification.brandId) {
+            setActiveBrandId(notification.brandId);
+            setView('brands');
+            setActiveTab('brands');
+        } else if (notification.senderId) {
+            setSelectedUserId(notification.senderId);
+            setView('profile');
+            setActiveTab('profile');
+        }
+    };
+    // ========== END NOTIFICATION MANAGEMENT FUNCTIONS ==========
+
+    // Handle People You May Know actions
+    const handleViewProfile = (userId: number) => {
+        // Mark the user as viewed and remove from suggestions
+        setSuggestedUsers(prev => prev.filter(user => user.id !== userId));
+        
+        // Store in localStorage to prevent showing again
+        if (isClient) {
+            const viewedProfiles = JSON.parse(localStorage.getItem('universeViewedProfiles') || '[]');
+            localStorage.setItem('universeViewedProfiles', JSON.stringify([...viewedProfiles, userId]));
+        }
+        
+        // Navigate to profile
+        setSelectedUserId(userId);
+        setView('profile');
+        setActiveTab('profile');
+    };
+
+    const handleRemoveSuggestedUser = (userId: number) => {
+        // Remove from suggestions
+        setSuggestedUsers(prev => prev.filter(user => user.id !== userId));
+        
+        // Store in localStorage to prevent showing again
+        if (isClient) {
+            const removedSuggestions = JSON.parse(localStorage.getItem('universeRemovedSuggestions') || '[]');
+            localStorage.setItem('universeRemovedSuggestions', JSON.stringify([...removedSuggestions, userId]));
+        }
+        
+        // Rotate to next set of suggestions
+        setSuggestionRotation(prev => prev + 1);
+    };
+
+    // Handle Groups You May Like actions
+    const handleViewGroup = (groupId: string) => {
+        // Navigate to group
+        setInitialGroupIdToView(groupId);
+        setView('groups');
+        setActiveTab('groups');
+    };
+
+    const handleRemoveSuggestedGroup = (groupId: string) => {
+        // Remove from suggestions
+        setSuggestedGroups(prev => prev.filter(group => group.id !== groupId));
+        
+        // Store in localStorage to prevent showing again
+        if (isClient) {
+            const removedGroupSuggestions = JSON.parse(localStorage.getItem('universeRemovedGroupSuggestions') || '[]');
+            localStorage.setItem('universeRemovedGroupSuggestions', JSON.stringify([...removedGroupSuggestions, groupId]));
+        }
+        
+        // Rotate to next set of group suggestions
+        setGroupRotation(prev => prev + 1);
+    };
+
+    // Handle Brand Recommendations actions
+    const handleViewBrand = (brandId: number) => {
+        setActiveBrandId(brandId);
+        setView('brands');
+        setActiveTab('brands');
+    };
+
+    const handleRemoveBrandRecommendation = (brandId: number) => {
+        if (isClient) {
+            const removedBrands = JSON.parse(localStorage.getItem('universeRemovedBrandRecommendations') || '[]');
+            localStorage.setItem('universeRemovedBrandRecommendations', JSON.stringify([...removedBrands, brandId]));
+        }
+        
+        setBrandRotation(prev => prev + 1);
+    };
+
+    // Load People You May Know and Groups data from localStorage
+    useEffect(() => {
+        if (isClient) {
+            const storedUser = localStorage.getItem('universeCurrentUser');
+            const storedUsers = localStorage.getItem('universeUsers');
+            const storedSongs = localStorage.getItem('universeSongs');
+            const storedEpisodes = localStorage.getItem('universeEpisodes');
+            const storedLikedTracks = localStorage.getItem('universeLikedTracks');
+            const storedProducts = localStorage.getItem('marketplaceProducts');
+            const storedBrands = localStorage.getItem('universeBrands');
+            const storedPosts = localStorage.getItem('universePosts');
+            const storedGroups = localStorage.getItem('universeGroups');
+            const storedNotifications = localStorage.getItem('universeNotifications');
+            
+            // Load People You May Know filters
+            const viewedProfiles = JSON.parse(localStorage.getItem('universeViewedProfiles') || '[]');
+            const removedSuggestions = JSON.parse(localStorage.getItem('universeRemovedSuggestions') || '[]');
+            const removedGroupSuggestions = JSON.parse(localStorage.getItem('universeRemovedGroupSuggestions') || '[]');
+            const removedBrandRecommendations = JSON.parse(localStorage.getItem('universeRemovedBrandRecommendations') || '[]');
+            
+            if (storedUsers) setUsers(JSON.parse(storedUsers));
+            if (storedSongs) setSongs(JSON.parse(storedSongs));
+            if (storedEpisodes) setEpisodes(JSON.parse(storedEpisodes));
+            if (storedLikedTracks) setLikedTracks(JSON.parse(storedLikedTracks));
+            if (storedProducts) {
+                const parsedProducts = JSON.parse(storedProducts);
+                setProducts(parsedProducts);
+            }
+            if (storedBrands) setBrands(JSON.parse(storedBrands));
+            if (storedPosts) {
+                const parsedPosts = JSON.parse(storedPosts);
+                // Ensure all loaded posts have formattedTime
+                const postsWithFormattedTime = parsedPosts.map((post: PostType) => ({
+                    ...post,
+                    formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+                }));
+                setPosts(postsWithFormattedTime);
+            }
+            if (storedGroups) setGroups(JSON.parse(storedGroups));
+            if (storedNotifications) setNotifications(JSON.parse(storedNotifications));
+            
+            if (storedUser) {
+                const user = JSON.parse(storedUser);
+                const freshUser = (storedUsers ? JSON.parse(storedUsers) : INITIAL_USERS).find((u: User) => u.id === user.id);
+                if (freshUser) setCurrentUser(freshUser);
+            }
+        }
+        setTimeout(() => setIsLoading(false), 800);
+    }, [isClient]);
+
+    // Save People You May Know and Groups data to localStorage
+    useEffect(() => {
+        if (isClient) {
+            localStorage.setItem('universeCurrentUser', JSON.stringify(currentUser));
+            localStorage.setItem('universeUsers', JSON.stringify(users));
+            localStorage.setItem('universeSongs', JSON.stringify(songs));
+            localStorage.setItem('universeEpisodes', JSON.stringify(episodes));
+            localStorage.setItem('universeLikedTracks', JSON.stringify(likedTracks));
+            localStorage.setItem('marketplaceProducts', JSON.stringify(products));
+            localStorage.setItem('universeBrands', JSON.stringify(brands));
+            localStorage.setItem('universePosts', JSON.stringify(posts));
+            localStorage.setItem('universeGroups', JSON.stringify(groups));
+            localStorage.setItem('universeNotifications', JSON.stringify(notifications));
+        }
+    }, [currentUser, users, songs, episodes, likedTracks, products, brands, posts, groups, notifications, isClient]);
+
+    const handleLogin = (email: string, pass: string) => {
+        const user = users.find(u => u.email === email && u.password === pass);
+        if (user) {
+            setCurrentUser(user);
+            setView('home');
+            setActiveTab('home');
+            setLoginError('');
+            setShowRegister(false);
+            setShowForgotPassword(false);
+            if (isClient) window.history.pushState({}, '', '/');
+        } else {
+            setLoginError('Invalid email or password');
+        }
+    };
+
+    const handleRegister = (newUser: Partial<User>) => {
+        const id = Math.max(...users.map(u => u.id)) + 1;
+        const user: User = { ...newUser, id, role: 'user', followers: [], following: [], joinedDate: new Date().toISOString() } as User;
+        setUsers([...users, user]);
+        setCurrentUser(user);
+        setShowRegister(false);
+        setShowForgotPassword(false);
+        setView('home');
+        if (isClient) window.history.pushState({}, '', '/');
+    };
+
+    const handleLogout = () => {
+        setCurrentUser(null);
+        if (isClient) {
+            localStorage.removeItem('universeCurrentUser');
+            window.history.pushState({}, '', '/');
+        }
+        setView('login');
+        setCurrentAudioTrack(null);
+        setIsAudioPlaying(false);
+    };
+
+    const handleTagClick = (tag: string) => {
+        setActiveTag(tag.replace('#', ''));
+        setView('tag_feed');
+    };
+
+    const handleNavigate = (targetView: string) => {
+        if (isClient) {
+            const pathMap: { [key: string]: string } = {
+                home: '/',
+                marketplace: '/marketplace',
+                reels: '/reels',
+                groups: '/groups',
+                brands: '/brands',
+                events: '/events',
+                birthdays: '/birthdays',
+                profiles: '/profiles',
+                suggested_profiles: '/suggested',
+                memories: '/memories',
+                music: '/music',
+                tools: '/tools',
+                help_support: '/help',
+                settings: '/settings',
+                privacy_policy: '/privacy',
+                terms_of_service: '/terms',
+                profile: currentUser ? `/@${currentUser.username || currentUser.id}` : '/login',
+                create_event: '/create-event',
+                brand_view: '/brands',
+            };
+            window.history.pushState({}, '', pathMap[targetView] || '/');
+        }
+
+        setActiveTag(null);
+        if (targetView.startsWith('post-')) {
+            const postId = parseInt(targetView.split('-')[1]);
+            setActiveSinglePostId(postId);
+            setView('single_post');
+            return;
+        }
+
+        setActiveReelId(null);
+        setActiveBrandId(null);
+        setInitialGroupIdToView(null);
+        setActiveGroupComments(null);
+        setActiveGroupShare(null);
+
+        // Handle all menu views
+        switch(targetView) {
+            case 'home':
+                setView('home');
+                setActiveTab('home');
+                break;
+            case 'marketplace':
+                setView('marketplace');
+                setActiveTab('marketplace');
+                break;
+            case 'reels':
+                setView('reels');
+                setActiveTab('reels');
+                break;
+            case 'groups':
+                setView('groups');
+                setActiveTab('groups');
+                break;
+            case 'brands':
+                setView('brands');
+                setActiveTab('brands');
+                break;
+            case 'events':
+                setView('events');
+                setActiveTab('events');
+                break;
+            case 'birthdays':
+                setView('birthdays');
+                setActiveTab('birthdays');
+                break;
+            case 'profiles':
+            case 'suggested_profiles':
+                setView('suggested_profiles');
+                setActiveTab('suggested');
+                break;
+            case 'memories':
+                setView('memories');
+                setActiveTab('memories');
+                break;
+            case 'music':
+                setView('music');
+                setActiveTab('music');
+                break;
+            case 'tools':
+                setView('tools');
+                setActiveTab('tools');
+                break;
+            case 'help_support':
+                setView('help_support');
+                setActiveTab('help');
+                break;
+            case 'settings':
+                setView('settings');
+                setActiveTab('settings');
+                break;
+            case 'privacy_policy':
+                setView('privacy_policy');
+                setActiveTab('privacy');
+                break;
+            case 'terms_of_service':
+                setView('terms_of_service');
+                setActiveTab('terms');
+                break;
+            case 'profile':
+                if (currentUser) {
+                    setSelectedUserId(currentUser.id);
+                    setView('profile');
+                    setActiveTab('profile');
+                } else {
+                    setView('login');
+                }
+                break;
+            case 'create_event':
+                if (currentUser) {
+                    setShowCreateEventModal(true);
+                } else {
+                    setView('login');
+                }
+                break;
+            case 'brand_view':
+                setView('brands');
+                setActiveTab('brands');
+                break;
+            default:
+                setView(targetView);
+                setActiveTab('home');
+        }
+    };
+    
+    // ========== FIXED LIKE AND REACT FUNCTIONS ==========
+    const handleFollowUser = (userIdToToggle: number) => {
+        if (!currentUser) {
+            alert("Please login to follow users.");
+            return;
+        }
+        const currentUserId = currentUser.id;
+    
+        const isCurrentlyFollowing = currentUser.following.includes(userIdToToggle);
+    
+        // Send follow notification if not already following AND not following yourself
+        if (!isCurrentlyFollowing && userIdToToggle !== currentUserId) {
+            handleCreateNotification(
+                userIdToToggle,
+                currentUserId,
+                'follow',
+                'started following you.',
+                {}
+            );
+        }
+
+        const newUsers = users.map(user => {
+            if (user.id === currentUserId) {
+                let updatedFollowing, updatedFollowers;
+    
+                if (isCurrentlyFollowing) {
+                    updatedFollowing = user.following.filter(id => id !== userIdToToggle);
+                    updatedFollowers = user.followers.filter(id => id !== userIdToToggle);
+                } else {
+                    updatedFollowing = [...user.following, userIdToToggle];
+                    updatedFollowers = [...user.followers, userIdToToggle];
+                }
+                
+                const updatedUser = { 
+                    ...user, 
+                    following: updatedFollowing,
+                    followers: updatedFollowers
+                };
+    
+                setCurrentUser(updatedUser);
+                return updatedUser;
+            }
+    
+            if (user.id === userIdToToggle) {
+                let updatedFollowers, updatedFollowing;
+    
+                if (isCurrentlyFollowing) {
+                    updatedFollowers = user.followers.filter(id => id !== currentUserId);
+                    updatedFollowing = user.following.filter(id => id !== currentUserId);
+                } else {
+                    updatedFollowers = [...user.followers, currentUserId];
+                    updatedFollowing = [...user.following, currentUserId];
+                }
+                return { 
+                    ...user,
+                    followers: updatedFollowers,
+                    following: updatedFollowing
+                };
+            }
+    
+            return user;
+        });
+    
+        setUsers(newUsers);
+    };
+
+    // ========== CRITICAL FIX: Enhanced handleReact function ==========
+    const handleReact = (itemId: number, type: ReactionType) => {
+        console.log('[DEBUG] handleReact called:', { 
+            itemId, 
+            type, 
+            currentUserId: currentUser?.id,
+            currentUserName: currentUser?.name
+        });
+        
+        if (!currentUser) {
+            console.log('[DEBUG] No current user, showing alert');
+            alert("Please login to react.");
+            return;
+        }
+        
+        // Check if it's a product post (ID > 100000)
+        if (itemId > 100000) {
+            console.log('[DEBUG] Product post detected, calling handleLikeProduct');
+            const productId = itemId - 100000;
+            handleLikeProduct(productId);
+            return;
+        }
+        
+        // Find the post first
+        const postToUpdate = posts.find(p => p.id === itemId);
+        if (!postToUpdate) {
+            console.log('[DEBUG] Post not found:', itemId);
+            return;
+        }
+        
+        console.log('[DEBUG] Found post:', {
+            postId: postToUpdate.id,
+            authorId: postToUpdate.authorId,
+            currentReactions: postToUpdate.reactions.length,
+            postAuthorName: users.find(u => u.id === postToUpdate.authorId)?.name || 'Unknown'
+        });
+        
+        // Update posts state
+        setPosts(prev => {
+            return prev.map(post => {
+                if (post.id === itemId) {
+                    const existingReaction = post.reactions.find(r => r.userId === currentUser.id);
+                    
+                    let newReactions = [...post.reactions];
+                    
+                    if (existingReaction) {
+                        // User already has a reaction
+                        if (existingReaction.type === type) {
+                            // Remove reaction if same type clicked
+                            newReactions = newReactions.filter(r => r.userId !== currentUser.id);
+                            console.log('[DEBUG] Removed reaction for post:', post.id);
+                        } else {
+                            // Update reaction type
+                            newReactions = newReactions.map(r => 
+                                r.userId === currentUser.id ? { ...r, type } : r
+                            );
+                            console.log('[DEBUG] Updated reaction type to:', type, 'for post:', post.id);
+                        }
+                    } else {
+                        // Add new reaction
+                        newReactions.push({ userId: currentUser.id, type });
+                        console.log('[DEBUG] Added new reaction:', type, 'for post:', post.id);
+                        
+                        // Send notification to post author (prevent self-notification)
+                        if (post.authorId !== currentUser.id) {
+                            console.log('[DEBUG] Sending notification to author:', post.authorId);
+                            const content = type === 'like' 
+                                ? 'liked your post.' 
+                                : `reacted with ${type} to your post.`;
+                            
+                            handleCreateNotification(
+                                post.authorId,
+                                currentUser.id,
+                                `like_${type === 'like' ? 'post' : 'reaction'}`,
+                                content,
+                                { postId: itemId, reactionType: type }
+                            );
+                        } else {
+                            console.log('[DEBUG] Self-reaction, skipping notification');
+                        }
+                    }
+                    
+                    return { ...post, reactions: newReactions };
+                }
+                return post;
+            });
+        });
+    };
+
+    // ========== CRITICAL FIX: Enhanced handleComment function ==========
+    const handleComment = (itemId: number, text: string, attachment?: any, parentId?: number) => {
+        console.log('[DEBUG] handleComment called:', { 
+            itemId, 
+            text: text.substring(0, 50) + (text.length > 50 ? '...' : ''),
+            currentUserId: currentUser?.id,
+            currentUserName: currentUser?.name
+        });
+        
+        if (!currentUser) {
+            console.log('[DEBUG] No current user, returning');
+            alert("Please login to comment.");
+            return;
+        }
+        
+        // Check if it's a product post (ID > 100000)
+        if (itemId > 100000) {
+            console.log('[DEBUG] Product post detected, calling handleCommentOnProduct');
+            const productId = itemId - 100000;
+            handleCommentOnProduct(productId, text);
+            return;
+        }
+        
+        // Find the post first
+        const postToUpdate = posts.find(p => p.id === itemId);
+        if (!postToUpdate) {
+            console.log('[DEBUG] Post not found:', itemId);
+            return;
+        }
+        
+        const timestamp = Date.now();
+        const formattedTime = formatRelativeTime(timestamp);
+        const newComment: Comment = { 
+            id: timestamp, 
+            userId: currentUser.id, 
+            text, 
+            timestamp: timestamp,
+            formattedTime: formattedTime,
+            likes: 0, 
+            attachment,
+            authorName: currentUser.name,
+            authorImage: currentUser.profileImage,
+            parentId
+        };
+        
+        console.log('[DEBUG] Adding comment to post:', {
+            postId: itemId,
+            postAuthorId: postToUpdate.authorId,
+            commentId: newComment.id,
+            commentTextPreview: text.substring(0, 30)
+        });
+        
+        // Update posts state
+        setPosts(prev => {
+            return prev.map(p => {
+                if (p.id === itemId) {
+                    const updatedComments = [...p.comments, newComment];
+                    console.log('[DEBUG] Updated comments for post', p.id, ':', updatedComments.length);
+                    
+                    // Send notification to post author (prevent self-commenting notifications)
+                    if (p.authorId !== currentUser.id) {
+                        console.log('[DEBUG] Sending comment notification to author:', p.authorId);
+                        handleCreateNotification(
+                            p.authorId,
+                            currentUser.id,
+                            'comment_post',
+                            'commented on your post.',
+                            { postId: itemId, commentId: newComment.id }
+                        );
+                    } else {
+                        console.log('[DEBUG] Self-comment, skipping notification');
+                    }
+                    
+                    // Handle mentions in comments with self-notification prevention
+                    const mentionRegex = /@(\w+(?:\s\w+)?)/g;
+                    const mentions = [...text.matchAll(mentionRegex)];
+                    if (mentions.length > 0) {
+                        const mentionedUserIds = new Set<number>();
+                        mentions.forEach(match => {
+                            const userName = match[1];
+                            const user = users.find(u => u.name.toLowerCase() === userName.toLowerCase());
+                            if (user && user.id !== currentUser.id) {
+                                mentionedUserIds.add(user.id);
+                                
+                                // Send mention notification
+                                console.log('[DEBUG] Sending mention notification to user:', user.id);
+                                handleCreateNotification(
+                                    user.id,
+                                    currentUser.id,
+                                    'mention_comment',
+                                    'mentioned you in a comment.',
+                                    { postId: itemId, commentId: newComment.id }
+                                );
+                            }
+                        });
+                    }
+                    
+                    return { ...p, comments: updatedComments };
+                }
+                return p;
+            });
+        });
+
+        // Update comment count for music/podcast posts
+        const post = posts.find(p => p.id === itemId);
+        if (post && (post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
+            const song = getSongForPost(post, songs, episodes);
+            if (song) {
+                handleTrackComment(song.id);
+            }
+        }
+        
+        // Close comments sheet if it's open
+        if (activeCommentsPostId === itemId) {
+            console.log('[DEBUG] Closing comments sheet for post:', itemId);
+            setActiveCommentsPostId(null);
+        }
+        
+        console.log('[DEBUG] Comment added successfully to post:', itemId);
+    };
+
+    // FIXED: Prevent self-notifications for reel reactions
+    const handleReelReact = (reelId: number, type: ReactionType | undefined) => {
+        if (!currentUser) return alert("Please login to react.");
+        setReels(prev => prev.map(reel => {
+            if (reel.id === reelId) {
+                const existing = reel.reactions.find(r => r.userId === currentUser!.id);
+                let newReactions = [...reel.reactions];
+                if (type === undefined || (existing && existing.type === type)) {
+                    newReactions = newReactions.filter(r => r.userId !== currentUser!.id);
+                } else if (existing) {
+                    newReactions = newReactions.map(r => r.userId === currentUser!.id ? { ...r, type: type! } : r);
+                } else {
+                    newReactions.push({ userId: currentUser!.id, type: type! });
+                    
+                    // Send notification to reel owner (prevent self-notification)
+                    if (reel.userId !== currentUser.id) {
+                        const content = type === 'like' 
+                            ? 'liked your reel.' 
+                            : `reacted with ${type} to your reel.`;
+                        
+                        handleCreateNotification(
+                            reel.userId,
+                            currentUser.id,
+                            'like_reel',
+                            content,
+                            { reelId }
+                        );
+                    }
+                }
+                return { ...reel, reactions: newReactions };
+            }
+            return reel;
+        }));
+    };
+
+    const handleCreatePost = (
+        text: string, 
+        files: File[] | null, 
+        type: any, 
+        visibility: any, 
+        location?: string, 
+        feeling?: string, 
+        taggedUsers?: number[], 
+        background?: string, 
+        linkPreview?: LinkPreview
+    ) => {
+        if (!currentUser) return;
+        
+        // Handle multiple images
+        let images: string[] = [];
+        let video: string | undefined = undefined;
+        
+        if (files && files.length > 0) {
+            if (type === 'video' && files.length === 1) {
+                video = URL.createObjectURL(files[0]);
+            } else if (type === 'image' || type === 'multimage') {
+                images = files.map(file => URL.createObjectURL(file));
+            }
+        }
+        
+        const timestamp = Date.now();
+        const formattedTime = formatRelativeTime(timestamp);
+        const newPost: PostType = { 
+            id: timestamp, 
+            authorId: currentUser.id, 
+            content: text, 
+            images: images.length > 0 ? images : undefined,
+            video: video,
+            timestamp: timestamp,
+            formattedTime: formattedTime,
+            createdAt: timestamp, 
+            reactions: [], 
+            comments: [], 
+            shares: 0, 
+            views: 0, 
+            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')),
+            visibility, 
+            location, 
+            feeling, 
+            taggedUsers, 
+            background, 
+            linkPreview 
+        };
+        setPosts([newPost, ...posts]);
+        
+        // Enhanced notification logic for tagged users with self-notification prevention
+        if (taggedUsers && taggedUsers.length > 0) {
+            taggedUsers.forEach(userId => {
+                if (userId !== currentUser.id) {
+                    handleCreateNotification(
+                        userId,
+                        currentUser.id,
+                        'tag_post',
+                        'tagged you in a post.',
+                        { postId: newPost.id }
+                    );
+                }
+            });
+        }
+        
+        // Handle mentions in post content with self-notification prevention
+        const mentionRegex = /@(\w+(?:\s\w+)?)/g;
+        const mentions = [...text.matchAll(mentionRegex)];
+        if (mentions.length > 0) {
+            const mentionedUserIds = new Set<number>();
+            mentions.forEach(match => {
+                const userName = match[1];
+                const user = users.find(u => u.name.toLowerCase() === userName.toLowerCase());
+                if (user && user.id !== currentUser.id && !taggedUsers?.includes(user.id)) {
+                    mentionedUserIds.add(user.id);
+                    
+                    handleCreateNotification(
+                        user.id,
+                        currentUser.id,
+                        'mention_post',
+                        'mentioned you in a post.',
+                        { postId: newPost.id }
+                    );
+                }
+            });
+        }
+    };
+
+    // PROFESSIONAL BRAND MANAGEMENT FUNCTIONS WITH SELF-NOTIFICATION PREVENTION
+    const handleCreateBrand = (brandData: Partial<Brand>) => {
+        if (!currentUser) {
+            alert("Please login to create a brand page.");
+            return;
+        }
+        
+        const newBrand: Brand = {
+            id: Date.now(),
+            name: brandData.name || 'New Brand',
+            category: brandData.category || 'Business',
+            description: brandData.description || '',
+            location: brandData.location || '',
+            website: brandData.website || '',
+            contactEmail: brandData.contactEmail || '',
+            contactPhone: brandData.contactPhone || '',
+            adminId: currentUser.id,
+            followers: [currentUser.id],
+            isVerified: false,
+            posts: [],
+            createdAt: Date.now(),
+            profileImage: brandData.profileImage || `https://ui-avatars.com/api/?name=${brandData.name || 'Brand'}&background=random&size=150`,
+            coverImage: brandData.coverImage || 'https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-1.2.1&auto=format&fit=crop&w=1500&q=80'
+        };
+        
+        setBrands(prev => [newBrand, ...prev]);
+        
+        // Also add the brand to user's following list
+        if (currentUser) {
+            setCurrentUser(prev => prev ? {
+                ...prev,
+                following: [...prev.following, newBrand.id]
+            } : prev);
+            
+            setUsers(prev => prev.map(user => 
+                user.id === currentUser.id 
+                    ? { ...user, following: [...user.following, newBrand.id] }
+                    : user
+            ));
+        }
+        
+        alert("Brand page created successfully! You are now following this page.");
+    };
+
+    // FIXED: Prevent self-notifications in brand posts
+    const handlePostAsBrand = (
+        brandId: number, 
+        content: any
+    ) => {
+        if (!currentUser) {
+            alert("Please login to post as a brand.");
+            return;
+        }
+        
+        // Destructure all parameters
+        const { 
+            text, 
+            files, 
+            type, 
+            visibility, 
+            location, 
+            feeling, 
+            taggedUsers, 
+            background, 
+            linkPreview 
+        } = content;
+        
+        // Verify the current user is admin of this brand
+        const brand = brands.find(b => b.id === brandId);
+        if (!brand) {
+            alert("Brand not found.");
+            return;
+        }
+        
+        if (brand.adminId !== currentUser.id && !isAdmin) {
+            alert("You don't have permission to post as this brand.");
+            return;
+        }
+        
+        // Handle multiple images
+        let images: string[] = [];
+        let video: string | undefined = undefined;
+        
+        if (files && files.length > 0) {
+            if (type === 'video' && files.length === 1) {
+                video = URL.createObjectURL(files[0]);
+            } else if (type === 'image' || type === 'multimage') {
+                images = files.map(file => URL.createObjectURL(file));
+            }
+        }
+        
+        const timestamp = Date.now();
+        const formattedTime = formatRelativeTime(timestamp);
+        const newPost: PostType = { 
+            id: timestamp,
+            authorId: brandId,
+            content: text,
+            images: images.length > 0 ? images : undefined,
+            video: video,
+            timestamp: timestamp,
+            formattedTime: formattedTime,
+            createdAt: timestamp,
+            reactions: [], 
+            comments: [], 
+            shares: 0,
+            views: 0,
+            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')),
+            visibility: visibility as any,
+            location, 
+            feeling, 
+            taggedUsers, 
+            background, 
+            linkPreview,
+            brandId: brandId
+        };
+        
+        console.log("Creating brand post with multiple images:", newPost);
+        
+        // Add to main posts array
+        setPosts(prev => [newPost, ...prev]);
+        
+        // Update brand's posts array
+        setBrands(prev => prev.map(b => 
+            b.id === brandId 
+                ? { ...b, posts: [...(b.posts || []), timestamp] }
+                : b
+        ));
+        
+        // Notify brand followers (excluding the current user to prevent self-notification)
+        brand.followers.forEach(followerId => {
+            if (followerId !== currentUser.id) {
+                handleCreateNotification(
+                    followerId,
+                    currentUser.id,
+                    'brand_post',
+                    `${brand.name} posted: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`,
+                    { brandId, postId: timestamp }
+                );
+            }
+        });
+        
+        // Enhanced notification logic for tagged users in brand posts with self-notification prevention
+        if (taggedUsers && taggedUsers.length > 0) {
+            taggedUsers.forEach(userId => {
+                if (userId !== currentUser.id) {
+                    handleCreateNotification(
+                        userId,
+                        currentUser.id,
+                        'tag_post',
+                        `${brand.name} tagged you in a post.`,
+                        { postId: timestamp, brandId }
+                    );
+                }
+            });
+        }
+        
+        alert("Brand post published successfully!");
+        return newPost;
+    };
+
+    const handleFollowBrand = (brandId: number) => {
+        if (!currentUser) return alert("Login to follow brands.");
+        
+        setBrands(prev => prev.map(b => {
+            if (b.id === brandId) {
+                const isFollowing = b.followers.includes(currentUser!.id);
+                const updatedFollowers = isFollowing 
+                    ? b.followers.filter(id => id !== currentUser!.id) 
+                    : [...b.followers, currentUser!.id];
+                
+                // Send notification to brand admin if following (prevent self-notification)
+                if (!isFollowing && b.adminId !== currentUser.id) {
+                    handleCreateNotification(
+                        b.adminId,
+                        currentUser.id,
+                        'brand_follow',
+                        `followed your brand ${b.name}.`,
+                        { brandId }
+                    );
+                }
+                
+                // Update user's following list as well
+                if (currentUser) {
+                    const updatedFollowing = isFollowing
+                        ? currentUser.following.filter(id => id !== brandId)
+                        : [...currentUser.following, brandId];
+                    
+                    setCurrentUser(prev => prev ? { ...prev, following: updatedFollowing } : prev);
+                    
+                    setUsers(prev => prev.map(user => 
+                        user.id === currentUser.id 
+                            ? { ...user, following: updatedFollowing }
+                            : user
+                    ));
+                }
+                
+                return { 
+                    ...b, 
+                    followers: updatedFollowers
+                };
+            }
+            return b;
+        }));
+    };
+
+    const handleUpdateBrand = (brandId: number, updates: Partial<Brand>) => {
+        if (!currentUser) {
+            alert("Please login to update brand.");
+            return;
+        }
+        
+        const brand = brands.find(b => b.id === brandId);
+        if (!brand) {
+            alert("Brand not found.");
+            return;
+        }
+        
+        if (brand.adminId !== currentUser.id && !isAdmin) {
+            alert("You don't have permission to update this brand.");
+            return;
+        }
+        
+        setBrands(prev => prev.map(b => 
+            b.id === brandId ? { ...b, ...updates } : b
+        ));
+        
+        alert("Brand updated successfully!");
+    };
+
+    const handleDeleteBrand = (brandId: number) => {
+        if (!currentUser) {
+            alert("Please login to delete brand.");
+            return;
+        }
+        
+        const brand = brands.find(b => b.id === brandId);
+        if (!brand) {
+            alert("Brand not found.");
+            return;
+        }
+        
+        if (brand.adminId !== currentUser.id && !isAdmin) {
+            alert("You don't have permission to delete this brand.");
+            return;
+        }
+        
+        if (window.confirm(`Are you sure you want to delete "${brand.name}"? This will also delete all brand posts.`)) {
+            // Remove brand
+            setBrands(prev => prev.filter(b => b.id !== brandId));
+            
+            // Remove brand posts
+            setPosts(prev => prev.filter(p => p.brandId !== brandId && p.authorId !== brandId));
+            
+            // Remove brand from users' following lists
+            setUsers(prev => prev.map(user => ({
+                ...user,
+                following: user.following.filter(id => id !== brandId)
+            })));
+            
+            alert("Brand deleted successfully!");
+        }
+    };
+
+    const handleUpdateBrandImage = (brandId: number, type: 'cover' | 'profile', file: File) => {
+        if (!currentUser) {
+            alert("Please login to update brand image.");
+            return;
+        }
+        
+        const brand = brands.find(b => b.id === brandId);
+        if (!brand) {
+            alert("Brand not found.");
+            return;
+        }
+        
+        if (brand.adminId !== currentUser.id && !isAdmin) {
+            alert("You don't have permission to update this brand's image.");
+            return;
+        }
+        
+        const url = URL.createObjectURL(file);
+        setBrands(prev => prev.map(b => 
+            b.id === brandId 
+                ? (type === 'cover' 
+                    ? { ...b, coverImage: url } 
+                    : { ...b, profileImage: url })
+                : b
+        ));
+        
+        alert("Brand image updated successfully!");
+    };
+
+    const handleVerifyBrand = (brandId: number) => {
+        if (!isAdmin) {
+            alert("Only admins can verify brands.");
+            return;
+        }
+        
+        setBrands(prev => prev.map(b => 
+            b.id === brandId ? { ...b, isVerified: !b.isVerified } : b
+        ));
+        
+        const brand = brands.find(b => b.id === brandId);
+        if (brand) {
+            const action = brand.isVerified ? "unverified" : "verified";
+            alert(`Brand ${action} successfully!`);
+        }
+    };
+
+    const handleDeletePost = (postId: number) => {
+        if (!currentUser) {
+            alert("Please login to delete posts.");
+            return;
+        }
+        
+        const post = posts.find(p => p.id === postId);
+        if (!post) {
+            alert("Post not found.");
+            return;
+        }
+        
+        // Check permissions
+        const canDelete = isAdmin || post.authorId === currentUser.id;
+        if (!canDelete) {
+            // For brand posts, check if user is brand admin
+            if (post.brandId) {
+                const brand = brands.find(b => b.id === post.brandId);
+                if (brand && brand.adminId === currentUser.id) {
+                    // Brand admin can delete brand posts
+                } else {
+                    alert("You can only delete your own posts.");
+                    return;
+                }
+            } else if (post.groupId) {
+                const group = groups.find(g => g.id === post.groupId);
+                if (group && group.adminId === currentUser.id) {
+                    // Group admin can delete group posts
+                } else {
+                    alert("You can only delete your own posts.");
+                    return;
+                }
+            } else {
+                alert("You can only delete your own posts.");
+                return;
+            }
+        }
+        
+        if (window.confirm("Are you sure you want to delete this post?")) {
+            // Remove from main posts
+            setPosts(prev => prev.filter(p => p.id !== postId));
+            
+            // Remove from brand posts if applicable
+            if (post.brandId) {
+                setBrands(prev => prev.map(brand => ({
+                    ...brand,
+                    posts: brand.id === post.brandId 
+                        ? (brand.posts || []).filter(id => id !== postId)
+                        : (brand.posts || [])
+                })));
+            }
+            
+            // Also remove from group posts if applicable
+            if (post.groupId) {
+                setGroups(prev => prev.map(group => ({
+                    ...group,
+                    posts: group.id === post.groupId 
+                        ? group.posts.filter(p => p.id !== postId)
+                        : group.posts
+                })));
+            }
+            
+            alert("Post deleted successfully!");
+        }
+    };
+
+    const handleCreateProduct = (productData: Partial<Product>) => {
+        console.log("Creating product with data:", productData);
+        
+        if (!currentUser) {
+            alert("Please login to create a product listing.");
+            return;
+        }
+
+        // Generate a shareId
+        const generateShareId = () => {
+            return 'prod_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        };
+
+        // Create a complete product object
+        const newProduct: Product = {
+            id: Date.now(),
+            title: productData.title || 'Untitled',
+            description: productData.description || '',
+            category: productData.category || 'other',
+            mainPrice: productData.mainPrice || 0,
+            discountPrice: productData.discountPrice || null,
+            quantity: productData.quantity || 1,
+            images: productData.images || [],
+            address: productData.address || '',
+            country: productData.country || 'US',
+            phoneNumber: productData.phoneNumber || '',
+            sellerId: currentUser.id,
+            sellerName: currentUser.name,
+            sellerAvatar: currentUser.profileImage || 'https://via.placeholder.com/150',
+            status: 'active',
+            views: 0,
+            ratings: [],
+            comments: [],
+            date: Date.now(),
+            shareId: generateShareId(),
+        };
+
+        console.log("New product created:", newProduct);
+        
+        // Update products state
+        setProducts(prev => [...prev, newProduct]);
+        
+        // Notify followers about new product (excluding self)
+        const followers = currentUser.followers || [];
+        followers.forEach(followerId => {
+            if (followerId !== currentUser.id) {
+                handleCreateNotification(
+                    followerId,
+                    currentUser.id,
+                    'product_post',
+                    `listed a new product: "${newProduct.title}"`,
+                    { productId: newProduct.id }
+                );
+            }
+        });
+        
+        alert("Product listed successfully!");
+        
+        return newProduct;
+    };
+
+    // ========== FIXED PRODUCT INTERACTION FUNCTIONS ==========
+    // ENHANCED: Handle product likes from homepage feeds
+    const handleLikeProduct = (productId: number) => {
+        if (!currentUser) return alert("Please login to like products.");
+        
+        setProducts(prev => prev.map(product => {
+            if (product.id === productId) {
+                const ratings = product.ratings || [];
+                const existingRating = ratings.find(r => r.userId === currentUser.id);
+                
+                if (existingRating) {
+                    // Unlike if already liked
+                    return {
+                        ...product,
+                        ratings: ratings.filter(r => r.userId !== currentUser.id)
+                    };
+                } else {
+                    // Like the product
+                    const newRating = {
+                        userId: currentUser.id,
+                        rating: 5, // Like counts as 5-star rating
+                        comment: '',
+                        timestamp: Date.now()
+                    };
+                    
+                    // Notify product seller (prevent self-notification)
+                    if (product.sellerId !== currentUser.id) {
+                        handleCreateNotification(
+                            product.sellerId,
+                            currentUser.id,
+                            'product_like',
+                            `liked your product: "${product.title}"`,
+                            { productId }
+                        );
+                    }
+                    
+                    return {
+                        ...product,
+                        ratings: [...ratings, newRating]
+                    };
+                }
+            }
+            return product;
+        }));
+    };
+
+    // ENHANCED: Handle product comments from homepage feeds
+    const handleCommentOnProduct = (productId: number, text: string) => {
+        if (!currentUser) return alert("Please login to comment on products.");
+        
+        setProducts(prev => prev.map(product => {
+            if (product.id === productId) {
+                const comments = product.comments || [];
+                const newComment = {
+                    userId: currentUser.id,
+                    text,
+                    timestamp: Date.now(),
+                    authorName: currentUser.name,
+                    authorImage: currentUser.profileImage
+                };
+                
+                // Notify product seller (prevent self-notification)
+                if (product.sellerId !== currentUser.id) {
+                    handleCreateNotification(
+                        product.sellerId,
+                        currentUser.id,
+                        'product_comment',
+                        `commented on your product: "${product.title}"`,
+                        { productId }
+                    );
+                }
+                
+                return {
+                    ...product,
+                    comments: [...comments, newComment]
+                };
+            }
+            return product;
+        }));
+    };
+
+    const handleCreateStory = (storyData: Partial<Story>) => {
+        if (!currentUser) return;
+        const timestamp = Date.now();
+        const newStory: Story = { 
+            id: timestamp, 
+            userId: currentUser.id, 
+            user: currentUser, 
+            ...storyData, 
+            createdAt: timestamp 
+        } as Story;
+        setStories(prev => [newStory, ...prev]);
+        setShowCreateStoryModal(false);
+    };
+
+    const handleCreateReel = (videoFile: File, caption: string, song?: Song | { name: string, url: string }, effectName?: string) => {
+        if (!currentUser) return;
+        const timestamp = Date.now();
+        const newReel: Reel = { 
+            id: timestamp, 
+            userId: currentUser.id, 
+            videoUrl: URL.createObjectURL(videoFile), 
+            caption, 
+            songName: song ? (song as Song).title || (song as {name: string}).name : 'Original Audio', 
+            effectName: effectName, 
+            createdAt: timestamp, 
+            reactions: [], 
+            comments: [], 
+            shares: 0 
+        };
+        setReels(prev => [newReel, ...prev]);
+        setShowCreateReelModal(false);
+    };
+
+    const handleLikeStory = (storyId: number) => {
+        if (!currentUser) { alert("Please login to like stories."); return; }
+        setStories(prev => prev.map(s => {
+            if (s.id === storyId) {
+                const reactions = s.reactions || [];
+                const existingLike = reactions.find(r => r.userId === currentUser!.id);
+                if (existingLike) {
+                    return { ...s, reactions: reactions.filter(r => r.userId !== currentUser!.id) };
+                } else {
+                    // Send notification to story owner (prevent self-notification)
+                    if (s.userId !== currentUser.id) {
+                        handleCreateNotification(
+                            s.userId,
+                            currentUser.id,
+                            'like_story',
+                            'liked your story.',
+                            { storyId }
+                        );
+                    }
+                    return { ...s, reactions: [...reactions, { userId: currentUser!.id }] };
+                }
+            }
+            return s;
+        }));
+    };
+    
+    const handleReplyStory = (storyId: number, text: string) => {
+        if (!currentUser) { alert("Please login to reply."); return; }
+        setStories(prev => prev.map(s => {
+            if (s.id === storyId) {
+                const replies = s.replies || [];
+                const newReply = { userId: currentUser!.id, text, timestamp: Date.now() };
+                
+                // Send notification to story owner (prevent self-notification)
+                if (s.userId !== currentUser.id) {
+                    handleCreateNotification(
+                        s.userId,
+                        currentUser.id,
+                        'comment_story',
+                        'replied to your story.',
+                        { storyId }
+                    );
+                }
+                
+                return { ...s, replies: [...replies, newReply] };
+            }
+            return s;
+        }));
+    };
+
+    const handleCreateEvent = (eventData: Partial<Event>) => {
+        if (!currentUser) return;
+        const timestamp = Date.now();
+        const formattedTime = formatRelativeTime(timestamp);
+        const newEvent: Event = { 
+            ...eventData, 
+            id: timestamp, 
+            attendees: [currentUser.id], 
+            interestedIds: [] 
+        } as Event;
+        setEvents(prev => [newEvent, ...prev]);
+        const eventPost: PostType = { 
+            id: timestamp + 1, 
+            authorId: currentUser.id, 
+            content: `is hosting a new event: ${newEvent.title}`, 
+            timestamp: timestamp,
+            formattedTime: formattedTime,
+            createdAt: timestamp, 
+            reactions: [], 
+            comments: [], 
+            shares: 0, 
+            type: 'event', 
+            visibility: 'Public', 
+            event: newEvent, 
+            eventId: newEvent.id 
+        };
+        setPosts(prev => [eventPost, ...prev]);
+    };
+
+    const handleJoinEvent = (eventId: number) => {
+        if (!currentUser) return alert("Please login to join events.");
+        setEvents(prev => prev.map(ev => {
+            if (ev.id === eventId) {
+                const isAttending = ev.attendees.includes(currentUser!.id);
+                const isInterested = ev.interestedIds?.includes(currentUser!.id);
+                if (isAttending) return ev;
+                if (isInterested) {
+                    return { ...ev, interestedIds: ev.interestedIds!.filter(id => id !== currentUser!.id), attendees: [...ev.attendees, currentUser!.id] };
+                }
+                
+                // Send notification to event organizer (prevent self-notification)
+                if (ev.organizerId !== currentUser.id) {
+                    handleCreateNotification(
+                        ev.organizerId,
+                        currentUser.id,
+                        'event_interest',
+                        'is interested in your event.',
+                        { eventId }
+                    );
+                }
+                
+                return { ...ev, interestedIds: [...(ev.interestedIds || []), currentUser!.id] };
+            }
+            return ev;
+        }));
+    };
+
+    // FIXED: Prevent self-notifications for shares - UPDATED to handle product posts
+    const handleShare = (postId: number, targetType: 'profile' | 'group' | 'brand', targetId?: string | number, extraCaption?: string) => {
+        console.log('[DEBUG] handleShare called:', { postId, targetType, targetId, currentUserId: currentUser?.id });
+        
+        if (!currentUser) {
+            console.log('[DEBUG] No current user, returning');
+            return;
+        }
+        
+        // Check if it's a product post (ID > 100000)
+        if (postId > 100000) {
+            console.log('[DEBUG] Product post detected');
+            const productId = postId - 100000;
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+            
+            // Handle product share
+            if (targetType === 'profile') {
+                const timestamp = Date.now();
+                const formattedTime = formatRelativeTime(timestamp);
+                const newPost: PostType = { 
+                    id: timestamp, 
+                    authorId: currentUser.id, 
+                    content: extraCaption ? `${extraCaption}\n\nShared product: ${product.title}` : `Shared product: ${product.title}`, 
+                    timestamp: timestamp,
+                    formattedTime: formattedTime,
+                    createdAt: timestamp, 
+                    reactions: [], 
+                    comments: [], 
+                    shares: 0, 
+                    views: 0, 
+                    type: 'product' as const, 
+                    visibility: 'Public' as const, 
+                    product: product, 
+                    productId: productId,
+                    sharedPostId: postId
+                };
+                setPosts([newPost, ...posts]);
+                
+                // Send notification to product seller
+                if (product.sellerId !== currentUser.id) {
+                    handleCreateNotification(
+                        product.sellerId,
+                        currentUser.id,
+                        'product_share',
+                        `shared your product: "${product.title}"`,
+                        { productId }
+                    );
+                }
+                
+                alert("Product shared to your feed!");
+            }
+            return;
+        }
+        
+        const sourcePost = posts.find(p => p.id === postId);
+        if (!sourcePost) return;
+        
+        // Send notification to original post author (prevent self-sharing notifications)
+        if (sourcePost.authorId !== currentUser.id) {
+            handleCreateNotification(
+                sourcePost.authorId,
+                currentUser.id,
+                'share_post',
+                'shared your post.',
+                { postId: postId }
+            );
+        }
+        
+        // Check if it's a music/podcast post and update share count
+        if (sourcePost.type === 'music' || sourcePost.type === 'podcast') {
+            if (sourcePost.audioTrack) {
+                const song = getSongForPost(sourcePost, songs, episodes);
+                if (song) {
+                    handleTrackShare(song.id);
+                }
+            }
+        }
+        
+        const timestamp = Date.now();
+        const formattedTime = formatRelativeTime(timestamp);
+        const newSharedPost: PostType = { 
+            ...sourcePost, 
+            id: timestamp, 
+            authorId: currentUser.id, 
+            content: extraCaption ? `${extraCaption}\n\n${sourcePost.content || ''}` : sourcePost.content, 
+            timestamp: timestamp,
+            formattedTime: formattedTime,
+            createdAt: timestamp, 
+            reactions: [], 
+            comments: [], 
+            shares: 0, 
+            sharedPostId: sourcePost.id 
+        };
+        
+        if (targetType === 'profile') setPosts([newSharedPost, ...posts]);
+        else if (targetType === 'brand' && targetId) {
+            setPosts([{ ...newSharedPost, brandId: Number(targetId) }, ...posts]);
+        }
+        
+        // Update original post share count
+        setPosts(prev => prev.map(post => 
+            post.id === postId 
+                ? { ...post, shares: (post.shares || 0) + 1 }
+                : post
+        ));
+        
+        setActiveSharePostId(null);
+        alert("Shared successfully!");
+    };
+
+    const handleFeedPost = (data: any) => {
+        if (!currentUser) return;
+        const timestamp = Date.now();
+        const formattedTime = formatRelativeTime(timestamp);
+        const newPost: PostType = { 
+            id: timestamp, 
+            authorId: currentUser.id, 
+            content: data.content, 
+            timestamp: timestamp,
+            formattedTime: formattedTime,
+            createdAt: timestamp, 
+            reactions: [], 
+            comments: [], 
+            shares: 0, 
+            views: 0, 
+            type: data.type || 'text', 
+            visibility: 'Public', 
+            audioTrack: data.audioTrack 
+        };
+        setPosts([newPost, ...posts]);
+    };
+
+    // Handle adding songs from upload - ENHANCED to ensure complete audioTrack data
+    const handleAddSong = (song: Song) => {
+        console.log("Adding new song to library:", song);
+        const newSong = {
+            ...song,
+            plays: song.plays || 0,
+            likes: song.likes || 0,
+            shares: song.shares || 0,
+            comments: song.comments || 0,
+            uploadDate: song.uploadDate || new Date().toISOString(),
+            stats: song.stats || {
+                plays: song.plays || 0,
+                likes: song.likes || 0,
+                shares: song.shares || 0,
+                comments: song.comments || 0,
+                downloads: 0,
+                reelsUse: 0
+            }
+        };
+        
+        setSongs(prev => {
+            const exists = prev.find(s => s.id === song.id);
+            if (exists) {
+                return prev.map(s => s.id === song.id ? newSong : s);
+            }
+            return [newSong, ...prev];
+        });
+        
+        // Also create a feed post for the new upload
+        if (currentUser) {
+            const timestamp = Date.now();
+            const formattedTime = formatRelativeTime(timestamp);
+            const audioTrack: AudioTrack = {
+                id: song.id,
+                title: song.title,
+                artist: song.artist,
+                duration: typeof song.duration === 'string' ? 
+                    parseInt(song.duration.split(':')[0]) * 60 + parseInt(song.duration.split(':')[1]) || 180 : 
+                    song.duration || 180,
+                url: song.audioUrl || '',
+                uploaderId: song.uploaderId || currentUser.id,
+                cover: song.cover || '/default-cover.jpg',
+                type: 'music',
+                isVerified: true,
+                plays: song.plays || 0,
+                likes: song.likes || 0,
+                shares: song.shares || 0
+            };
+            
+            const newPost: PostType = {
+                id: timestamp,
+                authorId: currentUser.id,
+                content: `🎵 Just released new music: "${song.title}" by ${song.artist}`,
+                timestamp: timestamp,
+                formattedTime: formattedTime,
+                createdAt: timestamp,
+                reactions: [],
+                comments: [],
+                shares: 0,
+                views: 0,
+                type: 'music',
+                visibility: 'Public',
+                audioTrack: audioTrack
+            };
+            
+            setPosts(prev => [newPost, ...prev]);
+            
+            // Notify followers about new music (excluding self)
+            const followers = currentUser.followers || [];
+            followers.forEach(followerId => {
+                if (followerId !== currentUser.id) {
+                    handleCreateNotification(
+                        followerId,
+                        currentUser.id,
+                        'music_post',
+                        `released new music: "${song.title}"`,
+                        { songId: song.id }
+                    );
+                }
+            });
+        }
+    };
+
+    // Handle adding episodes from upload - ENHANCED to ensure complete audioTrack data
+    const handleAddEpisode = (episode: Episode) => {
+        console.log("Adding new episode to library:", episode);
+        const newEpisode = {
+            ...episode,
+            plays: episode.plays || 0,
+            likes: episode.likes || 0,
+            shares: episode.shares || 0,
+            comments: episode.comments || 0,
+            uploadDate: episode.uploadDate || new Date().toISOString(),
+            stats: episode.stats || {
+                plays: episode.plays || 0,
+                likes: episode.likes || 0,
+                shares: episode.shares || 0,
+                comments: episode.comments || 0,
+                downloads: 0,
+                reelsUse: 0
+            }
+        };
+        
+        setEpisodes(prev => {
+            const exists = prev.find(e => e.id === episode.id);
+            if (exists) {
+                return prev.map(e => e.id === episode.id ? newEpisode : e);
+            }
+            return [newEpisode, ...prev];
+        });
+        
+        // Also create a feed post for the new upload
+        if (currentUser) {
+            const timestamp = Date.now();
+            const formattedTime = formatRelativeTime(timestamp);
+            const audioTrack: AudioTrack = {
+                id: episode.id,
+                title: episode.title,
+                artist: episode.host || 'Podcast Host',
+                duration: typeof episode.duration === 'string' ?
+                    parseInt(episode.duration.split(':')[0]) * 60 + parseInt(episode.duration.split(':')[1]) || 1800 :
+                    episode.duration || 1800,
+                url: episode.audioUrl || '',
+                uploaderId: episode.uploaderId || currentUser.id,
+                cover: episode.thumbnail || episode.cover || '/default-cover.jpg',
+                type: 'podcast',
+                isVerified: true,
+                plays: episode.plays || 0,
+                likes: episode.likes || 0,
+                shares: episode.shares || 0
+            };
+            
+            const newPost: PostType = {
+                id: timestamp,
+                authorId: currentUser.id,
+                content: `🎙️ New podcast episode: "${episode.title}" with ${episode.host || 'Podcast Host'}`,
+                timestamp: timestamp,
+                formattedTime: formattedTime,
+                createdAt: timestamp,
+                reactions: [],
+                comments: [],
+                shares: 0,
+                views: 0,
+                type: 'podcast',
+                visibility: 'Public',
+                audioTrack: audioTrack
+            };
+            
+            setPosts(prev => [newPost, ...prev]);
+        }
+    };
+
+    const handleUploadToFeed = (song: Song) => {
+        console.log("Uploading to feed:", song);
+        handleAddSong(song);
+    };
+
+    // Enhanced handlePlayTrack with proper play counting
+    const handlePlayTrack = (track: AudioTrack) => { 
+        setCurrentAudioTrack(track); 
+        setIsAudioPlaying(true); 
+        
+        // Add to play history
+        setPlayHistory(prev => [...prev, {
+            trackId: track.id,
+            timestamp: Date.now(),
+            duration: track.duration
+        }]);
+        
+        // Update play count for the track
+        if (track.type === 'music') {
+            setSongs(prev => prev.map(song => 
+                song.id === track.id 
+                    ? { 
+                        ...song, 
+                        plays: (song.plays || 0) + 1,
+                        stats: {
+                            ...song.stats,
+                            plays: (song.stats?.plays || 0) + 1
+                        }
+                    }
+                    : song
+            ));
+        } else if (track.type === 'podcast') {
+            setEpisodes(prev => prev.map(episode => 
+                episode.id === track.id 
+                    ? { 
+                        ...episode, 
+                        plays: (episode.plays || 0) + 1,
+                        stats: {
+                            ...episode.stats,
+                            plays: (episode.stats?.plays || 0) + 1
+                        }
+                    }
+                    : episode
+            ));
+        }
+    };
+
+    // Handle like for music/podcast posts with self-notification prevention
+    const handleLikeTrack = (trackId: string, isLiked: boolean) => {
+        setLikedTracks(prev => 
+            isLiked 
+                ? prev.filter(id => id !== trackId)
+                : [...prev, trackId]
+        );
+        
+        // Update song/episode like count
+        const track = songs.find(s => s.id === trackId) || episodes.find(e => e.id === trackId);
+        if (track) {
+            if ('artist' in track) {
+                // It's a song
+                setSongs(prev => prev.map(song => 
+                    song.id === trackId 
+                        ? { 
+                            ...song, 
+                            likes: isLiked ? Math.max(0, (song.likes || 0) - 1) : (song.likes || 0) + 1,
+                            stats: {
+                                ...song.stats,
+                                likes: isLiked ? Math.max(0, (song.stats?.likes || 0) - 1) : (song.stats?.likes || 0) + 1
+                            }
+                        }
+                        : song
+                ));
+                
+                // Send notification to song uploader if liking (prevent self-notification)
+                if (!isLiked && track.uploaderId && track.uploaderId !== currentUser?.id) {
+                    handleCreateNotification(
+                        track.uploaderId,
+                        currentUser!.id,
+                        'music_like',
+                        `liked your song "${track.title}"`,
+                        { songId: trackId }
+                    );
+                }
+            } else {
+                // It's an episode
+                setEpisodes(prev => prev.map(episode => 
+                    episode.id === trackId 
+                        ? { 
+                            ...episode, 
+                            likes: isLiked ? Math.max(0, (episode.likes || 0) - 1) : (episode.likes || 0) + 1,
+                            stats: {
+                                ...episode.stats,
+                                likes: isLiked ? Math.max(0, (episode.stats?.likes || 0) - 1) : (episode.stats?.likes || 0) + 1
+                            }
+                        }
+                        : episode
+                ));
+            }
+        }
+    };
+
+    // Handle comment count for music/podcast posts
+    const handleTrackComment = (trackId: string) => {
+        // Update song/episode comment count
+        const track = songs.find(s => s.id === trackId) || episodes.find(e => e.id === trackId);
+        if (track) {
+            if ('artist' in track) {
+                setSongs(prev => prev.map(song => 
+                    song.id === trackId 
+                        ? { 
+                            ...song, 
+                            comments: (song.comments || 0) + 1,
+                            stats: {
+                                ...song.stats,
+                                comments: (song.stats?.comments || 0) + 1
+                            }
+                        }
+                        : song
+                ));
+            } else {
+                setEpisodes(prev => prev.map(episode => 
+                    episode.id === trackId 
+                        ? { 
+                            ...episode, 
+                            comments: (episode.comments || 0) + 1,
+                            stats: {
+                                ...episode.stats,
+                                comments: (episode.stats?.comments || 0) + 1
+                            }
+                        }
+                        : episode
+                ));
+            }
+        }
+    };
+
+    // Handle share for music/podcast posts
+    const handleTrackShare = (trackId: string) => {
+        // Update song/episode share count
+        const track = songs.find(s => s.id === trackId) || episodes.find(e => e.id === trackId);
+        if (track) {
+            if ('artist' in track) {
+                setSongs(prev => prev.map(song => 
+                    song.id === trackId 
+                        ? { 
+                            ...song, 
+                            shares: (song.shares || 0) + 1,
+                            stats: {
+                                ...song.stats,
+                                shares: (song.stats?.shares || 0) + 1
+                            }
+                        }
+                        : song
+                ));
+            } else {
+                setEpisodes(prev => prev.map(episode => 
+                    episode.id === trackId 
+                        ? { 
+                            ...episode, 
+                            shares: (episode.shares || 0) + 1,
+                            stats: {
+                                ...episode.stats,
+                                shares: (episode.stats?.shares || 0) + 1
+                            }
+                        }
+                        : episode
+                ));
+            }
+        }
+    };
+
+    // ========== MISSING FUNCTIONS ADDED ==========
+    const handleDeleteSong = (songId: string) => {
+        if (!currentUser || !isAdmin) {
+            alert("Only admins can delete songs");
+            return;
+        }
+        
+        if (window.confirm("Are you sure you want to delete this song?")) {
+            setSongs(prev => prev.filter(s => s.id !== songId));
+            setPosts(prev => prev.filter(p => !p.audioTrack || p.audioTrack.id !== songId));
+            alert("Song deleted successfully");
+        }
+    };
+
+    const handleDeleteEpisode = (episodeId: string) => {
+        if (!currentUser || !isAdmin) {
+            alert("Only admins can delete episodes");
+            return;
+        }
+        
+        if (window.confirm("Are you sure you want to delete this episode?")) {
+            setEpisodes(prev => prev.filter(e => e.id !== episodeId));
+            setPosts(prev => prev.filter(p => !p.audioTrack || p.audioTrack.id !== episodeId));
+            alert("Episode deleted successfully");
+        }
+    };
+
+    const handleVerifyUser = (userId: number) => { 
+        if (isAdmin) {
+            setUsers(users.map(u => u.id === userId ? { ...u, isVerified: !u.isVerified } : u));
+            alert(`User ${users.find(u => u.id === userId)?.isVerified ? 'unverified' : 'verified'} successfully!`);
+        }
+    };
+    
+    const handleRestrictUser = (userId: number) => { 
+        if (isAdmin) {
+            setUsers(users.map(u => u.id === userId ? { ...u, isRestricted: true, restrictedUntil: Date.now() + 24 * 60 * 60 * 1000 } : u));
+            alert("User restricted for 24 hours");
+        }
+    };
+    
+    const handleDeleteUser = (userId: number) => { 
+        if (isAdmin && window.confirm("Delete this user and all their content? This is irreversible.")) { 
+            setUsers(users.filter(u => u.id !== userId)); 
+            setPosts(posts.filter(p => p.authorId !== userId)); 
+            setReels(reels.filter(r => r.userId !== userId)); 
+            setStories(stories.filter(s => s.userId !== userId)); 
+            alert("User deleted successfully");
+        } 
+    };
+    
+    const handleMakeModerator = (userId: number) => { 
+        if (isAdmin) {
+            setUsers(users.map(u => u.id === userId ? { ...u, role: u.role === 'moderator' ? 'user' : 'moderator' } : u));
+            const user = users.find(u => u.id === userId);
+            alert(`${user?.name} is now ${user?.role === 'moderator' ? 'a user' : 'a moderator'}!`);
+        }
+    };
+    
+    // ========== ENHANCED GROUP FUNCTIONS WITH SELF-NOTIFICATION PREVENTION ==========
+    const handleGroupComment = (groupId: string, postId: number, text: string, attachment?: any, parentId?: number) => {
+        if (!currentUser) return;
+        
+        const timestamp = Date.now();
+        const formattedTime = formatRelativeTime(timestamp);
+        const newComment: Comment = { 
+            id: timestamp, 
+            userId: currentUser.id, 
+            text, 
+            timestamp: timestamp,
+            formattedTime: formattedTime,
+            likes: 0, 
+            attachment,
+            authorName: currentUser.name,
+            authorImage: currentUser.profileImage
+        };
+        
+        // Update the group post with new comment
+        setGroups(prev => prev.map(g => {
+            if (g.id === groupId) {
+                const updatedPosts = g.posts.map(p => {
+                    if (p.id === postId) {
+                        const updatedComments = [...(p.comments || []), newComment];
+                        
+                        // Send notification to post author (prevent self-notification)
+                        if (p.authorId !== currentUser.id) {
+                            const group = groups.find(gr => gr.id === groupId);
+                            handleCreateNotification(
+                                p.authorId,
+                                currentUser.id,
+                                'group_comment',
+                                `commented on your post in ${group?.name || 'the group'}.`,
+                                { postId, groupId, commentId: newComment.id }
+                            );
+                        }
+                        
+                        return { ...p, comments: updatedComments };
+                    }
+                    return p;
+                });
+                return { ...g, posts: updatedPosts };
+            }
+            return g;
+        }));
+
+        // Handle mentions in group comments with self-notification prevention
+        const mentionRegex = /@(\w+(?:\s\w+)?)/g;
+        const mentions = [...text.matchAll(mentionRegex)];
+        if (mentions.length > 0) {
+            const mentionedUserIds = new Set<number>();
+            mentions.forEach(match => {
+                const userName = match[1];
+                const user = users.find(u => u.name.toLowerCase() === userName.toLowerCase());
+                if (user && user.id !== currentUser.id) {
+                    mentionedUserIds.add(user.id);
+                    
+                    const group = groups.find(g => g.id === groupId);
+                    handleCreateNotification(
+                        user.id,
+                        currentUser.id,
+                        'group_mention',
+                        `mentioned you in a comment in ${group?.name || 'a group'}.`,
+                        { postId, groupId, commentId: newComment.id }
+                    );
+                }
+            });
+        }
+    };
+
+    const handleInviteToGroup = (groupId: string, userIds: number[]) => {
+        if (!currentUser) return;
+        
+        setGroups(prev => prev.map(g => 
+            g.id === groupId 
+                ? { 
+                    ...g, 
+                    members: [...new Set([...g.members, ...userIds])] 
+                } 
+                : g
+        ));
+        
+        // Send notifications to invited users
+        const group = groups.find(g => g.id === groupId);
+        userIds.forEach(userId => {
+            if (userId !== currentUser.id) {
+                handleCreateNotification(
+                    userId,
+                    currentUser.id,
+                    'group_invite',
+                    `invited you to join ${group?.name || 'a group'}.`,
+                    { groupId }
+                );
+            }
+        });
+        
+        alert(`Invited ${userIds.length} user(s) to the group!`);
+    };
+
+    const handleJoinGroup = (groupId: string) => { 
+        if (!currentUser) return; 
+        setGroups(prev => prev.map(g => 
+            (g.id === groupId && !g.members.includes(currentUser.id)) 
+                ? { 
+                    ...g, 
+                    members: [...g.members, currentUser.id] 
+                } 
+                : g
+        )); 
+        
+        // Notify group admin (prevent self-notification)
+        const group = groups.find(g => g.id === groupId);
+        if (group && group.adminId !== currentUser.id) {
+            handleCreateNotification(
+                group.adminId,
+                currentUser.id,
+                'group_join',
+                `joined your group ${group.name}.`,
+                { groupId }
+            );
+        }
+        
+        // Remove from suggestions after joining
+        setSuggestedGroups(prev => prev.filter(g => g.id !== groupId));
+    };
+    
+    const handleLeaveGroup = (groupId: string) => { 
+        if (!currentUser) return; 
+        setGroups(prev => prev.map(g => 
+            (g.id === groupId) 
+                ? { ...g, members: g.members.filter(id => id !== currentUser!.id) } 
+                : g
+        )); 
+    };
+    
+    const handleDeleteGroup = (groupId: string) => { 
+        if (!currentUser) return; 
+        const group = groups.find(g => g.id === groupId); 
+        if (group && (group.adminId === currentUser.id || isAdmin)) { 
+            if (window.confirm("Are you sure you want to permanently delete this group?")) { 
+                setGroups(prev => prev.filter(g => g.id !== groupId)); 
+                alert("Group deleted successfully!");
+            } 
+        } else {
+            alert("You don't have permission to delete this group.");
+        }
+    };
+    
+    const handleUpdateGroupImage = (groupId: string, type: 'cover' | 'profile', file: File) => { 
+        const url = URL.createObjectURL(file); 
+        setGroups(prev => prev.map(g => 
+            g.id === groupId 
+                ? (type === 'cover' 
+                    ? { ...g, coverImage: url } 
+                    : { ...g, image: url }) 
+                : g
+        )); 
+    };
+    
+    // FIXED: Prevent self-notifications in group posts
+    const handlePostToGroup = (groupId: string, content: string, files: File[] | null, type: any, background?: string) => { 
+        if (!currentUser) return;
+        
+        // Handle multiple images
+        let images: string[] = [];
+        let video: string | undefined = undefined;
+        
+        if (files && files.length > 0) {
+            if (type === 'video' && files.length === 1) {
+                video = URL.createObjectURL(files[0]);
+            } else if (type === 'image' || type === 'multimage') {
+                images = files.map(file => URL.createObjectURL(file));
+            }
+        }
+        
+        const timestamp = Date.now();
+        const formattedTime = formatRelativeTime(timestamp);
+        
+        const newGroupPost: GroupPost = { 
+            id: timestamp,
+            authorId: currentUser.id, 
+            content, 
+            images: images.length > 0 ? images : undefined,
+            video: video,
+            timestamp: timestamp, 
+            formattedTime: formattedTime,
+            reactions: [], 
+            comments: [], 
+            shares: 0,
+            background: background
+        }; 
+        
+        // 1. Update group posts
+        setGroups(prev => prev.map(g => 
+            g.id === groupId 
+                ? { ...g, posts: [newGroupPost, ...g.posts] } 
+                : g
+        )); 
+        
+        // 2. Create a proper PostType for the main feed with ALL required properties
+        const newFeedPost: PostType = { 
+            id: timestamp,
+            authorId: currentUser.id, 
+            content,
+            images: images.length > 0 ? images : undefined,
+            video: video,
+            timestamp: timestamp,
+            formattedTime: formattedTime,
+            createdAt: timestamp,
+            reactions: [], 
+            comments: [], 
+            shares: 0,
+            views: 0,
+            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')),
+            visibility: 'Public' as const,
+            groupId, 
+            groupName: groups.find(g => g.id === groupId)?.name,
+            background
+        }; 
+        
+        console.log("Creating group post:", newFeedPost);
+        
+        // 3. Add to main posts array
+        setPosts(prev => [newFeedPost, ...prev]); 
+        
+        // Notify group members (excluding the poster to prevent self-notification)
+        const group = groups.find(g => g.id === groupId);
+        if (group && group.memberPostingAllowed) {
+            group.members.forEach(memberId => {
+                if (memberId !== currentUser.id) {
+                    handleCreateNotification(
+                        memberId,
+                        currentUser.id,
+                        'group_post',
+                        `posted in ${group.name}`,
+                        { groupId, postId: timestamp }
+                    );
+                }
+            });
+        }
+        
+        alert("Post published to group successfully!");
+    };
+    
+    const handleCreateGroupEvent = (groupId: string, eventData: Partial<Event>) => {
+        if (!currentUser) return;
+        const timestamp = Date.now();
+        const formattedTime = formatRelativeTime(timestamp);
+        const newEvent: Event = { 
+            ...eventData, 
+            id: timestamp, 
+            attendees: [currentUser.id], 
+            interestedIds: [],
+            groupId: groupId,
+            groupName: groups.find(g => g.id === groupId)?.name
+        } as Event;
+        
+        // Add event to the group
+        setGroups(prev => prev.map(g => 
+            g.id === groupId 
+                ? { ...g, events: [...(g.events || []), newEvent] } 
+                : g
+        ));
+        
+        // Also add to global events
+        setEvents(prev => [newEvent, ...prev]);
+        
+        // Create a post about the event
+        const eventPost: PostType = { 
+            id: timestamp + 1, 
+            authorId: currentUser.id, 
+            content: `is hosting a new event in ${groups.find(g => g.id === groupId)?.name}: ${newEvent.title}`, 
+            timestamp: timestamp,
+            formattedTime: formattedTime,
+            createdAt: timestamp, 
+            reactions: [], 
+            comments: [], 
+            shares: 0, 
+            type: 'event', 
+            visibility: 'Public', 
+            event: newEvent, 
+            eventId: newEvent.id,
+            groupId: groupId,
+            groupName: groups.find(g => g.id === groupId)?.name
+        };
+        setPosts(prev => [eventPost, ...prev]);
+    };
+    
+    // FIXED: Prevent self-notifications in group shares
+    const handleGroupShare = (groupId: string, postId: number, targetType: 'profile' | 'group' | 'brand', targetId?: string | number, extraCaption?: string) => {
+        if (!currentUser) return;
+        
+        // Find the group post
+        const group = groups.find(g => g.id === groupId);
+        if (!group) return;
+        
+        const groupPost = group.posts.find(p => p.id === postId);
+        if (!groupPost) return;
+        
+        // Create a shared post for the feed
+        const timestamp = Date.now();
+        const formattedTime = formatRelativeTime(timestamp);
+        const newSharedPost: PostType = {
+            id: timestamp,
+            authorId: currentUser.id,
+            content: extraCaption ? `${extraCaption}\n\nShared from ${group.name}: ${groupPost.content}` : `Shared from ${group.name}: ${groupPost.content}`,
+            images: groupPost.images,
+            video: groupPost.video,
+            timestamp: timestamp,
+            formattedTime: formattedTime,
+            createdAt: timestamp,
+            reactions: [],
+            comments: [],
+            shares: 0,
+            views: 0,
+            type: groupPost.video ? 'video' : (groupPost.images ? 'image' : 'text'),
+            visibility: 'Public',
+            sharedPostId: postId,
+            groupId: groupId,
+            groupName: group.name
+        };
+        
+        // Add to main feed
+        setPosts(prev => [newSharedPost, ...prev]);
+        
+        // Update share count in the group post
+        setGroups(prev => prev.map(g => {
+            if (g.id === groupId) {
+                const updatedPosts = g.posts.map(p => {
+                    if (p.id === postId) {
+                        return { ...p, shares: (p.shares || 0) + 1 };
+                    }
+                    return p;
+                });
+                return { ...g, posts: updatedPosts };
+            }
+            return g;
+        }));
+        
+        // Send notification to original post author (prevent self-notification)
+        if (groupPost.authorId !== currentUser.id) {
+            handleCreateNotification(
+                groupPost.authorId,
+                currentUser.id,
+                'group_share',
+                `shared your post from ${group.name}.`,
+                { postId, groupId }
+            );
+        }
+        
+        setActiveGroupShare(null);
+        alert("Shared successfully from group!");
+    };
+    
+    const handleCreateGroup = (groupData: Partial<Group>) => {
+        if (!currentUser) return;
+        const timestamp = Date.now();
+        const newGroup: Group = { 
+            ...groupData, 
+            id: `g${timestamp}`, 
+            adminId: currentUser.id, 
+            members: [currentUser.id], 
+            posts: [], 
+            createdDate: timestamp,
+            image: groupData.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(groupData.name || 'Group')}&background=random&size=150`,
+            coverImage: groupData.coverImage || 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-1.2.1&auto=format&fit=crop&w=1500&q=80',
+            events: [],
+            memberPostingAllowed: true
+        } as Group;
+        setGroups(prev => [newGroup, ...prev]);
+        
+        // Notify followers about new group (excluding self)
+        const followers = currentUser.followers || [];
+        followers.forEach(followerId => {
+            if (followerId !== currentUser.id) {
+                handleCreateNotification(
+                    followerId,
+                    currentUser.id,
+                    'group_created',
+                    `created a new group: ${newGroup.name}`,
+                    { groupId: newGroup.id }
+                );
+            }
+        });
+        
+        alert("Group created successfully!");
+    };
+    
+    // FIXED: Prevent self-notifications for group post reactions
+    const handleReactGroupPost = (groupId: string, postId: number, type: ReactionType) => { 
+        if (!currentUser) return; 
+        setGroups(prev => prev.map(g => {
+            if (g.id === groupId) {
+                const updatedPosts = g.posts.map(p => {
+                    if (p.id === postId) {
+                        const reactions = p.reactions || [];
+                        const existing = reactions.find(r => r.userId === currentUser.id);
+                        let newReactions = [...reactions];
+                        if (existing) {
+                            if (existing.type === type) {
+                                newReactions = newReactions.filter(r => r.userId !== currentUser!.id);
+                            } else {
+                                newReactions = newReactions.map(r => 
+                                    r.userId === currentUser!.id ? { ...r, type } : r
+                                );
+                            }
+                        } else {
+                            newReactions.push({ userId: currentUser!.id, type });
+                            
+                            // Send notification to post author (prevent self-notification)
+                            if (p.authorId !== currentUser.id) {
+                                const group = groups.find(g => g.id === groupId);
+                                handleCreateNotification(
+                                    p.authorId,
+                                    currentUser.id,
+                                    'group_reaction',
+                                    `reacted to your post in ${group?.name || 'the group'}.`,
+                                    { postId, groupId, reactionType: type }
+                                );
+                            }
+                        }
+                        return { ...p, reactions: newReactions };
+                    }
+                    return p;
+                });
+                return { ...g, posts: updatedPosts };
+            }
+            return g;
+        }));
+    };
+    
+    const handleOpenGroupComments = (groupId: string, postId: number) => {
+        console.log('Opening group comments:', { groupId, postId });
+        setActiveGroupComments({ groupId, postId });
+    };
+    
+    const handleShareGroupPost = (groupId: string, postId: number) => {
+        console.log('Sharing group post:', { groupId, postId });
+        setActiveGroupShare({ groupId, postId });
+    };
+    
+    const handleUpdateGroupSettings = (groupId: string, settings: Partial<Group>) => { 
+        setGroups(prev => prev.map(g => 
+            g.id === groupId ? { ...g, ...settings } : g
+        )); 
+    };
+    
+    const handleRemoveMember = (groupId: string, memberId: number) => { 
+        const group = groups.find(g => g.id === groupId); 
+        if (currentUser && group && (group.adminId === currentUser.id || isAdmin)) { 
+            setGroups(prev => prev.map(g => 
+                g.id === groupId 
+                    ? { ...g, members: g.members.filter(id => id !== memberId) } 
+                    : g
+            )); 
+            
+            // Notify removed member
+            handleCreateNotification(
+                memberId,
+                currentUser.id,
+                'group_removed',
+                `removed you from ${group.name}.`,
+                { groupId }
+            );
+        } 
+    };
+    
+    const handleDeleteGroupPost = (groupId: string, postId: number) => { 
+        const group = groups.find(g => g.id === groupId); 
+        const post = group?.posts.find(p => p.id === postId); 
+        if (currentUser && group && post && (group.adminId === currentUser.id || isAdmin || post.authorId === currentUser.id)) { 
+            if (window.confirm("Are you sure you want to delete this group post?")) {
+                setGroups(prev => prev.map(g => 
+                    (g.id === groupId) 
+                        ? { ...g, posts: g.posts.filter(p => p.id !== postId) } 
+                        : g
+                )); 
+                
+                // Also delete from main feed if it exists
+                setPosts(prev => prev.filter(p => !(p.id === postId && p.groupId === groupId)));
+                
+                alert("Group post deleted successfully!");
+            }
+        } else {
+            alert("You don't have permission to delete this post.");
+        }
+    };
+
+    // Birthday notification check with self-notification prevention
+    useEffect(() => {
+        const checkBirthdays = () => {
+            if (!currentUser) return;
+            
+            const today = new Date();
+            const todayStr = `${today.getMonth() + 1}/${today.getDate()}`;
+            
+            users.forEach(user => {
+                if (user.birthDate && user.id !== currentUser.id) {
+                    const birthDate = new Date(user.birthDate);
+                    const birthStr = `${birthDate.getMonth() + 1}/${birthDate.getDate()}`;
+                    
+                    if (birthStr === todayStr) {
+                        // Check if birthday notification was already sent today
+                        const alreadySent = notifications.some(n => 
+                            n.type === 'birthday' && 
+                            n.senderId === user.id && 
+                            new Date(n.timestamp).toDateString() === today.toDateString()
+                        );
+                        
+                        if (!alreadySent) {
+                            handleCreateNotification(
+                                currentUser.id,
+                                user.id,
+                                'birthday',
+                                `It's ${user.name}'s birthday today!`,
+                                {}
+                            );
+                        }
+                    }
+                }
+            });
+        };
+        
+        // Check birthdays on mount and every 24 hours
+        checkBirthdays();
+        const interval = setInterval(checkBirthdays, 24 * 60 * 60 * 1000);
+        
+        return () => clearInterval(interval);
+    }, [currentUser, users, notifications, handleCreateNotification]);
+
+    const effectiveView = isClient ? view : (initialData?.view || parsedPath.view);
+    
     // Function to render music/podcast posts
-    const renderMusicPostDefault = (post: PostType, author: any) => {
+    const renderMusicPost = (post: PostType, author: any) => {
         const song = getSongForPost(post, songs, episodes);
         if (!song) return null;
         
         return (
-            <div key={post.id} className="bg-[#242526] rounded-xl border border-[#3E4042] p-4 mb-4">
-                <div className="flex items-center gap-3 mb-4">
-                    <img 
-                        src={author.profileImage} 
-                        alt={author.name} 
-                        className="w-12 h-12 rounded-full cursor-pointer"
-                        onClick={() => onProfileClick(author.id)}
-                    />
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <span 
-                                className="font-bold text-[#E4E6EB] cursor-pointer hover:underline"
-                                onClick={() => onProfileClick(author.id)}
-                            >
-                                {author.name}
-                            </span>
-                            {author.isVerified && <i className="fas fa-check-circle text-[#1877F2]"></i>}
-                        </div>
-                        <div className="text-[#B0B3B8] text-sm">{post.timestamp}</div>
-                    </div>
-                </div>
-                
-                {post.content && (
-                    <div className="mb-4 text-[#E4E6EB]">
-                        {post.content}
-                    </div>
-                )}
-                
-                <div className="flex items-center gap-4 border border-[#3E4042] rounded-lg p-4 bg-[#3A3B3C]">
-                    <img 
-                        src={song.cover} 
-                        alt={song.title} 
-                        className="w-16 h-16 rounded-lg object-cover cursor-pointer"
-                        onClick={() => onPlayAudioTrack && onPlayAudioTrack(song)}
-                    />
-                    <div className="flex-1">
-                        <div className="font-bold text-[#E4E6EB]">{song.title}</div>
-                        <div className="text-[#B0B3B8] text-sm">{song.artist}</div>
-                        <div className="flex items-center gap-4 mt-2 text-[#B0B3B8] text-sm">
-                            <div className="flex items-center gap-1">
-                                <i className="fas fa-play"></i>
-                                <span>{song.plays?.toLocaleString() || 0}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <i className="fas fa-heart"></i>
-                                <span>{song.likes?.toLocaleString() || 0}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <i className="fas fa-share"></i>
-                                <span>{song.shares?.toLocaleString() || 0}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <button 
-                        className="bg-[#1877F2] text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-[#166FE5]"
-                        onClick={() => onPlayAudioTrack && onPlayAudioTrack(song)}
-                    >
-                        <i className="fas fa-play"></i>
-                    </button>
-                </div>
-                
-                <div className="flex justify-between items-center mt-4 pt-4 border-t border-[#3E4042]">
-                    <button 
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg ${likedTracks.includes(song.id) ? 'text-[#F02849]' : 'text-[#B0B3B8] hover:bg-[#3A3B3C]'}`}
-                        onClick={() => onLikeTrack && onLikeTrack(song.id, likedTracks.includes(song.id))}
-                    >
-                        <i className={`fas fa-heart ${likedTracks.includes(song.id) ? 'text-[#F02849]' : ''}`}></i>
-                        <span>{song.likes?.toLocaleString() || 0}</span>
-                    </button>
-                    <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-[#B0B3B8] hover:bg-[#3A3B3C]">
-                        <i className="far fa-comment"></i>
-                        <span>{song.comments?.toLocaleString() || 0}</span>
-                    </button>
-                    <button 
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-[#B0B3B8] hover:bg-[#3A3B3C]"
-                        onClick={() => onTrackShare && onTrackShare(song.id)}
-                    >
-                        <i className="fas fa-share"></i>
-                        <span>{song.shares?.toLocaleString() || 0}</span>
-                    </button>
-                </div>
-            </div>
-        );
-    };
-
-    // Function to render regular posts
-    const renderRegularPostDefault = (post: PostType, author: any, isFollowing?: boolean) => {
-        return (
-            <Post 
-                key={post.id} 
-                post={post} 
-                author={author} 
-                currentUser={currentUser} 
-                users={users} 
-                onProfileClick={onProfileClick} 
-                onReact={onReact} 
-                onShare={onShare} 
-                onDelete={onDeletePost} 
-                onEdit={onEditPost} 
-                onHashtagClick={onHashtagClick} 
-                onViewImage={onViewImage} 
-                onOpenComments={onOpenComments}
-                onVideoClick={onVideoClick}
-                onViewProduct={() => {}} 
-                onPlayAudioTrack={onPlayAudioTrack}
-                onFollow={onFollow}
-                isFollowing={isFollowing}
+            <MusicFeedPost 
+                key={post.id}
+                song={song}
+                currentUser={currentUser}
+                users={users}
+                onPlayTrack={handlePlayTrack}
+                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
+                onLikeTrack={handleLikeTrack}
+                onTrackComment={handleTrackComment}
+                onTrackShare={handleTrackShare}
+                isLiked={likedTracks.includes(song.id)}
             />
         );
     };
 
-    // Helper function to get all photos from posts (including multi-image posts)
-    const getAllPhotos = () => {
-        const photos: string[] = [];
-        userPosts.forEach(post => {
-            if (post.type === 'image') {
-                // Handle single image posts
-                if (post.image) {
-                    photos.push(post.image);
-                }
-                // Handle multi-image posts
-                if (post.images && post.images.length > 0) {
-                    photos.push(...post.images);
-                }
-            }
-        });
-        return photos;
+    // Function to render regular posts with brand support
+    const renderRegularPost = (post: PostType, author: any, isFollowing?: boolean) => {
+        const isBrandAuthor = author?.type === 'brand';
+        const isFollowingBrand = isBrandAuthor && currentUser ? 
+            brands.find(b => b.id === author.id)?.followers.includes(currentUser.id) || false : 
+            false;
+        
+        // Ensure post has formattedTime
+        const postWithFormattedTime = {
+            ...post,
+            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+        };
+        
+        return (
+            <Post 
+                key={post.id} 
+                post={postWithFormattedTime}
+                author={author as any} 
+                currentUser={currentUser} 
+                users={users} 
+                onProfileClick={(id) => { 
+                    if (isBrandAuthor) {
+                        setActiveBrandId(id);
+                        handleNavigate('brand_view');
+                    } else {
+                        setSelectedUserId(id); 
+                        setView('profile');
+                    }
+                }} 
+                onReact={handleReact} 
+                onShare={(id) => setActiveSharePostId(id)} 
+                onViewImage={(url) => setFullScreenImage(url)} 
+                onOpenComments={(postId) => setActiveCommentsPostId(postId)} 
+                onVideoClick={(p) => { setActiveReelId(p.id - 200000); setView('reels'); }} 
+                onViewProduct={(p) => setActiveProduct(p)} 
+                onGroupClick={(groupId) => { setInitialGroupIdToView(groupId); setView('groups'); setActiveTab('groups'); }} 
+                onPlayAudioTrack={handlePlayTrack} 
+                onFollow={isBrandAuthor ? handleFollowBrand : handleFollowUser} 
+                isFollowing={isBrandAuthor ? isFollowingBrand : isFollowing} 
+                onHashtagClick={handleTagClick} 
+                onDeletePost={handleDeletePost} 
+                isAdmin={isAdmin}
+            />
+        );
     };
-
-    const renderContent = () => {
-        switch (activeTab) {
-            case 'About': return (
-                <div className="bg-[#242526] p-6 text-[#E4E6EB] rounded-xl border border-[#3E4042] mx-4 md:mx-0">
-                    <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-2xl font-bold">About</h2>
-                        {isCurrentUser && <button onClick={() => setShowEditProfile(true)} className="text-[#1877F2] font-semibold hover:underline">Edit</button>}
-                    </div>
-                    <p className="text-[#B0B3B8] text-lg italic mb-6">"{user.bio || 'No bio available'}"</p>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="flex flex-col gap-4">
-                            <h3 className="text-xl font-bold">Work & Education</h3>
-                            <div className="flex items-center gap-3">
-                                <i className="fas fa-briefcase text-[#B0B3B8] w-6 text-center"></i>
-                                <span>{user.work ? `Works at ${user.work}` : 'No workplace to show'}</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <i className="fas fa-graduation-cap text-[#B0B3B8] w-6 text-center"></i>
-                                <span>{user.education ? `Studied at ${user.education}` : 'No schools to show'}</span>
-                            </div>
-                        </div>
-                        <div className="flex flex-col gap-4">
-                            <h3 className="text-xl font-bold">Contact & Basic Info</h3>
-                            <div className="flex items-center gap-3">
-                                <i className="fas fa-map-marker-alt text-[#B0B3B8] w-6 text-center"></i>
-                                <span>{user.location || 'No location to show'}</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <i className="fas fa-link text-[#B0B3B8] w-6 text-center"></i>
-                                <span>{user.website ? <a href={user.website.startsWith('http') ? user.website : `https://${user.website}`} target="_blank" rel="noreferrer" className="text-[#1877F2] hover:underline">{user.website}</a> : 'No website'}</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <i className="fas fa-birthday-cake text-[#B0B3B8] w-6 text-center"></i>
-                                <span>{user.birthDate || 'No birth date'}</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <i className="fas fa-venus-mars text-[#B0B3B8] w-6 text-center"></i>
-                                <span>{user.gender || 'Not specified'}</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            );
-            case 'Followers': return (
-                <div className="bg-[#242526] p-4 rounded-xl border border-[#3E4042] mx-4 md:mx-0">
-                    <h2 className="text-xl font-bold text-[#E4E6EB] mb-4">Followers</h2>
-                    {followersList.length > 0 ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {followersList.map(follower => (
-                                <div key={follower.id} className="flex items-center gap-3 p-3 border border-[#3E4042] rounded-lg hover:bg-[#3A3B3C] cursor-pointer" onClick={() => onProfileClick(follower.id)}>
-                                    <img src={follower.profileImage} alt="" className="w-16 h-16 rounded-lg object-cover" />
-                                    <div>
-                                        <h4 className="font-semibold text-[#E4E6EB]">{follower.name}</h4>
-                                        <span className="text-[#B0B3B8] text-sm">{follower.location}</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : <p className="text-[#B0B3B8]">No followers yet.</p>}
-                </div>
-            );
-            case 'Photos': 
-                const photos = getAllPhotos();
-                return (
-                    <div className="bg-[#242526] p-4 rounded-xl border border-[#3E4042] mx-4 md:mx-0">
-                        <h2 className="text-xl font-bold text-[#E4E6EB] mb-4">Photos ({photos.length})</h2>
-                        {photos.length > 0 ? (
-                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1">
-                                {photos.map((photo, index) => (
-                                    <div key={index} className="aspect-square cursor-pointer overflow-hidden relative group" onClick={() => onViewImage(photo)}>
-                                        <img src={photo} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                    </div>
-                                ))}
-                            </div>
-                        ) : <p className="text-[#B0B3B8]">No photos shared.</p>}
-                    </div>
-                );
-            case 'Reels': 
-                return (
-                    <div className="bg-[#242526] p-4 rounded-xl border border-[#3E4042] mx-4 md:mx-0">
-                        <h2 className="text-xl font-bold text-[#E4E6EB] mb-4">Reels</h2>
-                        {userReels.length > 0 ? (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                                {userReels.map(reel => (
-                                    <div key={reel.id} className="aspect-[9/16] relative bg-black rounded-lg overflow-hidden cursor-pointer group">
-                                        <video src={reel.videoUrl} className="w-full h-full object-cover" />
-                                        <div className="absolute inset-0 bg-black/20 flex items-end p-2">
-                                            <div className="flex items-center gap-1 text-white text-xs font-bold">
-                                                <i className="fas fa-play"></i> {reel.reactions.length * 10 + reel.shares * 5} {/* Mock view count */}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : <div className="text-center py-8 text-[#B0B3B8]">No reels posted yet.</div>}
-                    </div>
-                );
-            case 'Posts': default: return (
-                <div className="max-w-[1095px] mx-auto w-full flex flex-col md:flex-row gap-4 px-0 md:px-4 mt-4">
-                    <div className="w-full md:w-[380px] flex-shrink-0 flex flex-col gap-4 px-4 md:px-0">
-                        {isAdmin && !isCurrentUser && (
-                            <div className="bg-[#242526] rounded-xl p-4 shadow-sm border border-red-900/50">
-                                <h2 className="text-xl font-bold text-red-500 mb-4">Admin Controls</h2>
-                                <div className="flex flex-col gap-2">
-                                    <button onClick={() => onVerifyUser && onVerifyUser(user.id)} className="w-full bg-[#263951] text-[#2D88FF] py-2 rounded font-semibold hover:bg-[#2A3F5A]">
-                                        {user.isVerified ? 'Remove Verification' : 'Verify User'}
-                                    </button>
-                                    <button onClick={() => onRestrictUser && onRestrictUser(user.id)} className="w-full bg-yellow-900/80 text-yellow-300 py-2 rounded font-semibold hover:bg-yellow-800">
-                                        Suspend User (24h)
-                                    </button>
-                                     <button onClick={() => onMakeModerator && onMakeModerator(user.id)} className="w-full bg-[#3A3B3C] text-[#E4E6EB] py-2 rounded font-semibold hover:bg-[#4E4F50]">
-                                        {user.role === 'moderator' ? 'Remove Moderator' : 'Make Moderator'}
-                                    </button>
-                                    <button onClick={() => onDeleteUser && onDeleteUser(user.id)} className="w-full bg-red-900/80 text-white py-2 rounded font-semibold hover:bg-red-800 mt-2">
-                                        Delete Account
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="bg-[#242526] rounded-xl p-4 shadow-sm border border-[#3E4042]">
-                            <h2 className="text-xl font-bold text-[#E4E6EB] mb-4">Intro</h2>
-                            <div className="flex flex-col gap-3 text-[#E4E6EB]">
-                                <div className="text-center mb-2"><p className="text-[15px]">{user.bio}</p></div>
-                                <div className="h-[1px] bg-[#3E4042] w-full my-1"></div>
-                                {user.work && <div className="flex items-center gap-3"><i className="fas fa-briefcase text-[#B0B3B8] w-5 text-center"></i><span>{user.work}</span></div>}
-                                {user.education && <div className="flex items-center gap-3"><i className="fas fa-graduation-cap text-[#B0B3B8] w-5 text-center"></i><span>{user.education}</span></div>}
-                                {user.location && <div className="flex items-center gap-3"><i className="fas fa-map-marker-alt text-[#B0B3B8] w-5 text-center"></i><span>{user.location}</span></div>}
-                                {user.website && <div className="flex items-center gap-3"><i className="fas fa-link text-[#B0B3B8] w-5 text-center"></i><a href={user.website} target="_blank" rel="noreferrer" className="text-[#1877F2] hover:underline truncate">{user.website}</a></div>}
-                                <div className="flex items-center gap-3"><i className="fas fa-rss text-[#B0B3B8] w-5 text-center"></i><span>{followerCount} Followers</span></div>
-                                {isCurrentUser && <button className="w-full bg-[#3A3B3C] hover:bg-[#4E4F50] text-[#E4E6EB] font-semibold py-2 rounded-md transition-colors text-[15px] mt-2" onClick={() => setShowEditProfile(true)}>Edit Details</button>}
-                            </div>
-                        </div>
-                        <div className="bg-[#242526] rounded-xl p-4 shadow-sm border border-[#3E4042]">
-                            <div className="flex justify-between items-center mb-3">
-                                <h2 className="text-xl font-bold text-[#E4E6EB]">Photos</h2>
-                                <span className="text-[#1877F2] cursor-pointer hover:underline" onClick={() => setActiveTab('Photos')}>See all</span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-1 rounded-lg overflow-hidden">
-                                {getAllPhotos().slice(0, 9).map((photo, index) => (
-                                    <img key={index} src={photo} className="w-full aspect-square object-cover cursor-pointer hover:opacity-90" alt="" onClick={() => onViewImage(photo)} />
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div className="flex-1 min-w-0">
-                        {isCurrentUser && (
-                            <div className="bg-[#242526] rounded-xl p-4 mb-4 border border-[#3E4042] shadow-sm animate-fade-in">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h2 className="text-[#E4E6EB] font-bold text-lg">Professional Dashboard</h2>
-                                    <span className="text-[#B0B3B8] text-xs bg-[#3A3B3C] px-2 py-1 rounded border border-[#3E4042]">Private to you</span>
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="bg-[#3A3B3C] p-3 rounded-lg border border-[#3E4042]">
-                                        <div className="text-[#B0B3B8] text-xs font-medium mb-1">Total Views</div>
-                                        <div className="text-[#E4E6EB] font-bold text-xl flex items-center gap-2">
-                                            {totalViews.toLocaleString()} <i className="fas fa-chart-line text-[#45BD62] text-sm"></i>
-                                        </div>
-                                    </div>
-                                    <div className="bg-[#3A3B3C] p-3 rounded-lg border border-[#3E4042]">
-                                        <div className="text-[#B0B3B8] text-xs font-medium mb-1">Engagement</div>
-                                        <div className="text-[#E4E6EB] font-bold text-xl flex items-center gap-2">
-                                            {totalEngagement.toLocaleString()} <i className="fas fa-fire text-[#F02849] text-sm"></i>
-                                        </div>
-                                    </div>
-                                    <div className="bg-[#3A3B3C] p-3 rounded-lg border border-[#3E4042]">
-                                        <div className="text-[#B0B3B8] text-xs font-medium mb-1">Total Likes</div>
-                                        <div className="text-[#E4E6EB] font-bold text-xl flex items-center gap-2">
-                                            {totalLikes.toLocaleString()} <i className="fas fa-thumbs-up text-[#1877F2] text-sm"></i>
-                                        </div>
-                                    </div>
-                                    <div className="bg-[#3A3B3C] p-3 rounded-lg border border-[#3E4042]">
-                                        <div className="text-[#B0B3B8] text-xs font-medium mb-1">Content</div>
-                                        <div className="text-[#E4E6EB] font-bold text-xl">
-                                            {userPosts.length + userReels.length} <span className="text-xs text-[#B0B3B8] font-normal">posts/reels</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {isCurrentUser && currentUser && (
-                            <>
-                                <CreatePost 
-                                    currentUser={currentUser} 
-                                    onProfileClick={onProfileClick} 
-                                    onClick={() => setShowCreatePostModal(true)} 
-                                    onCreateEventClick={onCreateEventClick}
-                                />
-                                {showCreatePostModal && (
-                                    <CreatePostModal 
-                                        currentUser={currentUser} 
-                                        onClose={() => setShowCreatePostModal(false)} 
-                                        onCreatePost={onCreatePost} 
-                                        users={users}
-                                        onCreateEventClick={() => {
-                                            setShowCreatePostModal(false);
-                                            if (onCreateEventClick) onCreateEventClick();
-                                        }}
-                                    />
-                                )}
-                            </>
-                        )}
-                        <div className="bg-[#242526] p-3 mb-4 rounded-xl border border-[#3E4042] flex items-center justify-between mx-4 md:mx-0">
-                            <h3 className="text-xl font-bold text-[#E4E6EB]">Posts</h3>
-                            <div className="flex gap-2">
-                                <button className="bg-[#3A3B3C] px-3 py-1.5 rounded-md text-[#E4E6EB] font-semibold text-sm hover:bg-[#4E4F50]">
-                                    <i className="fas fa-sliders-h mr-1"></i> Filters
-                                </button>
-                            </div>
-                        </div>
-                        
-                        {userPosts.map(post => {
-                            const isFollowingPostAuthor = currentUser ? currentUser.following.includes(post.authorId) : false;
-                            
-                            // Use custom render functions if provided, otherwise use default
-                            if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
-                                if (renderMusicPost) {
-                                    return renderMusicPost(post, user);
-                                }
-                                return renderMusicPostDefault(post, user);
-                            } else {
-                                if (renderRegularPost) {
-                                    return renderRegularPost(post, user, isFollowingPostAuthor);
-                                }
-                                return renderRegularPostDefault(post, user, isFollowingPostAuthor);
-                            }
-                        })}
-                        
-                        {userPosts.length === 0 && (
-                            <div className="text-center py-8 text-[#B0B3B8] font-medium bg-[#242526] rounded-xl mx-4 md:mx-0 border border-[#3E4042]">
-                                No posts available
-                            </div>
-                        )}
-                    </div>
-                </div>
-            );
-        }
-    };
-
-    return (
-        <div className="w-full bg-[#18191A] min-h-screen">
-            <input type="file" ref={profileInputRef} className="hidden" accept="image/*" onChange={(e) => { if (e.target.files && e.target.files[0]) onUpdateProfileImage(e.target.files[0]); }} />
-            <input type="file" ref={coverInputRef} className="hidden" accept="image/*" onChange={(e) => { if (e.target.files && e.target.files[0]) onUpdateCoverImage(e.target.files[0]); }} />
+    
+    // Function to render feed with People You May Know and Groups You May Like at intervals
+    const renderFeedWithSuggestions = () => {
+        const peopleIntervals = [5, 20, 45]; // Show People You May Know after 5th, 20th, and 45th posts
+        const groupIntervals = [8, 25]; // Show Groups You May Like after 8th and 25th posts
+        const brandIntervals = [12, 30, 55]; // Show Brand Recommendations after 12th, 30th, and 55th posts
+        let postCount = 0;
+        let peopleIndex = 0;
+        let groupIndex = 0;
+        let brandIndex = 0;
+        const renderedItems = [];
+        
+        for (const post of rankedPosts) {
+            renderedItems.push(renderPostItem(post));
+            postCount++;
             
-            <div className="bg-[#242526] shadow-sm">
-                <div className="max-w-[1095px] mx-auto w-full relative">
-                    {/* Cover Photo */}
-                    <div className="h-[200px] md:h-[350px] w-full bg-gray-700 relative group overflow-hidden md:rounded-b-xl">
-                        {user.coverImage ? (
-                            <img src={user.coverImage} alt="Cover" className="w-full h-full object-cover" onClick={() => user.coverImage && onViewImage(user.coverImage)} />
-                        ) : (
-                            <div className="w-full h-full flex items-center justify-center text-gray-500">No Cover</div>
-                        )}
-                        {isCurrentUser && (
-                            <div className="absolute bottom-4 right-4 bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-md cursor-pointer hover:bg-white/20 font-semibold text-white text-[15px] flex items-center gap-2" onClick={(e) => { e.stopPropagation(); coverInputRef.current?.click(); }}>
-                                <i className="fas fa-camera"></i> <span className="hidden sm:block">Edit cover photo</span>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Profile Header Info */}
-                    <div className="px-4 pb-0">
-                        <div className="flex flex-col md:flex-row items-center md:items-end -mt-[84px] md:-mt-[30px] relative z-10 mb-4">
-                            <div className="relative">
-                                <div className="w-[168px] h-[168px] rounded-full border-[6px] border-[#242526] bg-[#242526] overflow-hidden cursor-pointer relative group">
-                                    <img src={user.profileImage} alt={user.name} className="w-full h-full object-cover" onClick={() => onViewImage(user.profileImage)} />
-                                    {isCurrentUser && (
-                                        <div className="absolute inset-0 bg-black/40 hidden group-hover:flex items-center justify-center" onClick={(e) => { e.stopPropagation(); profileInputRef.current?.click(); }}>
-                                            <i className="fas fa-camera text-white text-3xl"></i>
-                                        </div>
+            // Check if we should show People You May Know after this post
+            if (peopleIntervals.includes(postCount) && suggestedUsers.length > 0) {
+                // Get a rotated set of suggestions for this interval
+                const rotationKey = `people-rotation-${suggestionRotation}-interval-${peopleIndex}`;
+                const rotatedSuggestions = getIntelligentSuggestions(currentUser, users, suggestionRotation + peopleIndex);
+                
+                if (rotatedSuggestions.length > 0) {
+                    renderedItems.push(
+                        <PeopleYouMayKnow 
+                            key={rotationKey}
+                            suggestedUsers={rotatedSuggestions}
+                            onViewProfile={(userId) => {
+                                handleViewProfile(userId);
+                                // Advance to next rotation when someone views a profile
+                                setSuggestionRotation(prev => prev + 1);
+                            }}
+                            onRemove={(userId) => {
+                                handleRemoveSuggestedUser(userId);
+                                // Advance to next rotation when someone is removed
+                                setSuggestionRotation(prev => prev + 1);
+                            }}
+                        />
+                    );
+                }
+                peopleIndex++;
+            }
+            
+            // Check if we should show Groups You May Like after this post
+            if (groupIntervals.includes(postCount) && suggestedGroups.length > 0) {
+                // Get a rotated set of group suggestions for this interval
+                const groupRotationKey = `group-rotation-${groupRotation}-interval-${groupIndex}`;
+                const rotatedGroupSuggestions = getIntelligentGroupSuggestions(currentUser, groups, groupRotation + groupIndex);
+                
+                if (rotatedGroupSuggestions.length > 0) {
+                    renderedItems.push(
+                        <GroupsYouMayLike 
+                            key={groupRotationKey}
+                            suggestedGroups={rotatedGroupSuggestions}
+                            currentUser={currentUser}
+                            onViewGroup={handleViewGroup}
+                            onJoinGroup={handleJoinGroup}
+                            onRemove={handleRemoveSuggestedGroup}
+                        />
+                    );
+                }
+                groupIndex++;
+            }
+            
+            // Check if we should show Brand Recommendations after this post
+            if (brandIntervals.includes(postCount) && brands.length > 0) {
+                // Get a rotated set of brand recommendations for this interval
+                const brandRotationKey = `brand-rotation-${brandRotation}-interval-${brandIndex}`;
+                const rotatedBrandRecommendations = getIntelligentBrandRecommendations(currentUser, brands, brandRotation + brandIndex);
+                
+                if (rotatedBrandRecommendations.length > 0) {
+                    renderedItems.push(
+                        <BrandRecommendations 
+                            key={brandRotationKey}
+                            brands={rotatedBrandRecommendations}
+                            currentUser={currentUser}
+                            onViewBrand={(brandId) => {
+                                handleViewBrand(brandId);
+                                setBrandRotation(prev => prev + 1);
+                            }}
+                            onRemove={handleRemoveBrandRecommendation}
+                        />
+                    );
+                }
+                brandIndex++;
+            }
+        }
+        
+        return renderedItems;
+    };
+    
+    // Helper function to render individual post
+    const renderPostItem = (post: PostType) => {
+        const author = getAuthorForPost(post, users, brands);
+        if (!author) return null;
+        
+        let isFollowing = false;
+        if (author.type === 'user' && currentUser) {
+            isFollowing = currentUser.following.includes(author.id);
+        } else if (author.type === 'brand' && currentUser) {
+            const brand = brands.find(b => b.id === author.id);
+            isFollowing = brand ? brand.followers.includes(currentUser.id) : false;
+        }
+        
+        if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
+            return renderMusicPost(post, author);
+        }
+        
+        return renderRegularPost(post, author, isFollowing);
+    };
+    
+    return (
+        <div className="bg-[#18191A] min-h-screen flex flex-col font-sans">
+            {isLoading ? (
+                <div className="flex items-center justify-center min-h-screen bg-[#18191A] flex-col">
+                    <div className="w-20 h-20 border-4 border-[#1877F2] border-t-transparent rounded-full animate-spin mb-4"></div>
+                    <div className="text-[#1877F2] font-bold text-xl animate-pulse">Loading UNERA...</div>
+                </div>
+            ) : effectiveView === 'login' ? (
+                 showRegister 
+                    ? <Register onRegister={handleRegister} onBackToLogin={() => { setShowRegister(false); setShowForgotPassword(false); }} /> 
+                    : showForgotPassword
+                    ? <ForgotPassword onBackToLogin={() => { setShowForgotPassword(false); setShowRegister(false); }} />
+                    : <Login onLogin={handleLogin} onNavigateToRegister={() => { setShowRegister(true); setShowForgotPassword(false); }} onNavigateToForgotPassword={() => { setShowForgotPassword(true); setShowRegister(false); }} onClose={() => { setView('home'); setCurrentUser(null); }} error={loginError} />
+            ) : (
+                <>
+                    {currentAudioTrack && (
+                        <GlobalAudioPlayer 
+                            currentTrack={currentAudioTrack} 
+                            isPlaying={isAudioPlaying} 
+                            onTogglePlay={() => setIsAudioPlaying(!isAudioPlaying)} 
+                            onNext={() => {}} 
+                            onPrevious={() => {}} 
+                            onClose={() => { setCurrentAudioTrack(null); setIsAudioPlaying(false); }} 
+                            onDownload={() => alert("Download started...")} 
+                            onLike={(id) => setLikedTracks(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])} 
+                            isLiked={likedTracks.includes(currentAudioTrack.id)} 
+                            uploaderProfile={users.find(u => u.id === currentAudioTrack.uploaderId)} 
+                            onArtistClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                        />
+                    )}
+                    <Header 
+                        onHomeClick={() => handleNavigate('home')} 
+                        onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                        onReelsClick={() => handleNavigate('reels')} 
+                        onMarketplaceClick={() => handleNavigate('marketplace')} 
+                        onGroupsClick={() => handleNavigate('groups')} 
+                        currentUser={currentUser} 
+                        notifications={notifications} 
+                        users={users} 
+                        onLogout={handleLogout} 
+                        onLoginClick={() => setView('login')} 
+                        onMarkNotificationsRead={handleMarkAllNotificationsRead} 
+                        onNotificationClick={handleNotificationClick}
+                        activeTab={activeTab} 
+                        onNavigate={handleNavigate} 
+                    />
+                    <div className="flex justify-center w-full max-w-[1920px] mx-auto relative flex-1">
+                        <div className="sticky top-14 h-[calc(100vh-56px)] z-20 hidden lg:block">
+                            <Sidebar 
+                                currentUser={currentUser || INITIAL_USERS[0]} 
+                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                onReelsClick={() => handleNavigate('reels')} 
+                                onMarketplaceClick={() => handleNavigate('marketplace')} 
+                                onGroupsClick={() => handleNavigate('groups')} 
+                            />
+                        </div>
+                        <div className="w-full lg:w-[740px] xl:w-[700px] min-h-screen">
+                            {effectiveView === 'home' && (
+                                <div className="w-full pt-4 md:px-8 pb-10">
+                                    <StoryReel 
+                                        stories={storiesWithUsers} 
+                                        onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                        onCreateStory={() => currentUser ? setShowCreateStoryModal(true) : setView('login')} 
+                                        onViewStory={(s) => setActiveStory(s)} 
+                                        currentUser={currentUser} 
+                                        onRequestLogin={() => setView('login')} 
+                                    />
+                                    {currentUser && (
+                                        <> 
+                                            <CreatePost 
+                                                currentUser={currentUser} 
+                                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                                onClick={() => setShowCreatePostModal(true)} 
+                                                onCreateEventClick={() => setShowCreateEventModal(true)} 
+                                            /> 
+                                            
+                                            {/* Feed with all recommendations at intervals */}
+                                            {renderFeedWithSuggestions()}
+                                        </>
                                     )}
                                 </div>
-                            </div>
+                            )}
                             
-                            <div className="flex-1 flex flex-col items-center md:items-start mt-4 md:mt-0 md:ml-6 text-center md:text-left md:mb-4">
-                                <h1 className="text-[32px] font-bold text-[#E4E6EB] leading-tight flex items-center gap-2">
-                                    {user.name} 
-                                    {user.isVerified && <i className="fas fa-check-circle text-[#1877F2] text-[20px]"></i>}
-                                </h1>
-                                <span className="text-[#B0B3B8] font-semibold text-[17px] mt-1">{followerCount} Followers</span>
-                            </div>
-
-                            <div className="flex flex-col sm:flex-row items-center gap-2 mt-4 md:mt-0 md:mb-6">
-                                {isCurrentUser ? (
-                                    <>
-                                        <button className="bg-[#1877F2] text-white px-4 py-2 rounded-md font-semibold flex items-center gap-2 hover:bg-[#166FE5] transition-colors">
-                                            <i className="fas fa-plus"></i><span>Add to story</span>
-                                        </button>
-                                        <button className="bg-[#3A3B3C] text-[#E4E6EB] px-4 py-2 rounded-md font-semibold flex items-center gap-2 hover:bg-[#4E4F50] transition-colors" onClick={() => setShowEditProfile(true)}>
-                                            <i className="fas fa-pen"></i><span>Edit profile</span>
-                                        </button>
-                                    </>
-                                ) : (
-                                    <>
-                                        {currentUser && (
-                                            <>
-                                            <button onClick={() => onFollow(user.id)} className={`${isFollowing ? 'bg-[#3A3B3C] text-[#E4E6EB]' : 'bg-[#1877F2] text-white'} px-6 py-2 rounded-md font-semibold flex items-center gap-2 transition-colors`}>
-                                                {isFollowing ? (
-                                                    <><i className="fas fa-user-check"></i><span>Following</span></>
-                                                ) : (
-                                                    <><i className="fas fa-user-plus"></i><span>Follow</span></>
-                                                )}
-                                            </button>
-                                            <button onClick={() => onMessage(user.id)} className="bg-[#3A3B3C] text-[#E4E6EB] px-6 py-2 rounded-md font-semibold flex items-center gap-2 hover:bg-[#4E4F50] transition-colors">
-                                                <i className="fab fa-facebook-messenger"></i><span>Message</span>
-                                            </button>
-                                            </>
-                                        )}
-                                        <button className="bg-[#3A3B3C] text-[#E4E6EB] px-3 py-2 rounded-md font-semibold hover:bg-[#4E4F50] transition-colors">
-                                            <i className="fas fa-ellipsis-h"></i>
-                                        </button>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="h-[1px] bg-[#3E4042] w-full mt-4"></div>
-                        
-                        {/* Tabs */}
-                        <div className="flex items-center gap-1 pt-1 overflow-x-auto">
-                            {['Posts', 'About', 'Followers', 'Photos', 'Reels'].map((tab) => (
-                                <div key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-3 cursor-pointer whitespace-nowrap text-[15px] font-semibold border-b-[3px] transition-colors ${activeTab === tab ? 'text-[#1877F2] border-[#1877F2]' : 'text-[#B0B3B8] border-transparent hover:bg-[#3A3B3C] rounded-t-md'}`}>
-                                    {tab}
+                            {effectiveView === 'profile' && selectedUserId !== null && (
+                                <UserProfile 
+                                    user={users.find(u => u.id === selectedUserId)!} 
+                                    currentUser={currentUser} 
+                                    users={users} 
+                                    posts={(() => {
+                                        const userPosts = posts.filter(p => p.authorId === selectedUserId);
+                                        const enhancedPosts = userPosts.map(post => ({
+                                            ...post,
+                                            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+                                        }));
+                                        
+                                        return [
+                                            ...enhancedPosts,
+                                            ...products
+                                                .filter(p => p.sellerId === selectedUserId)
+                                                .map(p => ({
+                                                    id: p.id + 100000,
+                                                    authorId: p.sellerId,
+                                                    content: `Just listed a new item: ${p.title}`,
+                                                    timestamp: p.date,
+                                                    formattedTime: formatRelativeTime(p.date),
+                                                    createdAt: p.date,
+                                                    reactions: [],
+                                                    comments: [],
+                                                    shares: 0,
+                                                    views: p.views,
+                                                    type: 'product' as const,
+                                                    visibility: 'Public' as const,
+                                                    product: p,
+                                                    productId: p.id
+                                                }))
+                                        ];
+                                    })()}
+                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                    onFollow={handleFollowUser} 
+                                    onReact={handleReact} 
+                                    onComment={handleComment} 
+                                    onShare={(id) => setActiveSharePostId(id)} 
+                                    onMessage={(id) => setActiveChatUser(users.find(u => u.id === id) || null)} 
+                                    onCreatePost={handleCreatePost} 
+                                    onUpdateProfileImage={(f) => {}} 
+                                    onUpdateCoverImage={(f) => {}} 
+                                    onUpdateUserDetails={(d) => {}} 
+                                    onDeletePost={(id) => {
+                                        if (id > 100000) {
+                                            const productId = id - 100000;
+                                            setProducts(prev => prev.filter(p => p.id !== productId));
+                                        } else {
+                                            const postToDelete = posts.find(p => p.id === id);
+                                            if (postToDelete && (postToDelete.type === 'music' || postToDelete.type === 'podcast') && postToDelete.audioTrack) {
+                                                const trackId = postToDelete.audioTrack.id;
+                                                setSongs(prev => prev.filter(s => s.id !== trackId));
+                                                setEpisodes(prev => prev.filter(e => e.id !== trackId));
+                                            }
+                                            setPosts(posts.filter(p => p.id !== id));
+                                        }
+                                    }} 
+                                    onEditPost={() => {}} 
+                                    getCommentAuthor={(id) => users.find(u => u.id === id)} 
+                                    onViewImage={setFullScreenImage} 
+                                    onOpenComments={setActiveCommentsPostId} 
+                                    onVideoClick={() => {}} 
+                                    onCreateEventClick={() => setShowCreateEventModal(true)} 
+                                    onPlayAudioTrack={handlePlayTrack} 
+                                    onVerifyUser={handleVerifyUser} 
+                                    onRestrictUser={handleRestrictUser} 
+                                    onDeleteUser={handleDeleteUser} 
+                                    onMakeModerator={handleMakeModerator} 
+                                    onHashtagClick={handleTagClick} 
+                                    songs={songs}
+                                    episodes={episodes}
+                                    likedTracks={likedTracks}
+                                    onLikeTrack={handleLikeTrack}
+                                    onTrackComment={handleTrackComment}
+                                    onTrackShare={handleTrackShare}
+                                    renderMusicPost={(post: PostType, author: any) => {
+                                        const song = getSongForPost(post, songs, episodes);
+                                        if (!song) return null;
+                                        
+                                        return (
+                                            <MusicFeedPost 
+                                                key={post.id}
+                                                song={song}
+                                                currentUser={currentUser}
+                                                users={users}
+                                                onPlayTrack={handlePlayTrack}
+                                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
+                                                onLikeTrack={handleLikeTrack}
+                                                onTrackComment={handleTrackComment}
+                                                onTrackShare={handleTrackShare}
+                                                isLiked={likedTracks.includes(song.id)}
+                                            />
+                                        );
+                                    }}
+                                    renderRegularPost={renderRegularPost}
+                                />
+                            )}
+                            
+                            {effectiveView === 'single_post' && activeSinglePostId !== null && (
+                                <div className="w-full pt-4 md:px-8 pb-10">
+                                    {(() => {
+                                        const post = posts.find(p => p.id === activeSinglePostId);
+                                        if (!post) return null;
+                                        
+                                        const author = getAuthorForPost(post, users, brands);
+                                        if (!author) return null;
+                                        
+                                        if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
+                                            return renderMusicPost(post, author);
+                                        }
+                                        
+                                        return (
+                                            <Post
+                                                key={activeSinglePostId}
+                                                post={{...post, formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())}}
+                                                author={author}
+                                                currentUser={currentUser}
+                                                users={users}
+                                                onProfileClick={(id) => { 
+                                                    if (author.type === 'brand') {
+                                                        setActiveBrandId(id);
+                                                        handleNavigate('brand_view');
+                                                    } else {
+                                                        setSelectedUserId(id); 
+                                                        setView('profile');
+                                                    }
+                                                }}
+                                                onReact={handleReact}
+                                                onShare={(id) => setActiveSharePostId(id)}
+                                                onViewImage={setFullScreenImage}
+                                                onOpenComments={setActiveCommentsPostId}
+                                                onVideoClick={() => {}}
+                                                onPlayAudioTrack={handlePlayTrack}
+                                                onFollow={author.type === 'brand' ? handleFollowBrand : handleFollowUser}
+                                                isFollowing={author.type === 'brand' && currentUser ? 
+                                                    brands.find(b => b.id === author.id)?.followers.includes(currentUser.id) || false :
+                                                    author.type === 'user' && currentUser ?
+                                                    currentUser.following.includes(author.id) : false}
+                                                onHashtagClick={handleTagClick}
+                                                onDeletePost={handleDeletePost}
+                                                isAdmin={isAdmin}
+                                            />
+                                        );
+                                    })()}
                                 </div>
-                            ))}
+                            )}
+                            
+                            {effectiveView === 'marketplace' && (
+                                <MarketplacePage 
+                                    products={products} 
+                                    currentUser={currentUser} 
+                                    onNavigateHome={() => handleNavigate('home')}
+                                    onCreateProduct={handleCreateProduct}
+                                    onViewProduct={(product) => setActiveProduct(product)}
+                                    // Pass the product interaction handlers
+                                    onLikeProduct={handleLikeProduct}
+                                    onCommentOnProduct={handleCommentOnProduct}
+                                />
+                            )}
+                            
+                            {effectiveView === 'reels' && (
+                                <ReelsFeed 
+                                    reels={reels} 
+                                    users={users} 
+                                    currentUser={currentUser} 
+                                    activeReelId={activeReelId} 
+                                    onReelClick={setActiveReelId} 
+                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                    onNavigate={handleNavigate} 
+                                    onReact={handleReelReact}
+                                    onShare={(reelId, type) => {
+                                        if (type === 'feed') {
+                                            const reel = reels.find(r => r.id === reelId);
+                                            if (reel && currentUser) {
+                                                const timestamp = Date.now();
+                                                const formattedTime = formatRelativeTime(timestamp);
+                                                const newPost: PostType = { 
+                                                    id: timestamp, 
+                                                    authorId: currentUser.id, 
+                                                    content: `Shared a reel: ${reel.caption}`, 
+                                                    video: reel.videoUrl,
+                                                    timestamp: timestamp,
+                                                    formattedTime: formattedTime,
+                                                    createdAt: timestamp, 
+                                                    reactions: [], 
+                                                    comments: [], 
+                                                    shares: 0, 
+                                                    views: 0, 
+                                                    type: 'video', 
+                                                    visibility: 'Public' 
+                                                };
+                                                setPosts([newPost, ...posts]);
+                                                setReels(prev => prev.map(r => 
+                                                    r.id === reelId 
+                                                        ? { ...r, shares: (r.shares || 0) + 1 }
+                                                        : r
+                                                ));
+                                                
+                                                // Send notification to reel owner (prevent self-notification)
+                                                if (reel.userId !== currentUser.id) {
+                                                    handleCreateNotification(
+                                                        reel.userId,
+                                                        currentUser.id,
+                                                        'reel_share',
+                                                        'shared your reel.',
+                                                        { reelId }
+                                                    );
+                                                }
+                                                
+                                                alert("Reel shared to your feed!");
+                                            }
+                                        } else if (type === 'copy' && isClient) {
+                                            navigator.clipboard.writeText(`https://unera.social/reels/${reelId}`);
+                                            alert("Link copied to clipboard!");
+                                        }
+                                    }}
+                                    onComment={(reelId, text) => {
+                                        if (!currentUser) return;
+                                        const timestamp = Date.now();
+                                        const formattedTime = formatRelativeTime(timestamp);
+                                        const newComment = { 
+                                            id: timestamp, 
+                                            userId: currentUser.id, 
+                                            text, 
+                                            timestamp: timestamp,
+                                            formattedTime: formattedTime,
+                                            likes: 0,
+                                            authorName: currentUser.name,
+                                            authorImage: currentUser.profileImage
+                                        };
+                                        setReels(prev => prev.map(reel => 
+                                            reel.id === reelId 
+                                                ? { ...reel, comments: [...reel.comments, newComment] }
+                                                : reel
+                                        ));
+                                        
+                                        // Send notification to reel owner (prevent self-notification)
+                                        const reel = reels.find(r => r.id === reelId);
+                                        if (reel && reel.userId !== currentUser.id) {
+                                            handleCreateNotification(
+                                                reel.userId,
+                                                currentUser.id,
+                                                'reel_comment',
+                                                'commented on your reel.',
+                                                { reelId, commentId: newComment.id }
+                                            );
+                                        }
+                                    }}
+                                    onCreateReelClick={() => setShowCreateReelModal(true)}
+                                    onFollow={handleFollowUser}
+                                    getCommentAuthor={(id) => users.find(u => u.id === id)}
+                                />
+                            )}
+                            
+                            {effectiveView === 'groups' && (
+                                <GroupsPage 
+                                    key="groups-page"
+                                    groups={groups}
+                                    currentUser={currentUser}
+                                    users={users}
+                                    initialGroupId={initialGroupIdToView}
+                                    onCreateGroup={handleCreateGroup}
+                                    onJoinGroup={handleJoinGroup}
+                                    onLeaveGroup={handleLeaveGroup}
+                                    onDeleteGroup={handleDeleteGroup}
+                                    onUpdateGroupImage={handleUpdateGroupImage}
+                                    onPostToGroup={handlePostToGroup}
+                                    onCreateGroupEvent={handleCreateGroupEvent}
+                                    onInviteToGroup={handleInviteToGroup}
+                                    onProfileClick={(id) => { 
+                                        setSelectedUserId(id); 
+                                        setView('profile'); 
+                                        setActiveTab('profile');
+                                    }}
+                                    onLikePost={handleReactGroupPost}
+                                    onOpenComments={handleOpenGroupComments}
+                                    onSharePost={handleShareGroupPost}
+                                    onDeleteGroupPost={handleDeleteGroupPost}
+                                    onRemoveMember={handleRemoveMember}
+                                    onUpdateGroupSettings={handleUpdateGroupSettings}
+                                    onPlayAudioTrack={handlePlayTrack}
+                                />
+                            )}
+                            
+                            {effectiveView === 'brands' && (
+                                <BrandsPage 
+                                    currentUser={currentUser}
+                                    brands={brands}
+                                    posts={posts}
+                                    users={users}
+                                    onCreateBrand={handleCreateBrand}
+                                    onFollowBrand={handleFollowBrand}
+                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
+                                    onPostAsBrand={handlePostAsBrand}
+                                    onReact={handleReact}
+                                    onShare={(id) => setActiveSharePostId(id)}
+                                    onOpenComments={(postId) => setActiveCommentsPostId(postId)}
+                                    onUpdateBrand={handleUpdateBrand}
+                                    onDeleteBrand={handleDeleteBrand}
+                                    onMessage={(brandId) => {
+                                        const brand = brands.find(b => b.id === brandId);
+                                        if (brand && currentUser) {
+                                            alert(`Messaging ${brand.name} - Feature coming soon!`);
+                                        }
+                                    }}
+                                    onCreateEvent={(brandId, eventData) => {
+                                        if (currentUser) {
+                                            const eventWithBrand = {
+                                                ...eventData,
+                                                brandId: brandId,
+                                                brandName: brands.find(b => b.id === brandId)?.name
+                                            };
+                                            handleCreateEvent(eventWithBrand);
+                                        }
+                                    }}
+                                    onUpdateBrandImage={handleUpdateBrandImage}
+                                    onDeletePost={handleDeletePost}
+                                    onVerifyBrand={handleVerifyBrand}
+                                    initialBrandId={activeBrandId}
+                                    onPlayAudioTrack={handlePlayTrack}
+                                />
+                            )}
+                            
+                            {effectiveView === 'events' && (
+                                <EventsPage 
+                                    events={events} 
+                                    users={users} 
+                                    currentUser={currentUser} 
+                                    onJoinEvent={handleJoinEvent} 
+                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                    onCreateEvent={() => setShowCreateEventModal(true)} 
+                                />
+                            )}
+                            
+                            {effectiveView === 'birthdays' && (
+                                <BirthdaysPage 
+                                    users={users} 
+                                    currentUser={currentUser} 
+                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                />
+                            )}
+                            
+                            {effectiveView === 'suggested_profiles' && (
+                                <SuggestedProfilesPage 
+                                    users={users} 
+                                    currentUser={currentUser} 
+                                    onFollow={handleFollowUser} 
+                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                />
+                            )}
+                            
+                            {effectiveView === 'memories' && (
+                                <MemoriesPage 
+                                    posts={posts} 
+                                    currentUser={currentUser} 
+                                    users={users} 
+                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                    onPostClick={(postId) => { setActiveSinglePostId(postId); setView('single_post'); }} 
+                                />
+                            )}
+                            
+                            {effectiveView === 'music' && (
+                                <MusicSystem 
+                                    songs={songs} 
+                                    episodes={episodes} 
+                                    currentUser={currentUser} 
+                                    onPlayTrack={handlePlayTrack} 
+                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                    onDeleteSong={handleDeleteSong} 
+                                    onDeleteEpisode={handleDeleteEpisode} 
+                                    likedTracks={likedTracks} 
+                                    onToggleLike={handleLikeTrack} 
+                                    onUploadToFeed={handleUploadToFeed} 
+                                    onAddSong={handleAddSong} 
+                                    onAddEpisode={handleAddEpisode} 
+                                    playHistory={playHistory}
+                                />
+                            )}
+                            
+                            {effectiveView === 'tools' && (
+                                <ToolsPage 
+                                    currentUser={currentUser} 
+                                    onNavigate={handleNavigate} 
+                                />
+                            )}
+                            
+                            {effectiveView === 'help_support' && (
+                                <HelpSupportPage 
+                                    currentUser={currentUser} 
+                                />
+                            )}
+                            
+                            {effectiveView === 'settings' && (
+                                <SettingsPage 
+                                    currentUser={currentUser} 
+                                    onUpdateUser={(updates) => { 
+                                        if (currentUser) {
+                                            const updatedUser = { ...currentUser, ...updates };
+                                            setCurrentUser(updatedUser);
+                                            setUsers(users.map(u => u.id === currentUser.id ? updatedUser : u));
+                                        }
+                                    }} 
+                                    onLogout={handleLogout} 
+                                />
+                            )}
+                            
+                            {effectiveView === 'privacy_policy' && (
+                                <PrivacyPolicyPage />
+                            )}
+                            
+                            {effectiveView === 'terms_of_service' && (
+                                <TermsOfServicePage />
+                            )}
+                        </div>
+                        <div className="sticky top-14 h-[calc(100vh-56px)] z-20 hidden xl:block pl-4">
+                            <RightSidebar 
+                                contacts={users.filter(u => u.id !== currentUser?.id)} 
+                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                            />
                         </div>
                     </div>
-                </div>
-            </div>
-
-            {renderContent()}
-
-            {showEditProfile && isCurrentUser && (
-                <EditProfileModal 
-                    user={user}
-                    onClose={() => setShowEditProfile(false)}
-                    onSave={onUpdateUserDetails}
-                />
+                    
+                    {/* Modals */}
+                    {showCreatePostModal && currentUser && (
+                        <CreatePostModal 
+                            currentUser={currentUser} 
+                            users={users} 
+                            onClose={() => setShowCreatePostModal(false)} 
+                            onCreatePost={handleCreatePost} 
+                        />
+                    )}
+                    
+                    {showCreateStoryModal && currentUser && (
+                        <CreateStoryModal 
+                            currentUser={currentUser} 
+                            songs={songs} 
+                            onClose={() => setShowCreateStoryModal(false)} 
+                            onCreate={handleCreateStory} 
+                        />
+                    )}
+                    
+                    {showCreateReelModal && currentUser && (
+                        <CreateReelModal 
+                            currentUser={currentUser} 
+                            songs={songs} 
+                            onClose={() => setShowCreateReelModal(false)} 
+                            onSubmit={handleCreateReel} 
+                        />
+                    )}
+                    
+                    {showCreateEventModal && currentUser && (
+                        <CreateEventModal 
+                            currentUser={currentUser} 
+                            onClose={() => setShowCreateEventModal(false)} 
+                            onCreate={handleCreateEvent} 
+                        />
+                    )}
+                    
+                    {/* Regular Post Comments Modal */}
+                    {activeCommentsPostId && (
+                        <CommentsSheet 
+                            post={posts.find(p => p.id === activeCommentsPostId)!} 
+                            currentUser={currentUser || INITIAL_USERS[0]} 
+                            users={users} 
+                            onClose={() => setActiveCommentsPostId(null)} 
+                            onComment={handleComment} 
+                            onLikeComment={() => {}} 
+                            getCommentAuthor={(id) => users.find(u => u.id === id)} 
+                            onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); setActiveCommentsPostId(null); }} 
+                        />
+                    )}
+                    
+                    {/* Group Post Comments Modal */}
+                    {activeGroupComments && (
+                        (() => {
+                            const { groupId, postId } = activeGroupComments;
+                            const group = groups.find(g => g.id === groupId);
+                            const groupPost = group?.posts.find(p => p.id === postId);
+                            
+                            if (group && groupPost) {
+                                const postForComments: PostType = {
+                                    id: groupPost.id,
+                                    authorId: groupPost.authorId,
+                                    content: groupPost.content || '',
+                                    images: groupPost.images,
+                                    video: groupPost.video,
+                                    timestamp: groupPost.timestamp,
+                                    formattedTime: groupPost.formattedTime || formatRelativeTime(groupPost.timestamp),
+                                    createdAt: groupPost.timestamp,
+                                    reactions: groupPost.reactions || [],
+                                    comments: groupPost.comments || [],
+                                    shares: groupPost.shares || 0,
+                                    views: 0,
+                                    type: groupPost.video ? 'video' : (groupPost.images ? 'image' : 'text'),
+                                    visibility: 'Public',
+                                    groupId: groupId,
+                                    groupName: group.name
+                                };
+                                
+                                return (
+                                    <CommentsSheet 
+                                        post={postForComments}
+                                        currentUser={currentUser || INITIAL_USERS[0]}
+                                        users={users}
+                                        onClose={() => setActiveGroupComments(null)}
+                                        onComment={(postId, text, attachment) => handleGroupComment(groupId, postId, text, attachment)}
+                                        onLikeComment={() => {}}
+                                        getCommentAuthor={(id) => users.find(u => u.id === id)}
+                                        onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); setActiveGroupComments(null); }}
+                                        title={`Comments from ${group.name}`}
+                                    />
+                                );
+                            }
+                            return null;
+                        })()
+                    )}
+                    
+                    {/* Regular Post Share Modal */}
+                    {activeSharePostId && (
+                        <ShareSheet 
+                            currentUser={currentUser} 
+                            groups={groups} 
+                            brands={brands} 
+                            postId={activeSharePostId} 
+                            onClose={() => setActiveSharePostId(null)} 
+                            onShare={(type, id, caption) => handleShare(activeSharePostId, type, id, caption)} 
+                            onCopyLink={() => { if(isClient) { navigator.clipboard.writeText(`https://unera.social/posts/${activeSharePostId}`); alert("Link copied!"); } }} 
+                        />
+                    )}
+                    
+                    {/* Group Post Share Modal */}
+                    {activeGroupShare && (
+                        (() => {
+                            const { groupId, postId } = activeGroupShare;
+                            const group = groups.find(g => g.id === groupId);
+                            
+                            if (group) {
+                                return (
+                                    <ShareSheet 
+                                        currentUser={currentUser} 
+                                        groups={groups.filter(g => g.id !== groupId)} // Don't show current group
+                                        brands={brands} 
+                                        postId={postId} 
+                                        onClose={() => setActiveGroupShare(null)} 
+                                        onShare={(type, id, caption) => handleGroupShare(groupId, postId, type, id, caption)} 
+                                        onCopyLink={() => { 
+                                            if(isClient) { 
+                                                navigator.clipboard.writeText(`https://unera.social/groups/${groupId}/posts/${postId}`); 
+                                                alert("Link copied!"); 
+                                            } 
+                                        }}
+                                        title={`Share post from ${group.name}`}
+                                    />
+                                );
+                            }
+                            return null;
+                        })()
+                    )}
+                    
+                    {activeStory && (
+                        <StoryViewer 
+                            story={activeStory} 
+                            user={users.find(u => u.id === activeStory.userId)!} 
+                            currentUser={currentUser} 
+                            allStories={storiesWithUsers} 
+                            onClose={() => setActiveStory(null)} 
+                            onLike={() => handleLikeStory(activeStory.id)} 
+                            onReply={(text) => handleReplyStory(activeStory.id, text)} 
+                            onNext={() => {}} 
+                            onPrev={() => {}} 
+                            onFollow={handleFollowUser} 
+                            isFollowing={currentUser ? currentUser.following.includes(activeStory.userId) : false} 
+                        />
+                    )}
+                    {activeChatUser && currentUser && (
+                        <ChatWindow 
+                            currentUser={currentUser} 
+                            recipient={activeChatUser} 
+                            messages={messages} 
+                            onClose={() => setActiveChatUser(null)} 
+                            onSendMessage={() => {}} 
+                        />
+                    )}
+                    {activeProduct && (
+                        <ProductDetailModal 
+                            product={activeProduct} 
+                            currentUser={currentUser} 
+                            onClose={() => setActiveProduct(null)} 
+                            onMessage={(sid) => setActiveChatUser(users.find(u => u.id === sid) || null)} 
+                            // Add product interaction handlers
+                            onLike={() => handleLikeProduct(activeProduct.id)}
+                            onComment={(text) => handleCommentOnProduct(activeProduct.id, text)}
+                        />
+                    )}
+                    {fullScreenImage && (
+                        <ImageViewer 
+                            imageUrl={fullScreenImage} 
+                            onClose={() => setFullScreenImage(null)} 
+                        />
+                    )}
+                </>
             )}
         </div>
     );
-};
+}
