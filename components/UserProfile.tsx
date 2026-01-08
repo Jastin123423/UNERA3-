@@ -536,38 +536,51 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                     
                     <div className="flex-1 min-w-0">
                         {isCurrentUser && (
-                            <div className="bg-[#242526] rounded-xl p-4 mb-4 border border-[#3E4042] shadow-sm animate-fade-in">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h2 className="text-[#E4E6EB] font-bold text-lg">Professional Dashboard</h2>
-                                    <span className="text-[#B0B3B8] text-xs bg-[#3A3B3C] px-2 py-1 rounded border border-[#3E4042]">Private to you</span>
+                            <>
+                                <div className="bg-[#242526] rounded-xl p-4 mb-4 border border-[#3E4042] shadow-sm animate-fade-in">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h2 className="text-[#E4E6EB] font-bold text-lg">Professional Dashboard</h2>
+                                        <span className="text-[#B0B3B8] text-xs bg-[#3A3B3C] px-2 py-1 rounded border border-[#3E4042]">Private to you</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="bg-[#3A3B3C] p-3 rounded-lg border border-[#3E4042]">
+                                            <div className="text-[#B0B3B8] text-xs font-medium mb-1">Total Views</div>
+                                            <div className="text-[#E4E6EB] font-bold text-xl flex items-center gap-2">
+                                                {totalViews.toLocaleString()} <i className="fas fa-chart-line text-[#45BD62] text-sm"></i>
+                                            </div>
+                                        </div>
+                                        <div className="bg-[#3A3B3C] p-3 rounded-lg border border-[#3E4042]">
+                                            <div className="text-[#B0B3B8] text-xs font-medium mb-1">Engagement</div>
+                                            <div className="text-[#E4E6EB] font-bold text-xl flex items-center gap-2">
+                                                {totalEngagement.toLocaleString()} <i className="fas fa-fire text-[#F02849] text-sm"></i>
+                                            </div>
+                                        </div>
+                                        <div className="bg-[#3A3B3C] p-3 rounded-lg border border-[#3E4042]">
+                                            <div className="text-[#B0B3B8] text-xs font-medium mb-1">Total Likes</div>
+                                            <div className="text-[#E4E6EB] font-bold text-xl flex items-center gap-2">
+                                                {totalLikes.toLocaleString()} <i className="fas fa-thumbs-up text-[#1877F2] text-sm"></i>
+                                            </div>
+                                        </div>
+                                        <div className="bg-[#3A3B3C] p-3 rounded-lg border border-[#3E4042]">
+                                            <div className="text-[#B0B3B8] text-xs font-medium mb-1">Content</div>
+                                            <div className="text-[#E4E6EB] font-bold text-xl">
+                                                {userPosts.length + userReels.length} <span className="text-xs text-[#B0B3B8] font-normal">posts/reels</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {/* Professional Message Icon - Only visible to current user in private area */}
+                                    <div className="mt-4 pt-4 border-t border-[#3E4042]">
+                                        <button 
+                                            onClick={() => onMessage(user.id)}
+                                            className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white py-3 rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            <i className="fab fa-facebook-messenger text-xl"></i>
+                                            <span>View Messages</span>
+                                        </button>
+                                        <p className="text-[#B0B3B8] text-xs text-center mt-2">Read messages sent from other users</p>
+                                    </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="bg-[#3A3B3C] p-3 rounded-lg border border-[#3E4042]">
-                                        <div className="text-[#B0B3B8] text-xs font-medium mb-1">Total Views</div>
-                                        <div className="text-[#E4E6EB] font-bold text-xl flex items-center gap-2">
-                                            {totalViews.toLocaleString()} <i className="fas fa-chart-line text-[#45BD62] text-sm"></i>
-                                        </div>
-                                    </div>
-                                    <div className="bg-[#3A3B3C] p-3 rounded-lg border border-[#3E4042]">
-                                        <div className="text-[#B0B3B8] text-xs font-medium mb-1">Engagement</div>
-                                        <div className="text-[#E4E6EB] font-bold text-xl flex items-center gap-2">
-                                            {totalEngagement.toLocaleString()} <i className="fas fa-fire text-[#F02849] text-sm"></i>
-                                        </div>
-                                    </div>
-                                    <div className="bg-[#3A3B3C] p-3 rounded-lg border border-[#3E4042]">
-                                        <div className="text-[#B0B3B8] text-xs font-medium mb-1">Total Likes</div>
-                                        <div className="text-[#E4E6EB] font-bold text-xl flex items-center gap-2">
-                                            {totalLikes.toLocaleString()} <i className="fas fa-thumbs-up text-[#1877F2] text-sm"></i>
-                                        </div>
-                                    </div>
-                                    <div className="bg-[#3A3B3C] p-3 rounded-lg border border-[#3E4042]">
-                                        <div className="text-[#B0B3B8] text-xs font-medium mb-1">Content</div>
-                                        <div className="text-[#E4E6EB] font-bold text-xl">
-                                            {userPosts.length + userReels.length} <span className="text-xs text-[#B0B3B8] font-normal">posts/reels</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                            </>
                         )}
 
                         {isCurrentUser && currentUser && (
@@ -675,9 +688,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                             <div className="flex flex-col sm:flex-row items-center gap-2 mt-4 md:mt-0 md:mb-6">
                                 {isCurrentUser ? (
                                     <>
-                                        <button className="bg-[#1877F2] text-white px-4 py-2 rounded-md font-semibold flex items-center gap-2 hover:bg-[#166FE5] transition-colors">
-                                            <i className="fas fa-plus"></i><span>Add to story</span>
-                                        </button>
+                                        {/* Removed "Add to story" button */}
                                         <button className="bg-[#3A3B3C] text-[#E4E6EB] px-4 py-2 rounded-md font-semibold flex items-center gap-2 hover:bg-[#4E4F50] transition-colors" onClick={() => setShowEditProfile(true)}>
                                             <i className="fas fa-pen"></i><span>Edit profile</span>
                                         </button>
