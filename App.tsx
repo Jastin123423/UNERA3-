@@ -603,6 +603,56 @@ const BrandRecommendations: React.FC<{
     );
 };
 
+// Sign Up Call-to-Action Component for Guests
+const GuestSignUpCTA: React.FC<{
+    onSignUp: () => void;
+    title?: string;
+    description?: string;
+}> = ({ onSignUp, title = "Join UNERA", description = "Sign up to connect with friends and share your thoughts." }) => {
+    return (
+        <div className="bg-[#242526] rounded-xl p-4 mb-6 border border-[#3E4042] shadow-lg">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#1877F2] to-[#00B0FF] flex items-center justify-center mr-3">
+                        <i className="fas fa-user-plus text-white"></i>
+                    </div>
+                    <div>
+                        <h3 className="text-white font-semibold">{title}</h3>
+                        <p className="text-[#B0B3B8] text-sm">{description}</p>
+                    </div>
+                </div>
+                <button 
+                    onClick={onSignUp}
+                    className="bg-[#1877F2] hover:bg-[#166FE5] text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+                >
+                    Sign Up
+                </button>
+            </div>
+        </div>
+    );
+};
+
+// Guest View Create Post Component
+const GuestCreatePost: React.FC<{
+    onSignUp: () => void;
+}> = ({ onSignUp }) => {
+    return (
+        <div className="bg-[#242526] rounded-xl p-4 mb-6 border border-[#3E4042] shadow-lg">
+            <div className="flex items-center">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#1877F2] to-[#00B0FF] flex items-center justify-center mr-3">
+                    <i className="fas fa-user-plus text-white"></i>
+                </div>
+                <div 
+                    className="flex-1 bg-[#3A3B3C] rounded-full px-4 py-3 cursor-pointer hover:bg-[#4E4F50] transition-colors"
+                    onClick={onSignUp}
+                >
+                    <p className="text-[#B0B3B8]">What's on your mind? Sign up to share...</p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // ========== MAIN APP COMPONENT ==========
 export default function App({ initialData, initialPath }: { initialData?: any, initialPath?: string }) {
     const { t } = useLanguage();
@@ -840,8 +890,23 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     // Update parsedPath to include users dependency
     const parsedPath = useMemo(() => parsePath(path, users), [path, users]);
     
+    // ========== CRITICAL FIX: Initialize view state properly for guests ==========
+    const [view, setView] = useState(() => {
+        // For guests, default to 'home' to see content (like Facebook)
+        // Only show login view if explicitly on login path or no current user AND no initial data
+        if (initialData?.view) {
+            return initialData.view;
+        }
+        
+        // If guest is at root path, show them content, not login
+        if (parsedPath.view === 'home' || path === '/') {
+            return 'home';
+        }
+        
+        return parsedPath.view;
+    });
+    
     const [activeTab, setActiveTab] = useState(parsedPath.view === 'home' ? 'home' : parsedPath.view);
-    const [view, setView] = useState(initialData?.view || parsedPath.view);
     const [selectedUserId, setSelectedUserId] = useState<number | null>(initialData?.selectedUserId || parsedPath.userId || null);
     const [activeReelId, setActiveReelId] = useState<number | null>(null);
     const [activeBrandId, setActiveBrandId] = useState<number | null>(null);
@@ -1241,6 +1306,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             setView('brands');
             setActiveTab('brands');
         } else if (notification.senderId) {
+            if (!currentUser) {
+                setView('login');
+                return;
+            }
             setSelectedUserId(notification.senderId);
             setView('profile');
             setActiveTab('profile');
@@ -1317,63 +1386,109 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setBrandRotation(prev => prev + 1);
     };
 
-    // Load People You May Know and Groups data from localStorage
+    // ========== CRITICAL FIX: Load data for guests ==========
     useEffect(() => {
         if (isClient) {
-            const storedUser = localStorage.getItem('universeCurrentUser');
+            console.log('Loading data for guest/user...');
+            
+            // Load data for guests too - essential for content visibility
             const storedUsers = localStorage.getItem('universeUsers');
+            const storedPosts = localStorage.getItem('universePosts');
+            const storedStories = localStorage.getItem('universeStories');
+            const storedProducts = localStorage.getItem('marketplaceProducts');
+            
+            // Always load posts and users, even for guests
+            if (storedUsers) {
+                try {
+                    setUsers(JSON.parse(storedUsers));
+                } catch (e) {
+                    console.error('Error parsing stored users:', e);
+                }
+            }
+            
+            if (storedPosts) {
+                try {
+                    const parsedPosts = JSON.parse(storedPosts);
+                    const postsWithFormattedTime = parsedPosts.map((post: PostType) => ({
+                        ...post,
+                        formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+                    }));
+                    setPosts(postsWithFormattedTime);
+                } catch (e) {
+                    console.error('Error parsing stored posts:', e);
+                }
+            }
+            
+            if (storedStories) {
+                try {
+                    setStories(JSON.parse(storedStories));
+                } catch (e) {
+                    console.error('Error parsing stored stories:', e);
+                }
+            }
+            
+            if (storedProducts) {
+                try {
+                    const parsedProducts = JSON.parse(storedProducts);
+                    setProducts(parsedProducts);
+                } catch (e) {
+                    console.error('Error parsing stored products:', e);
+                }
+            }
+            
+            // Load other data...
             const storedSongs = localStorage.getItem('universeSongs');
             const storedEpisodes = localStorage.getItem('universeEpisodes');
             const storedLikedTracks = localStorage.getItem('universeLikedTracks');
-            const storedProducts = localStorage.getItem('marketplaceProducts');
             const storedBrands = localStorage.getItem('universeBrands');
-            const storedPosts = localStorage.getItem('universePosts');
             const storedGroups = localStorage.getItem('universeGroups');
             const storedNotifications = localStorage.getItem('universeNotifications');
             const storedMessages = localStorage.getItem('universeMessages');
             const storedUserStatus = localStorage.getItem('universeUserStatus');
             
-            // Load People You May Know filters
-            const viewedProfiles = JSON.parse(localStorage.getItem('universeViewedProfiles') || '[]');
-            const removedSuggestions = JSON.parse(localStorage.getItem('universeRemovedSuggestions') || '[]');
-            const removedGroupSuggestions = JSON.parse(localStorage.getItem('universeRemovedGroupSuggestions') || '[]');
-            const removedBrandRecommendations = JSON.parse(localStorage.getItem('universeRemovedBrandRecommendations') || '[]');
-            
-            if (storedUsers) setUsers(JSON.parse(storedUsers));
             if (storedSongs) setSongs(JSON.parse(storedSongs));
             if (storedEpisodes) setEpisodes(JSON.parse(storedEpisodes));
             if (storedLikedTracks) setLikedTracks(JSON.parse(storedLikedTracks));
-            if (storedProducts) {
-                const parsedProducts = JSON.parse(storedProducts);
-                setProducts(parsedProducts);
-            }
             if (storedBrands) setBrands(JSON.parse(storedBrands));
-            if (storedPosts) {
-                const parsedPosts = JSON.parse(storedPosts);
-                // Ensure all loaded posts have formattedTime
-                const postsWithFormattedTime = parsedPosts.map((post: PostType) => ({
-                    ...post,
-                    formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
-                }));
-                setPosts(postsWithFormattedTime);
-            }
             if (storedGroups) setGroups(JSON.parse(storedGroups));
             if (storedNotifications) setNotifications(JSON.parse(storedNotifications));
             if (storedMessages) setMessages(JSON.parse(storedMessages));
             if (storedUserStatus) setUserStatus(JSON.parse(storedUserStatus));
             
+            // Only set currentUser if they were previously logged in
+            const storedUser = localStorage.getItem('universeCurrentUser');
             if (storedUser) {
-                const user = JSON.parse(storedUser);
-                const freshUser = (storedUsers ? JSON.parse(storedUsers) : INITIAL_USERS).find((u: User) => u.id === user.id);
-                if (freshUser) setCurrentUser(freshUser);
+                try {
+                    const user = JSON.parse(storedUser);
+                    const freshUser = (storedUsers ? JSON.parse(storedUsers) : INITIAL_USERS).find((u: User) => u.id === user.id);
+                    if (freshUser) {
+                        setCurrentUser(freshUser);
+                        // If user was logged in, ensure view is home
+                        if (view === 'login') {
+                            setView('home');
+                            setActiveTab('home');
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error parsing stored user:', e);
+                }
+            }
+            
+            // ========== CRITICAL FIX: Ensure guests see content ==========
+            if (!storedUser && view === 'login' && path === '/') {
+                // Guest at root path should see content, not login
+                setView('home');
+                setActiveTab('home');
             }
         }
+        
+        // Set loading to false after data is loaded
         setTimeout(() => setIsLoading(false), 800);
-    }, [isClient]);
+    }, [isClient, view, path]);
 
     // Save People You May Know and Groups data to localStorage
     useEffect(() => {
-        if (isClient) {
+        if (isClient && !isLoading) {
             localStorage.setItem('universeCurrentUser', JSON.stringify(currentUser));
             localStorage.setItem('universeUsers', JSON.stringify(users));
             localStorage.setItem('universeSongs', JSON.stringify(songs));
@@ -1387,7 +1502,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             localStorage.setItem('universeMessages', JSON.stringify(messages));
             localStorage.setItem('universeUserStatus', JSON.stringify(userStatus));
         }
-    }, [currentUser, users, songs, episodes, likedTracks, products, brands, posts, groups, notifications, messages, userStatus, isClient]);
+    }, [currentUser, users, songs, episodes, likedTracks, products, brands, posts, groups, notifications, messages, userStatus, isClient, isLoading]);
 
     const handleLogin = (email: string, pass: string) => {
         const user = users.find(u => u.email === email && u.password === pass);
@@ -1421,7 +1536,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             localStorage.removeItem('universeCurrentUser');
             window.history.pushState({}, '', '/');
         }
-        setView('login');
+        // Keep guests on home page to see content
+        setView('home');
+        setActiveTab('home');
         setCurrentAudioTrack(null);
         setIsAudioPlaying(false);
     };
@@ -1432,6 +1549,17 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleNavigate = (targetView: string) => {
+        // Check if login is required for this view
+        const requiresLogin = [
+            'profile', 'create_event', 'create_post', 'create_story', 
+            'create_reel', 'marketplace_create', 'messages'
+        ].includes(targetView);
+        
+        if (requiresLogin && !currentUser) {
+            setView('login');
+            return;
+        }
+        
         if (isClient) {
             const pathMap: { [key: string]: string } = {
                 home: '/',
@@ -1798,6 +1926,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     
     // Function to handle message icon click in UserProfile
     const handleMessageIconClick = (userId: number) => {
+        if (!currentUser) {
+            setView('login');
+            return;
+        }
         const user = users.find(u => u.id === userId);
         if (user) {
             setActiveChatUser(user);
@@ -1808,7 +1940,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     // ========== FIXED LIKE AND REACT FUNCTIONS ==========
     const handleFollowUser = (userIdToToggle: number) => {
         if (!currentUser) {
-            alert("Please login to follow users.");
+            setView('login');
             return;
         }
         const currentUserId = currentUser.id;
@@ -1881,8 +2013,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         });
         
         if (!currentUser) {
-            console.log('[DEBUG] No current user, showing alert');
-            alert("Please login to react.");
+            console.log('[DEBUG] No current user, showing login');
+            setView('login');
             return;
         }
         
@@ -1970,8 +2102,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         });
         
         if (!currentUser) {
-            console.log('[DEBUG] No current user, returning');
-            alert("Please login to comment.");
+            console.log('[DEBUG] No current user, showing login');
+            setView('login');
             return;
         }
         
@@ -2083,7 +2215,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     // FIXED: Prevent self-notifications for reel reactions
     const handleReelReact = (reelId: number, type: ReactionType | undefined) => {
-        if (!currentUser) return alert("Please login to react.");
+        if (!currentUser) {
+            setView('login');
+            return;
+        }
         setReels(prev => prev.map(reel => {
             if (reel.id === reelId) {
                 const existing = reel.reactions.find(r => r.userId === currentUser!.id);
@@ -2127,7 +2262,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         background?: string, 
         linkPreview?: LinkPreview
     ) => {
-        if (!currentUser) return;
+        if (!currentUser) {
+            setView('login');
+            return;
+        }
         
         // Handle multiple images
         let images: string[] = [];
@@ -2207,7 +2345,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     // PROFESSIONAL BRAND MANAGEMENT FUNCTIONS WITH SELF-NOTIFICATION PREVENTION
     const handleCreateBrand = (brandData: Partial<Brand>) => {
         if (!currentUser) {
-            alert("Please login to create a brand page.");
+            setView('login');
             return;
         }
         
@@ -2254,7 +2392,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         content: any
     ) => {
         if (!currentUser) {
-            alert("Please login to post as a brand.");
+            setView('login');
             return;
         }
         
@@ -2365,7 +2503,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleFollowBrand = (brandId: number) => {
-        if (!currentUser) return alert("Login to follow brands.");
+        if (!currentUser) {
+            setView('login');
+            return;
+        }
         
         setBrands(prev => prev.map(b => {
             if (b.id === brandId) {
@@ -2411,7 +2552,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleUpdateBrand = (brandId: number, updates: Partial<Brand>) => {
         if (!currentUser) {
-            alert("Please login to update brand.");
+            setView('login');
             return;
         }
         
@@ -2435,7 +2576,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleDeleteBrand = (brandId: number) => {
         if (!currentUser) {
-            alert("Please login to delete brand.");
+            setView('login');
             return;
         }
         
@@ -2469,7 +2610,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleUpdateBrandImage = (brandId: number, type: 'cover' | 'profile', file: File) => {
         if (!currentUser) {
-            alert("Please login to update brand image.");
+            setView('login');
             return;
         }
         
@@ -2515,7 +2656,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleDeletePost = (postId: number) => {
         if (!currentUser) {
-            alert("Please login to delete posts.");
+            setView('login');
             return;
         }
         
@@ -2583,7 +2724,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         console.log("Creating product with data:", productData);
         
         if (!currentUser) {
-            alert("Please login to create a product listing.");
+            setView('login');
             return;
         }
 
@@ -2643,7 +2784,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     // ========== FIXED PRODUCT INTERACTION FUNCTIONS ==========
     // ENHANCED: Handle product likes from homepage feeds
     const handleLikeProduct = (productId: number) => {
-        if (!currentUser) return alert("Please login to like products.");
+        if (!currentUser) {
+            setView('login');
+            return;
+        }
         
         setProducts(prev => prev.map(product => {
             if (product.id === productId) {
@@ -2688,7 +2832,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     // ENHANCED: Handle product comments from homepage feeds
     const handleCommentOnProduct = (productId: number, text: string) => {
-        if (!currentUser) return alert("Please login to comment on products.");
+        if (!currentUser) {
+            setView('login');
+            return;
+        }
         
         setProducts(prev => prev.map(product => {
             if (product.id === productId) {
@@ -2722,7 +2869,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleCreateStory = (storyData: Partial<Story>) => {
-        if (!currentUser) return;
+        if (!currentUser) {
+            setView('login');
+            return;
+        }
         const timestamp = Date.now();
         const newStory: Story = { 
             id: timestamp, 
@@ -2736,7 +2886,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleCreateReel = (videoFile: File, caption: string, song?: Song | { name: string, url: string }, effectName?: string) => {
-        if (!currentUser) return;
+        if (!currentUser) {
+            setView('login');
+            return;
+        }
         const timestamp = Date.now();
         const newReel: Reel = { 
             id: timestamp, 
@@ -2755,7 +2908,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleLikeStory = (storyId: number) => {
-        if (!currentUser) { alert("Please login to like stories."); return; }
+        if (!currentUser) { 
+            setView('login');
+            return; 
+        }
         setStories(prev => prev.map(s => {
             if (s.id === storyId) {
                 const reactions = s.reactions || [];
@@ -2781,7 +2937,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
     
     const handleReplyStory = (storyId: number, text: string) => {
-        if (!currentUser) { alert("Please login to reply."); return; }
+        if (!currentUser) { 
+            setView('login');
+            return; 
+        }
         setStories(prev => prev.map(s => {
             if (s.id === storyId) {
                 const replies = s.replies || [];
@@ -2805,7 +2964,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleCreateEvent = (eventData: Partial<Event>) => {
-        if (!currentUser) return;
+        if (!currentUser) {
+            setView('login');
+            return;
+        }
         const timestamp = Date.now();
         const formattedTime = formatRelativeTime(timestamp);
         const newEvent: Event = { 
@@ -2834,7 +2996,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleJoinEvent = (eventId: number) => {
-        if (!currentUser) return alert("Please login to join events.");
+        if (!currentUser) {
+            setView('login');
+            return;
+        }
         setEvents(prev => prev.map(ev => {
             if (ev.id === eventId) {
                 const isAttending = ev.attendees.includes(currentUser!.id);
@@ -2866,7 +3031,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         console.log('[DEBUG] handleShare called:', { postId, targetType, targetId, currentUserId: currentUser?.id });
         
         if (!currentUser) {
-            console.log('[DEBUG] No current user, returning');
+            console.log('[DEBUG] No current user, showing login');
+            setView('login');
             return;
         }
         
@@ -2973,7 +3139,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleFeedPost = (data: any) => {
-        if (!currentUser) return;
+        if (!currentUser) {
+            setView('login');
+            return;
+        }
         const timestamp = Date.now();
         const formattedTime = formatRelativeTime(timestamp);
         const newPost: PostType = { 
@@ -3320,7 +3489,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     // ========== MISSING FUNCTIONS ADDED ==========
     const handleDeleteSong = (songId: string) => {
         if (!currentUser || !isAdmin) {
-            alert("Only admins can delete songs");
+            setView('login');
             return;
         }
         
@@ -3333,7 +3502,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleDeleteEpisode = (episodeId: string) => {
         if (!currentUser || !isAdmin) {
-            alert("Only admins can delete episodes");
+            setView('login');
             return;
         }
         
@@ -3378,7 +3547,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     
     // ========== ENHANCED GROUP FUNCTIONS WITH SELF-NOTIFICATION PREVENTION ==========
     const handleGroupComment = (groupId: string, postId: number, text: string, attachment?: any, parentId?: number) => {
-        if (!currentUser) return;
+        if (!currentUser) {
+            setView('login');
+            return;
+        }
         
         const timestamp = Date.now();
         const formattedTime = formatRelativeTime(timestamp);
@@ -3447,7 +3619,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleInviteToGroup = (groupId: string, userIds: number[]) => {
-        if (!currentUser) return;
+        if (!currentUser) {
+            setView('login');
+            return;
+        }
         
         setGroups(prev => prev.map(g => 
             g.id === groupId 
@@ -3476,7 +3651,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleJoinGroup = (groupId: string) => { 
-        if (!currentUser) return; 
+        if (!currentUser) {
+            setView('login');
+            return;
+        }
+        
         setGroups(prev => prev.map(g => 
             (g.id === groupId && !g.members.includes(currentUser.id)) 
                 ? { 
@@ -3503,7 +3682,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
     
     const handleLeaveGroup = (groupId: string) => { 
-        if (!currentUser) return; 
+        if (!currentUser) {
+            setView('login');
+            return;
+        }
+        
         setGroups(prev => prev.map(g => 
             (g.id === groupId) 
                 ? { ...g, members: g.members.filter(id => id !== currentUser!.id) } 
@@ -3512,7 +3695,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
     
     const handleDeleteGroup = (groupId: string) => { 
-        if (!currentUser) return; 
+        if (!currentUser) {
+            setView('login');
+            return;
+        }
+        
         const group = groups.find(g => g.id === groupId); 
         if (group && (group.adminId === currentUser.id || isAdmin)) { 
             if (window.confirm("Are you sure you want to permanently delete this group?")) { 
@@ -3537,7 +3724,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     
     // FIXED: Prevent self-notifications in group posts
     const handlePostToGroup = (groupId: string, content: string, files: File[] | null, type: any, background?: string) => { 
-        if (!currentUser) return;
+        if (!currentUser) {
+            setView('login');
+            return;
+        }
         
         // Handle multiple images
         let images: string[] = [];
@@ -3621,7 +3811,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
     
     const handleCreateGroupEvent = (groupId: string, eventData: Partial<Event>) => {
-        if (!currentUser) return;
+        if (!currentUser) {
+            setView('login');
+            return;
+        }
         const timestamp = Date.now();
         const formattedTime = formatRelativeTime(timestamp);
         const newEvent: Event = { 
@@ -3666,7 +3859,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     
     // FIXED: Prevent self-notifications in group shares
     const handleGroupShare = (groupId: string, postId: number, targetType: 'profile' | 'group' | 'brand', targetId?: string | number, extraCaption?: string) => {
-        if (!currentUser) return;
+        if (!currentUser) {
+            setView('login');
+            return;
+        }
         
         // Find the group post
         const group = groups.find(g => g.id === groupId);
@@ -3731,7 +3927,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
     
     const handleCreateGroup = (groupData: Partial<Group>) => {
-        if (!currentUser) return;
+        if (!currentUser) {
+            setView('login');
+            return;
+        }
+        
         const timestamp = Date.now();
         const newGroup: Group = { 
             ...groupData, 
@@ -3766,7 +3966,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     
     // FIXED: Prevent self-notifications for group post reactions
     const handleReactGroupPost = (groupId: string, postId: number, type: ReactionType) => { 
-        if (!currentUser) return; 
+        if (!currentUser) {
+            setView('login');
+            return;
+        }
+        
         setGroups(prev => prev.map(g => {
             if (g.id === groupId) {
                 const updatedPosts = g.posts.map(p => {
@@ -3955,7 +4159,17 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         };
     }, [currentUser, users]);
 
-    const effectiveView = isClient ? view : (initialData?.view || parsedPath.view);
+    // ========== CRITICAL FIX: Ensure guests see content on reload ==========
+    useEffect(() => {
+        if (isClient && !isLoading) {
+            // If guest is on login view but at root path, show them content
+            if (!currentUser && view === 'login' && (path === '/' || path === '')) {
+                console.log('Guest at root path - showing content instead of login');
+                setView('home');
+                setActiveTab('home');
+            }
+        }
+    }, [isClient, isLoading, currentUser, view, path]);
     
     // Function to render music/podcast posts
     const renderMusicPost = (post: PostType, author: any) => {
@@ -3969,11 +4183,19 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 currentUser={currentUser}
                 users={users}
                 onPlayTrack={handlePlayTrack}
-                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
+                onProfileClick={(id) => { 
+                    if (!currentUser) {
+                        setView('login');
+                    } else {
+                        setSelectedUserId(id); 
+                        setView('profile'); 
+                    }
+                }}
                 onLikeTrack={handleLikeTrack}
                 onTrackComment={handleTrackComment}
                 onTrackShare={handleTrackShare}
                 isLiked={likedTracks.includes(song.id)}
+                showLoginPrompt={() => setView('login')}
             />
         );
     };
@@ -3999,6 +4221,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 currentUser={currentUser} 
                 users={users} 
                 onProfileClick={(id) => { 
+                    if (!currentUser) {
+                        setView('login');
+                        return;
+                    }
                     if (isBrandAuthor) {
                         setActiveBrandId(id);
                         handleNavigate('brand_view');
@@ -4010,7 +4236,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 onReact={handleReact} 
                 onShare={(id) => setActiveSharePostId(id)} 
                 onViewImage={(url) => setFullScreenImage(url)} 
-                onOpenComments={(postId) => setActiveCommentsPostId(postId)} 
+                onOpenComments={(postId) => {
+                    if (!currentUser) {
+                        setView('login');
+                    } else {
+                        setActiveCommentsPostId(postId);
+                    }
+                }} 
                 onVideoClick={(p) => { setActiveReelId(p.id - 200000); setView('reels'); }} 
                 onViewProduct={(p) => setActiveProduct(p)} 
                 onGroupClick={(groupId) => { setInitialGroupIdToView(groupId); setView('groups'); setActiveTab('groups'); }} 
@@ -4020,118 +4252,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 onHashtagClick={handleTagClick} 
                 onDeletePost={handleDeletePost} 
                 isAdmin={isAdmin}
+                showLoginPrompt={() => setView('login')}
             />
         );
-    };
-    
-    // Function to render feed with People You May Know and Groups You May Like at intervals
-    const renderFeedWithSuggestions = () => {
-        const peopleIntervals = [5, 20, 45]; // Show People You May Know after 5th, 20th, and 45th posts
-        const groupIntervals = [8, 25]; // Show Groups You May Like after 8th and 25th posts
-        const brandIntervals = [12, 30, 55]; // Show Brand Recommendations after 12th, 30th, and 55th posts
-        let postCount = 0;
-        let peopleIndex = 0;
-        let groupIndex = 0;
-        let brandIndex = 0;
-        const renderedItems = [];
-        
-        for (const post of rankedPosts) {
-            renderedItems.push(renderPostItem(post));
-            postCount++;
-            
-            // Check if we should show People You May Know after this post
-            if (peopleIntervals.includes(postCount) && suggestedUsers.length > 0 && currentUser) {
-                // Get a rotated set of suggestions for this interval
-                const rotationKey = `people-rotation-${suggestionRotation}-interval-${peopleIndex}`;
-                const rotatedSuggestions = getIntelligentSuggestions(currentUser, users, suggestionRotation + peopleIndex);
-                
-                if (rotatedSuggestions.length > 0) {
-                    renderedItems.push(
-                        <PeopleYouMayKnow 
-                            key={rotationKey}
-                            suggestedUsers={rotatedSuggestions}
-                            onViewProfile={(userId) => {
-                                handleViewProfile(userId);
-                                // Advance to next rotation when someone views a profile
-                                setSuggestionRotation(prev => prev + 1);
-                            }}
-                            onRemove={(userId) => {
-                                handleRemoveSuggestedUser(userId);
-                                // Advance to next rotation when someone is removed
-                                setSuggestionRotation(prev => prev + 1);
-                            }}
-                        />
-                    );
-                }
-                peopleIndex++;
-            }
-            
-            // Check if we should show Groups You May Like after this post
-            if (groupIntervals.includes(postCount) && suggestedGroups.length > 0 && currentUser) {
-                // Get a rotated set of group suggestions for this interval
-                const groupRotationKey = `group-rotation-${groupRotation}-interval-${groupIndex}`;
-                const rotatedGroupSuggestions = getIntelligentGroupSuggestions(currentUser, groups, groupRotation + groupIndex);
-                
-                if (rotatedGroupSuggestions.length > 0) {
-                    renderedItems.push(
-                        <GroupsYouMayLike 
-                            key={groupRotationKey}
-                            suggestedGroups={rotatedGroupSuggestions}
-                            currentUser={currentUser}
-                            onViewGroup={handleViewGroup}
-                            onJoinGroup={handleJoinGroup}
-                            onRemove={handleRemoveSuggestedGroup}
-                        />
-                    );
-                }
-                groupIndex++;
-            }
-            
-            // Check if we should show Brand Recommendations after this post
-            if (brandIntervals.includes(postCount) && brands.length > 0 && currentUser) {
-                // Get a rotated set of brand recommendations for this interval
-                const brandRotationKey = `brand-rotation-${brandRotation}-interval-${brandIndex}`;
-                const rotatedBrandRecommendations = getIntelligentBrandRecommendations(currentUser, brands, brandRotation + brandIndex);
-                
-                if (rotatedBrandRecommendations.length > 0) {
-                    renderedItems.push(
-                        <BrandRecommendations 
-                            key={brandRotationKey}
-                            brands={rotatedBrandRecommendations}
-                            currentUser={currentUser}
-                            onViewBrand={(brandId) => {
-                                handleViewBrand(brandId);
-                                setBrandRotation(prev => prev + 1);
-                            }}
-                            onRemove={handleRemoveBrandRecommendation}
-                        />
-                    );
-                }
-                brandIndex++;
-            }
-        }
-        
-        return renderedItems;
-    };
-    
-    // Helper function to render individual post
-    const renderPostItem = (post: PostType) => {
-        const author = getAuthorForPost(post, users, brands);
-        if (!author) return null;
-        
-        let isFollowing = false;
-        if (author.type === 'user' && currentUser) {
-            isFollowing = currentUser.following.includes(author.id);
-        } else if (author.type === 'brand' && currentUser) {
-            const brand = brands.find(b => b.id === author.id);
-            isFollowing = brand ? brand.followers.includes(currentUser.id) : false;
-        }
-        
-        if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
-            return renderMusicPost(post, author);
-        }
-        
-        return renderRegularPost(post, author, isFollowing);
     };
     
     // Function to render the main feed - FIXED to show to everyone
@@ -4139,7 +4262,24 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         return (
             <>
                 {/* Feed posts - VISIBLE TO EVERYONE (logged-in and non-logged-in) */}
-                {rankedPosts.map(post => renderPostItem(post))}
+                {rankedPosts.map(post => {
+                    const author = getAuthorForPost(post, users, brands);
+                    if (!author) return null;
+                    
+                    let isFollowing = false;
+                    if (author.type === 'user' && currentUser) {
+                        isFollowing = currentUser.following.includes(author.id);
+                    } else if (author.type === 'brand' && currentUser) {
+                        const brand = brands.find(b => b.id === author.id);
+                        isFollowing = brand ? brand.followers.includes(currentUser.id) : false;
+                    }
+                    
+                    if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
+                        return renderMusicPost(post, author);
+                    }
+                    
+                    return renderRegularPost(post, author, isFollowing);
+                })}
                 
                 {/* Additional recommendations for logged-in users only */}
                 {currentUser && (
@@ -4173,6 +4313,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         );
     };
     
+    // ========== CRITICAL FIX: Determine what to render ==========
+    // Guests should see content, not login screen (unless explicitly on login)
+    const showLoginScreen = view === 'login' && !currentUser;
+    const showMainApp = !showLoginScreen || currentUser;
+    
     return (
         <div className="bg-[#18191A] min-h-screen flex flex-col font-sans">
             {isLoading ? (
@@ -4180,13 +4325,15 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     <div className="w-20 h-20 border-4 border-[#1877F2] border-t-transparent rounded-full animate-spin mb-4"></div>
                     <div className="text-[#1877F2] font-bold text-xl animate-pulse">Loading UNERA...</div>
                 </div>
-            ) : effectiveView === 'login' ? (
-                 showRegister 
+            ) : showLoginScreen ? (
+                // Show login/register only if view is 'login' AND user is not logged in
+                showRegister 
                     ? <Register onRegister={handleRegister} onBackToLogin={() => { setShowRegister(false); setShowForgotPassword(false); }} /> 
                     : showForgotPassword
                     ? <ForgotPassword onBackToLogin={() => { setShowForgotPassword(false); setShowRegister(false); }} />
                     : <Login onLogin={handleLogin} onNavigateToRegister={() => { setShowRegister(true); setShowForgotPassword(false); }} onNavigateToForgotPassword={() => { setShowForgotPassword(true); setShowRegister(false); }} onClose={() => { setView('home'); setCurrentUser(null); }} error={loginError} />
             ) : (
+                // ========== MAIN APP LAYOUT - FOR BOTH GUESTS AND LOGGED-IN USERS ==========
                 <>
                     {currentAudioTrack && (
                         <GlobalAudioPlayer 
@@ -4203,9 +4350,18 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             onArtistClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
                         />
                     )}
+                    
+                    {/* Header - Shows for both guests and logged-in users */}
                     <Header 
                         onHomeClick={() => handleNavigate('home')} 
-                        onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                        onProfileClick={(id) => { 
+                            if (!currentUser) {
+                                setView('login');
+                            } else {
+                                setSelectedUserId(id); 
+                                setView('profile');
+                            }
+                        }} 
                         onReelsClick={() => handleNavigate('reels')} 
                         onMarketplaceClick={() => handleNavigate('marketplace')} 
                         onGroupsClick={() => handleNavigate('groups')} 
@@ -4219,66 +4375,108 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                         activeTab={activeTab} 
                         onNavigate={handleNavigate} 
                         onMessageClick={(userId) => {
-                            const user = users.find(u => u.id === userId);
-                            if (user) {
-                                setActiveChatUser(user);
+                            if (!currentUser) {
+                                setView('login');
+                            } else {
+                                const user = users.find(u => u.id === userId);
+                                if (user) {
+                                    setActiveChatUser(user);
+                                }
                             }
                         }}
                     />
+                    
                     <div className="flex justify-center w-full max-w-[1920px] mx-auto relative flex-1">
-                        <div className="sticky top-14 h-[calc(100vh-56px)] z-20 hidden lg:block">
-                            <Sidebar 
-                                currentUser={currentUser || INITIAL_USERS[0]} 
-                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
-                                onReelsClick={() => handleNavigate('reels')} 
-                                onMarketplaceClick={() => handleNavigate('marketplace')} 
-                                onGroupsClick={() => handleNavigate('groups')} 
-                            />
-                        </div>
+                        {/* Sidebar - Hidden for guests on mobile, shown for logged-in */}
+                        {currentUser && (
+                            <div className="sticky top-14 h-[calc(100vh-56px)] z-20 hidden lg:block">
+                                <Sidebar 
+                                    currentUser={currentUser || INITIAL_USERS[0]} 
+                                    onProfileClick={(id) => { 
+                                        if (!currentUser) {
+                                            setView('login');
+                                        } else {
+                                            setSelectedUserId(id); 
+                                            setView('profile'); 
+                                        }
+                                    }} 
+                                    onReelsClick={() => handleNavigate('reels')} 
+                                    onMarketplaceClick={() => handleNavigate('marketplace')} 
+                                    onGroupsClick={() => handleNavigate('groups')} 
+                                />
+                            </div>
+                        )}
+                        
                         <div className="w-full lg:w-[740px] xl:w-[700px] min-h-screen">
-                            {effectiveView === 'home' && (
+                            {view === 'home' && (
                                 <div className="w-full pt-4 md:px-8 pb-10">
+                                    {/* Stories - Visible to everyone */}
                                     <StoryReel 
                                         stories={storiesWithUsers} 
-                                        onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
-                                        onCreateStory={() => currentUser ? setShowCreateStoryModal(true) : setView('login')} 
+                                        onProfileClick={(id) => { 
+                                            if (!currentUser) {
+                                                setView('login');
+                                            } else {
+                                                setSelectedUserId(id); 
+                                                setView('profile');
+                                            }
+                                        }} 
+                                        onCreateStory={() => {
+                                            if (!currentUser) {
+                                                setView('login');
+                                            } else {
+                                                setShowCreateStoryModal(true);
+                                            }
+                                        }} 
                                         onViewStory={(s) => setActiveStory(s)} 
                                         currentUser={currentUser} 
                                         onRequestLogin={() => setView('login')} 
                                     />
                                     
+                                    {/* Create Post - Different for guests vs logged-in */}
+                                    {currentUser ? (
+                                        <CreatePost 
+                                            currentUser={currentUser} 
+                                            onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                            onClick={() => setShowCreatePostModal(true)} 
+                                            onCreateEventClick={() => setShowCreateEventModal(true)} 
+                                        />
+                                    ) : (
+                                        <GuestCreatePost onSignUp={() => setView('login')} />
+                                    )}
+                                    
+                                    {/* People You May Know - Only for logged-in users */}
+                                    {currentUser && suggestedUsers.length > 0 && (
+                                        <PeopleYouMayKnow 
+                                            suggestedUsers={suggestedUsers}
+                                            onViewProfile={(userId) => {
+                                                handleViewProfile(userId);
+                                                setSuggestionRotation(prev => prev + 1);
+                                            }}
+                                            onRemove={(userId) => {
+                                                handleRemoveSuggestedUser(userId);
+                                                setSuggestionRotation(prev => prev + 1);
+                                            }}
+                                        />
+                                    )}
+                                    
+                                    {/* Suggested Products Widget - Only for logged-in users */}
                                     {currentUser && (
-                                        <> 
-                                            <CreatePost 
-                                                currentUser={currentUser} 
-                                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
-                                                onClick={() => setShowCreatePostModal(true)} 
-                                                onCreateEventClick={() => setShowCreateEventModal(true)} 
-                                            /> 
-                                            
-                                            {/* People You May Know Section - Only for logged-in users */}
-                                            {suggestedUsers.length > 0 && (
-                                                <PeopleYouMayKnow 
-                                                    suggestedUsers={suggestedUsers}
-                                                    onViewProfile={(userId) => {
-                                                        handleViewProfile(userId);
-                                                        setSuggestionRotation(prev => prev + 1);
-                                                    }}
-                                                    onRemove={(userId) => {
-                                                        handleRemoveSuggestedUser(userId);
-                                                        setSuggestionRotation(prev => prev + 1);
-                                                    }}
-                                                />
-                                            )}
-                                            
-                                            {/* Suggested Products Widget - Only for logged-in users */}
-                                            <SuggestedProductsWidget 
-                                                products={products} 
-                                                currentUser={currentUser} 
-                                                onViewProduct={(p) => { setActiveProduct(p); }} 
-                                                onSeeAll={() => handleNavigate('marketplace')} 
-                                            />
-                                        </>
+                                        <SuggestedProductsWidget 
+                                            products={products} 
+                                            currentUser={currentUser} 
+                                            onViewProduct={(p) => { setActiveProduct(p); }} 
+                                            onSeeAll={() => handleNavigate('marketplace')} 
+                                        />
+                                    )}
+                                    
+                                    {/* Sign Up CTA for Guests */}
+                                    {!currentUser && (
+                                        <GuestSignUpCTA 
+                                            onSignUp={() => setView('login')}
+                                            title="Join UNERA to connect with friends"
+                                            description="Sign up to see more posts, share your thoughts, and join communities."
+                                        />
                                     )}
                                     
                                     {/* Main Feed - VISIBLE TO EVERYONE */}
@@ -4286,7 +4484,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                 </div>
                             )}
                             
-                            {effectiveView === 'profile' && selectedUserId !== null && (
+                            {/* Other views... (profile, marketplace, etc.) */}
+                            {view === 'profile' && selectedUserId !== null && (
                                 <UserProfile 
                                     user={users.find(u => u.id === selectedUserId)!} 
                                     currentUser={currentUser} 
@@ -4320,7 +4519,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 }))
                                         ];
                                     })()}
-                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                    onProfileClick={(id) => { 
+                                        if (!currentUser) {
+                                            setView('login');
+                                        } else {
+                                            setSelectedUserId(id); 
+                                            setView('profile'); 
+                                        }
+                                    }} 
                                     onFollow={handleFollowUser} 
                                     onReact={handleReact} 
                                     onComment={handleComment} 
@@ -4373,11 +4579,19 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 currentUser={currentUser}
                                                 users={users}
                                                 onPlayTrack={handlePlayTrack}
-                                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
+                                                onProfileClick={(id) => { 
+                                                    if (!currentUser) {
+                                                        setView('login');
+                                                    } else {
+                                                        setSelectedUserId(id); 
+                                                        setView('profile'); 
+                                                    }
+                                                }}
                                                 onLikeTrack={handleLikeTrack}
                                                 onTrackComment={handleTrackComment}
                                                 onTrackShare={handleTrackShare}
                                                 isLiked={likedTracks.includes(song.id)}
+                                                showLoginPrompt={() => setView('login')}
                                             />
                                         );
                                     }}
@@ -4389,7 +4603,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                 />
                             )}
                             
-                            {effectiveView === 'single_post' && activeSinglePostId !== null && (
+                            {/* Other view components remain the same... */}
+                            {/* (single_post, marketplace, reels, groups, etc.) */}
+                            {view === 'single_post' && activeSinglePostId !== null && (
                                 <div className="w-full pt-4 md:px-8 pb-10">
                                     {(() => {
                                         const post = posts.find(p => p.id === activeSinglePostId);
@@ -4402,43 +4618,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                             return renderMusicPost(post, author);
                                         }
                                         
-                                        return (
-                                            <Post
-                                                key={activeSinglePostId}
-                                                post={{...post, formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())}}
-                                                author={author}
-                                                currentUser={currentUser}
-                                                users={users}
-                                                onProfileClick={(id) => { 
-                                                    if (author.type === 'brand') {
-                                                        setActiveBrandId(id);
-                                                        handleNavigate('brand_view');
-                                                    } else {
-                                                        setSelectedUserId(id); 
-                                                        setView('profile');
-                                                    }
-                                                }}
-                                                onReact={handleReact}
-                                                onShare={(id) => setActiveSharePostId(id)}
-                                                onViewImage={setFullScreenImage}
-                                                onOpenComments={setActiveCommentsPostId}
-                                                onVideoClick={() => {}}
-                                                onPlayAudioTrack={handlePlayTrack}
-                                                onFollow={author.type === 'brand' ? handleFollowBrand : handleFollowUser}
-                                                isFollowing={author.type === 'brand' && currentUser ? 
-                                                    brands.find(b => b.id === author.id)?.followers.includes(currentUser.id) || false :
-                                                    author.type === 'user' && currentUser ?
-                                                    currentUser.following.includes(author.id) : false}
-                                                onHashtagClick={handleTagClick}
-                                                onDeletePost={handleDeletePost}
-                                                isAdmin={isAdmin}
-                                            />
-                                        );
+                                        return renderRegularPost(post, author, false);
                                     })()}
                                 </div>
                             )}
                             
-                            {effectiveView === 'marketplace' && (
+                            {view === 'marketplace' && (
                                 <MarketplacePage 
                                     products={products} 
                                     currentUser={currentUser} 
@@ -4451,17 +4636,29 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                 />
                             )}
                             
-                            {effectiveView === 'reels' && (
+                            {view === 'reels' && (
                                 <ReelsFeed 
                                     reels={reels} 
                                     users={users} 
                                     currentUser={currentUser} 
                                     activeReelId={activeReelId} 
                                     onReelClick={setActiveReelId} 
-                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                    onProfileClick={(id) => { 
+                                        if (!currentUser) {
+                                            setView('login');
+                                        } else {
+                                            setSelectedUserId(id); 
+                                            setView('profile'); 
+                                        }
+                                    }} 
                                     onNavigate={handleNavigate} 
                                     onReact={handleReelReact}
                                     onShare={(reelId, type) => {
+                                        if (!currentUser) {
+                                            setView('login');
+                                            return;
+                                        }
+                                        
                                         if (type === 'feed') {
                                             const reel = reels.find(r => r.id === reelId);
                                             if (reel && currentUser) {
@@ -4508,7 +4705,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                         }
                                     }}
                                     onComment={(reelId, text) => {
-                                        if (!currentUser) return;
+                                        if (!currentUser) {
+                                            setView('login');
+                                            return;
+                                        }
+                                        
                                         const timestamp = Date.now();
                                         const formattedTime = formatRelativeTime(timestamp);
                                         const newComment = { 
@@ -4545,7 +4746,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                 />
                             )}
                             
-                            {effectiveView === 'groups' && (
+                            {view === 'groups' && (
                                 <GroupsPage 
                                     key="groups-page"
                                     groups={groups}
@@ -4561,9 +4762,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onCreateGroupEvent={handleCreateGroupEvent}
                                     onInviteToGroup={handleInviteToGroup}
                                     onProfileClick={(id) => { 
-                                        setSelectedUserId(id); 
-                                        setView('profile'); 
-                                        setActiveTab('profile');
+                                        if (!currentUser) {
+                                            setView('login');
+                                        } else {
+                                            setSelectedUserId(id); 
+                                            setView('profile'); 
+                                            setActiveTab('profile');
+                                        }
                                     }}
                                     onLikePost={handleReactGroupPost}
                                     onOpenComments={handleOpenGroupComments}
@@ -4575,7 +4780,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                 />
                             )}
                             
-                            {effectiveView === 'brands' && (
+                            {/* Other view components... */}
+                            {view === 'brands' && (
                                 <BrandsPage 
                                     currentUser={currentUser}
                                     brands={brands}
@@ -4583,28 +4789,47 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     users={users}
                                     onCreateBrand={handleCreateBrand}
                                     onFollowBrand={handleFollowBrand}
-                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
+                                    onProfileClick={(id) => { 
+                                        if (!currentUser) {
+                                            setView('login');
+                                        } else {
+                                            setSelectedUserId(id); 
+                                            setView('profile'); 
+                                        }
+                                    }}
                                     onPostAsBrand={handlePostAsBrand}
                                     onReact={handleReact}
                                     onShare={(id) => setActiveSharePostId(id)}
-                                    onOpenComments={(postId) => setActiveCommentsPostId(postId)}
+                                    onOpenComments={(postId) => {
+                                        if (!currentUser) {
+                                            setView('login');
+                                        } else {
+                                            setActiveCommentsPostId(postId);
+                                        }
+                                    }}
                                     onUpdateBrand={handleUpdateBrand}
                                     onDeleteBrand={handleDeleteBrand}
                                     onMessage={(brandId) => {
+                                        if (!currentUser) {
+                                            setView('login');
+                                            return;
+                                        }
                                         const brand = brands.find(b => b.id === brandId);
                                         if (brand && currentUser) {
                                             alert(`Messaging ${brand.name} - Feature coming soon!`);
                                         }
                                     }}
                                     onCreateEvent={(brandId, eventData) => {
-                                        if (currentUser) {
-                                            const eventWithBrand = {
-                                                ...eventData,
-                                                brandId: brandId,
-                                                brandName: brands.find(b => b.id === brandId)?.name
-                                            };
-                                            handleCreateEvent(eventWithBrand);
+                                        if (!currentUser) {
+                                            setView('login');
+                                            return;
                                         }
+                                        const eventWithBrand = {
+                                            ...eventData,
+                                            brandId: brandId,
+                                            brandName: brands.find(b => b.id === brandId)?.name
+                                        };
+                                        handleCreateEvent(eventWithBrand);
                                     }}
                                     onUpdateBrandImage={handleUpdateBrandImage}
                                     onDeletePost={handleDeletePost}
@@ -4614,51 +4839,87 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                 />
                             )}
                             
-                            {effectiveView === 'events' && (
+                            {/* Continue with other view components... */}
+                            {view === 'events' && (
                                 <EventsPage 
                                     events={events} 
                                     users={users} 
                                     currentUser={currentUser} 
                                     onJoinEvent={handleJoinEvent} 
-                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                    onProfileClick={(id) => { 
+                                        if (!currentUser) {
+                                            setView('login');
+                                        } else {
+                                            setSelectedUserId(id); 
+                                            setView('profile'); 
+                                        }
+                                    }} 
                                     onCreateEvent={() => setShowCreateEventModal(true)} 
                                 />
                             )}
                             
-                            {effectiveView === 'birthdays' && (
+                            {view === 'birthdays' && (
                                 <BirthdaysPage 
                                     users={users} 
                                     currentUser={currentUser} 
-                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                    onProfileClick={(id) => { 
+                                        if (!currentUser) {
+                                            setView('login');
+                                        } else {
+                                            setSelectedUserId(id); 
+                                            setView('profile'); 
+                                        }
+                                    }} 
                                 />
                             )}
                             
-                            {effectiveView === 'suggested_profiles' && (
+                            {view === 'suggested_profiles' && (
                                 <SuggestedProfilesPage 
                                     users={users} 
                                     currentUser={currentUser} 
                                     onFollow={handleFollowUser} 
-                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                    onProfileClick={(id) => { 
+                                        if (!currentUser) {
+                                            setView('login');
+                                        } else {
+                                            setSelectedUserId(id); 
+                                            setView('profile'); 
+                                        }
+                                    }} 
                                 />
                             )}
                             
-                            {effectiveView === 'memories' && (
+                            {view === 'memories' && (
                                 <MemoriesPage 
                                     posts={posts} 
                                     currentUser={currentUser} 
                                     users={users} 
-                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                    onProfileClick={(id) => { 
+                                        if (!currentUser) {
+                                            setView('login');
+                                        } else {
+                                            setSelectedUserId(id); 
+                                            setView('profile'); 
+                                        }
+                                    }} 
                                     onPostClick={(postId) => { setActiveSinglePostId(postId); setView('single_post'); }} 
                                 />
                             )}
                             
-                            {effectiveView === 'music' && (
+                            {view === 'music' && (
                                 <MusicSystem 
                                     songs={songs} 
                                     episodes={episodes} 
                                     currentUser={currentUser} 
                                     onPlayTrack={handlePlayTrack} 
-                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                    onProfileClick={(id) => { 
+                                        if (!currentUser) {
+                                            setView('login');
+                                        } else {
+                                            setSelectedUserId(id); 
+                                            setView('profile'); 
+                                        }
+                                    }} 
                                     onDeleteSong={handleDeleteSong} 
                                     onDeleteEpisode={handleDeleteEpisode} 
                                     likedTracks={likedTracks} 
@@ -4670,20 +4931,20 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                 />
                             )}
                             
-                            {effectiveView === 'tools' && (
+                            {view === 'tools' && (
                                 <ToolsPage 
                                     currentUser={currentUser} 
                                     onNavigate={handleNavigate} 
                                 />
                             )}
                             
-                            {effectiveView === 'help_support' && (
+                            {view === 'help_support' && (
                                 <HelpSupportPage 
                                     currentUser={currentUser} 
                                 />
                             )}
                             
-                            {effectiveView === 'settings' && (
+                            {view === 'settings' && (
                                 <SettingsPage 
                                     currentUser={currentUser} 
                                     onUpdateUser={(updates) => { 
@@ -4697,30 +4958,45 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                 />
                             )}
                             
-                            {effectiveView === 'privacy_policy' && (
+                            {view === 'privacy_policy' && (
                                 <PrivacyPolicyPage />
                             )}
                             
-                            {effectiveView === 'terms_of_service' && (
+                            {view === 'terms_of_service' && (
                                 <TermsOfServicePage />
                             )}
                         </div>
-                        <div className="sticky top-14 h-[calc(100vh-56px)] z-20 hidden xl:block pl-4">
-                            <RightSidebar 
-                                contacts={users.filter(u => u.id !== currentUser?.id)} 
-                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
-                                onMessageClick={(userId) => {
-                                    const user = users.find(u => u.id === userId);
-                                    if (user) {
-                                        setActiveChatUser(user);
-                                    }
-                                }}
-                                getUserStatus={getUserStatus}
-                            />
-                        </div>
+                        
+                        {/* Right Sidebar - Only for logged-in users */}
+                        {currentUser && (
+                            <div className="sticky top-14 h-[calc(100vh-56px)] z-20 hidden xl:block pl-4">
+                                <RightSidebar 
+                                    contacts={users.filter(u => u.id !== currentUser?.id)} 
+                                    onProfileClick={(id) => { 
+                                        if (!currentUser) {
+                                            setView('login');
+                                        } else {
+                                            setSelectedUserId(id); 
+                                            setView('profile'); 
+                                        }
+                                    }} 
+                                    onMessageClick={(userId) => {
+                                        if (!currentUser) {
+                                            setView('login');
+                                        } else {
+                                            const user = users.find(u => u.id === userId);
+                                            if (user) {
+                                                setActiveChatUser(user);
+                                            }
+                                        }
+                                    }}
+                                    getUserStatus={getUserStatus}
+                                />
+                            </div>
+                        )}
                     </div>
                     
-                    {/* Modals */}
+                    {/* Modals (only for logged-in users) */}
                     {showCreatePostModal && currentUser && (
                         <CreatePostModal 
                             currentUser={currentUser} 
@@ -4756,16 +5032,16 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                         />
                     )}
                     
-                    {/* Chat Window with FIXED message passing */}
+                    {/* Chat Window */}
                     {activeChatUser && currentUser && (
                         <ChatWindow 
-                            key={`chat-${currentUser.id}-${activeChatUser.id}`} // Add key to force re-render
+                            key={`chat-${currentUser.id}-${activeChatUser.id}`}
                             currentUser={currentUser}
                             recipient={activeChatUser}
                             messages={messages.filter(msg => 
                                 (msg.senderId === currentUser.id && msg.receiverId === activeChatUser.id) ||
                                 (msg.senderId === activeChatUser.id && msg.receiverId === currentUser.id)
-                            ).sort((a, b) => a.timestamp - b.timestamp)} // Sort by timestamp ascending
+                            ).sort((a, b) => a.timestamp - b.timestamp)}
                             onClose={() => {
                                 console.log('[DEBUG] Closing chat window');
                                 setActiveChatUser(null);
@@ -4776,71 +5052,30 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             onTyping={handleTyping}
                             onMarkAsRead={handleMarkAsRead}
                             getUserStatus={getUserStatus}
-                            gifApiKey="YOUR_GIPHY_API_KEY" // Add your GIPHY API key here
+                            gifApiKey="YOUR_GIPHY_API_KEY"
                         />
                     )}
                     
-                    {/* Regular Post Comments Modal */}
-                    {activeCommentsPostId && (
+                    {/* Comments Sheet */}
+                    {activeCommentsPostId && currentUser && (
                         <CommentsSheet 
                             post={posts.find(p => p.id === activeCommentsPostId)!} 
-                            currentUser={currentUser || INITIAL_USERS[0]} 
+                            currentUser={currentUser} 
                             users={users} 
                             onClose={() => setActiveCommentsPostId(null)} 
                             onComment={handleComment} 
                             onLikeComment={() => {}} 
                             getCommentAuthor={(id) => users.find(u => u.id === id)} 
-                            onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); setActiveCommentsPostId(null); }} 
+                            onProfileClick={(id) => { 
+                                setSelectedUserId(id); 
+                                setView('profile'); 
+                                setActiveCommentsPostId(null); 
+                            }} 
                         />
                     )}
                     
-                    {/* Group Post Comments Modal */}
-                    {activeGroupComments && (
-                        (() => {
-                            const { groupId, postId } = activeGroupComments;
-                            const group = groups.find(g => g.id === groupId);
-                            const groupPost = group?.posts.find(p => p.id === postId);
-                            
-                            if (group && groupPost) {
-                                const postForComments: PostType = {
-                                    id: groupPost.id,
-                                    authorId: groupPost.authorId,
-                                    content: groupPost.content || '',
-                                    images: groupPost.images,
-                                    video: groupPost.video,
-                                    timestamp: groupPost.timestamp,
-                                    formattedTime: groupPost.formattedTime || formatRelativeTime(groupPost.timestamp),
-                                    createdAt: groupPost.timestamp,
-                                    reactions: groupPost.reactions || [],
-                                    comments: groupPost.comments || [],
-                                    shares: groupPost.shares || 0,
-                                    views: 0,
-                                    type: groupPost.video ? 'video' : (groupPost.images ? 'image' : 'text'),
-                                    visibility: 'Public',
-                                    groupId: groupId,
-                                    groupName: group.name
-                                };
-                                
-                                return (
-                                    <CommentsSheet 
-                                        post={postForComments}
-                                        currentUser={currentUser || INITIAL_USERS[0]}
-                                        users={users}
-                                        onClose={() => setActiveGroupComments(null)}
-                                        onComment={(postId, text, attachment) => handleGroupComment(groupId, postId, text, attachment)}
-                                        onLikeComment={() => {}}
-                                        getCommentAuthor={(id) => users.find(u => u.id === id)}
-                                        onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); setActiveGroupComments(null); }}
-                                        title={`Comments from ${group.name}`}
-                                    />
-                                );
-                            }
-                            return null;
-                        })()
-                    )}
-                    
-                    {/* Regular Post Share Modal */}
-                    {activeSharePostId && (
+                    {/* Share Sheet */}
+                    {activeSharePostId && currentUser && (
                         <ShareSheet 
                             currentUser={currentUser} 
                             groups={groups} 
@@ -4852,35 +5087,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                         />
                     )}
                     
-                    {/* Group Post Share Modal */}
-                    {activeGroupShare && (
-                        (() => {
-                            const { groupId, postId } = activeGroupShare;
-                            const group = groups.find(g => g.id === groupId);
-                            
-                            if (group) {
-                                return (
-                                    <ShareSheet 
-                                        currentUser={currentUser} 
-                                        groups={groups.filter(g => g.id !== groupId)} // Don't show current group
-                                        brands={brands} 
-                                        postId={postId} 
-                                        onClose={() => setActiveGroupShare(null)} 
-                                        onShare={(type, id, caption) => handleGroupShare(groupId, postId, type, id, caption)} 
-                                        onCopyLink={() => { 
-                                            if(isClient) { 
-                                                navigator.clipboard.writeText(`https://unera.social/groups/${groupId}/posts/${postId}`); 
-                                                alert("Link copied!"); 
-                                            } 
-                                        }}
-                                        title={`Share post from ${group.name}`}
-                                    />
-                                );
-                            }
-                            return null;
-                        })()
-                    )}
-                    
+                    {/* Story Viewer */}
                     {activeStory && (
                         <StoryViewer 
                             story={activeStory} 
@@ -4896,17 +5103,20 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             isFollowing={currentUser ? currentUser.following.includes(activeStory.userId) : false} 
                         />
                     )}
+                    
+                    {/* Product Detail Modal */}
                     {activeProduct && (
                         <ProductDetailModal 
                             product={activeProduct} 
                             currentUser={currentUser} 
                             onClose={() => setActiveProduct(null)} 
                             onMessage={(sid) => setActiveChatUser(users.find(u => u.id === sid) || null)} 
-                            // Add product interaction handlers
                             onLike={() => handleLikeProduct(activeProduct.id)}
                             onComment={(text) => handleCommentOnProduct(activeProduct.id, text)}
                         />
                     )}
+                    
+                    {/* Image Viewer */}
                     {fullScreenImage && (
                         <ImageViewer 
                             imageUrl={fullScreenImage} 
