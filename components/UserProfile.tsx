@@ -1,5 +1,4 @@
 
-
 import React, { useState, useRef, useEffect } from 'react';
 import { User, Post as PostType, ReactionType, Reel, AudioTrack, Song, Episode } from '../types';
 import { CreatePost, Post, CreatePostModal } from './Feed';
@@ -92,6 +91,16 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClose, onSa
     );
 };
 
+// Add this interface for message notifications
+interface MessageNotification {
+    count: number;
+    lastMessage?: {
+        content: string;
+        timestamp: number;
+        senderId: number;
+    };
+}
+
 interface UserProfileProps {
     user: User;
     currentUser: User | null; // Allow null
@@ -136,6 +145,18 @@ interface UserProfileProps {
     // Render functions for different post types
     renderMusicPost?: (post: PostType, author: any) => React.ReactNode;
     renderRegularPost?: (post: PostType, author: any, isFollowing?: boolean) => React.ReactNode;
+    
+    // Message-related props
+    unreadMessageCount?: number;
+    onOpenMessages?: () => void; // New prop to open messages
+    recentMessages?: Array<{
+        userId: number;
+        userName: string;
+        userImage: string;
+        lastMessage: string;
+        timestamp: number;
+        unread: boolean;
+    }>;
 }
 
 // Helper function to get song for post
@@ -230,11 +251,17 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     onTrackComment,
     onTrackShare,
     renderMusicPost,
-    renderRegularPost
+    renderRegularPost,
+    
+    // Message-related props
+    unreadMessageCount = 0,
+    onOpenMessages,
+    recentMessages = []
 }) => {
     const [activeTab, setActiveTab] = useState('Posts');
     const [showCreatePostModal, setShowCreatePostModal] = useState(false);
     const [showEditProfile, setShowEditProfile] = useState(false);
+    const [showMessagesPreview, setShowMessagesPreview] = useState(false);
     
     const userPosts = posts.filter(post => post.authorId === user.id);
     const userReels = reels.filter(reel => reel.userId === user.id);
@@ -253,6 +280,21 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     const totalShares = userPosts.reduce((acc, curr) => acc + curr.shares, 0) + userReels.reduce((acc, curr) => acc + curr.shares, 0);
     const totalComments = userPosts.reduce((acc, curr) => acc + curr.comments.length, 0) + userReels.reduce((acc, curr) => acc + curr.comments.length, 0);
     const totalEngagement = totalLikes + totalComments + totalShares;
+
+    // Format time for messages
+    const formatMessageTime = (timestamp: number) => {
+        const date = new Date(timestamp);
+        const now = new Date();
+        const diffMs = now.getTime() - date.getTime();
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        
+        if (diffMins < 60) return `${diffMins}m`;
+        if (diffHours < 24) return `${diffHours}h`;
+        if (diffDays < 7) return `${diffDays}d`;
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    };
 
     // Function to render music/podcast posts
     const renderMusicPostDefault = (post: PostType, author: any) => {
@@ -543,6 +585,74 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                                     <h2 className="text-[#E4E6EB] font-bold text-lg">Professional Dashboard</h2>
                                     <span className="text-[#B0B3B8] text-xs bg-[#3A3B3C] px-2 py-1 rounded border border-[#3E4042]">Private to you</span>
                                 </div>
+                                
+                                {/* Message Icon with Notification Badge - PRIVATE AREA */}
+                                <div className="mb-4">
+                                    <div 
+                                        className="flex items-center justify-between p-3 bg-[#3A3B3C] rounded-lg border border-[#3E4042] hover:bg-[#4E4F50] cursor-pointer transition-colors"
+                                        onClick={() => {
+                                            if (onOpenMessages) {
+                                                onOpenMessages();
+                                            }
+                                        }}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="relative">
+                                                <i className="fas fa-envelope text-xl text-[#1877F2]"></i>
+                                                {unreadMessageCount > 0 && (
+                                                    <span className="absolute -top-2 -right-2 bg-[#F02849] text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                                                        {unreadMessageCount > 99 ? '99+' : unreadMessageCount}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <h3 className="text-[#E4E6EB] font-semibold">Messages</h3>
+                                                <p className="text-[#B0B3B8] text-sm">
+                                                    {unreadMessageCount 
+                                                        ? `${unreadMessageCount} unread message${unreadMessageCount > 1 ? 's' : ''}`
+                                                        : 'No new messages'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <i className="fas fa-chevron-right text-[#B0B3B8]"></i>
+                                    </div>
+                                    
+                                    {/* Recent Messages Preview */}
+                                    {recentMessages.length > 0 && (
+                                        <div className="mt-2 ml-3 pl-3 border-l border-[#3E4042]">
+                                            {recentMessages.slice(0, 3).map((msg, index) => (
+                                                <div 
+                                                    key={index} 
+                                                    className="flex items-center gap-2 p-2 rounded hover:bg-[#3A3B3C] cursor-pointer"
+                                                    onClick={() => onMessage(msg.userId)}
+                                                >
+                                                    <img 
+                                                        src={msg.userImage} 
+                                                        alt={msg.userName}
+                                                        className="w-8 h-8 rounded-full"
+                                                    />
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-[#E4E6EB] text-sm font-medium truncate">
+                                                                {msg.userName}
+                                                            </span>
+                                                            <span className="text-[#B0B3B8] text-xs">
+                                                                {formatMessageTime(msg.timestamp)}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-[#B0B3B8] text-xs truncate">
+                                                            {msg.lastMessage}
+                                                        </p>
+                                                    </div>
+                                                    {msg.unread && (
+                                                        <div className="w-2 h-2 bg-[#1877F2] rounded-full"></div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="bg-[#3A3B3C] p-3 rounded-lg border border-[#3E4042]">
                                         <div className="text-[#B0B3B8] text-xs font-medium mb-1">Total Views</div>
@@ -677,9 +787,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                             <div className="flex flex-col sm:flex-row items-center gap-2 mt-4 md:mt-0 md:mb-6">
                                 {isCurrentUser ? (
                                     <>
-                                        <button className="bg-[#1877F2] text-white px-4 py-2 rounded-md font-semibold flex items-center gap-2 hover:bg-[#166FE5] transition-colors">
-                                            <i className="fas fa-plus"></i><span>Add to story</span>
-                                        </button>
+                                        {/* REMOVED "Add to story" button */}
                                         <button className="bg-[#3A3B3C] text-[#E4E6EB] px-4 py-2 rounded-md font-semibold flex items-center gap-2 hover:bg-[#4E4F50] transition-colors" onClick={() => setShowEditProfile(true)}>
                                             <i className="fas fa-pen"></i><span>Edit profile</span>
                                         </button>
