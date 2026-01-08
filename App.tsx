@@ -701,7 +701,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const [showForgotPassword, setShowForgotPassword] = useState(false);
     const [loginError, setLoginError] = useState('');
     
-    // ========== MESSAGING STATES ==========
+    // ========== ENHANCED MESSAGING STATES ==========
     const [messages, setMessages] = useState<Message[]>([
         {
             id: '1',
@@ -729,13 +729,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             timestamp: Date.now() - 900000,
             status: 'delivered' as const,
             formattedTime: formatRelativeTime(Date.now() - 900000),
-            attachment: {
+            attachments: [{
                 id: 'att1',
                 type: 'document' as const,
                 url: 'https://example.com/document.pdf',
                 name: 'Project_Updates.pdf',
                 size: '2.5 MB'
-            }
+            }]
         },
         {
             id: '4',
@@ -766,6 +766,57 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             formattedTime: formatRelativeTime(Date.now() - 120000)
         }
     ]);
+    
+    // Track unread message counts for each user
+    const [unreadMessageCounts, setUnreadMessageCounts] = useState<Record<number, number>>(() => {
+        const counts: Record<number, number> = {};
+        // Initialize with sample unread counts
+        counts[1] = 3; // Current user (id: 1) has 3 unread messages
+        return counts;
+    });
+    
+    // Track recent conversations
+    const [recentConversations, setRecentConversations] = useState<Array<{
+        userId: number;
+        userName: string;
+        userImage: string;
+        lastMessage: string;
+        timestamp: number;
+        unread: boolean;
+    }>>(() => {
+        // Get recent conversations from messages
+        const conversations = new Map<number, {
+            userId: number;
+            userName: string;
+            userImage: string;
+            lastMessage: string;
+            timestamp: number;
+            unread: boolean;
+        }>();
+        
+        // Process messages to build conversation list
+        messages.forEach(msg => {
+            const otherUserId = msg.senderId === 1 ? msg.receiverId : msg.senderId;
+            const user = INITIAL_USERS.find(u => u.id === otherUserId);
+            if (user) {
+                const existing = conversations.get(otherUserId);
+                if (!existing || msg.timestamp > existing.timestamp) {
+                    conversations.set(otherUserId, {
+                        userId: otherUserId,
+                        userName: user.name,
+                        userImage: user.profileImage,
+                        lastMessage: msg.content || 'Sent an attachment',
+                        timestamp: msg.timestamp,
+                        unread: msg.status === 'delivered' && msg.receiverId === 1
+                    });
+                }
+            }
+        });
+        
+        return Array.from(conversations.values())
+            .sort((a, b) => b.timestamp - a.timestamp)
+            .slice(0, 5);
+    });
     
     // User online status tracking
     const [userStatus, setUserStatus] = useState<Record<number, { isOnline: boolean; lastSeen: string; typing: boolean }>>(() => {
@@ -861,6 +912,26 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             return { ...story, user };
         }).sort((a,b) => b.createdAt - a.createdAt);
     }, [stories, users]);
+
+    // ========== MESSAGE-RELATED COMPUTED VALUES ==========
+    // Calculate unread message count for current user
+    const currentUserUnreadCount = useMemo(() => {
+        if (!currentUser) return 0;
+        return unreadMessageCounts[currentUser.id] || 0;
+    }, [currentUser, unreadMessageCounts]);
+    
+    // Get recent conversations for current user
+    const currentUserRecentConversations = useMemo(() => {
+        if (!currentUser) return [];
+        
+        // Filter conversations to only include those involving current user
+        return recentConversations.filter(conv => 
+            messages.some(msg => 
+                (msg.senderId === currentUser.id && msg.receiverId === conv.userId) ||
+                (msg.receiverId === currentUser.id && msg.senderId === conv.userId)
+            )
+        ).slice(0, 3); // Show only 3 most recent
+    }, [currentUser, recentConversations, messages]);
 
     // Function to get intelligent suggestions based on current user
     const getIntelligentSuggestions = useCallback((currentUser: User | null, allUsers: User[], rotationIndex: number = 0): SuggestedUser[] => {
@@ -1489,7 +1560,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
     
-    // ========== FIXED MESSAGING FUNCTIONS ==========
+    // ========== ENHANCED MESSAGING FUNCTIONS WITH UNREAD COUNT TRACKING ==========
     const handleSendMessage = (text: string, attachments?: any[], gifUrl?: string, emoji?: string) => {
         console.log('[DEBUG] handleSendMessage called:', { 
             text, 
@@ -1508,7 +1579,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         const timestamp = Date.now();
         const formattedTime = formatRelativeTime(timestamp);
         
-        // FIXED: Create message object with proper structure
+        // Create message object with proper structure
         const newMessage: Message = {
             id: `msg-${timestamp}-${Math.random().toString(36).substr(2, 9)}`,
             senderId: currentUser.id,
@@ -1524,11 +1595,24 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         
         console.log('[DEBUG] Created new message:', newMessage);
         
-        // Add message to messages list (prepend for chronological order)
+        // Add message to messages list
         setMessages(prev => {
             const updatedMessages = [newMessage, ...prev];
             console.log('[DEBUG] Updated messages count:', updatedMessages.length);
             return updatedMessages;
+        });
+        
+        // Update recent conversations
+        setRecentConversations(prev => {
+            const updatedConversations = prev.filter(conv => conv.userId !== activeChatUser.id);
+            return [{
+                userId: activeChatUser.id,
+                userName: activeChatUser.name,
+                userImage: activeChatUser.profileImage,
+                lastMessage: text || (gifUrl ? 'Sent a GIF' : (emoji ? `Reacted with ${emoji}` : 'Sent an attachment')),
+                timestamp,
+                unread: false // Not unread for sender
+            }, ...updatedConversations].slice(0, 5);
         });
         
         // Update user typing status
@@ -1541,6 +1625,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     ? { ...msg, status: 'sent' as const }
                     : msg
             ));
+            
+            // Increment unread count for recipient
+            setUnreadMessageCounts(prev => ({
+                ...prev,
+                [activeChatUser.id]: (prev[activeChatUser.id] || 0) + 1
+            }));
             
             // Simulate delivery after 1 second
             setTimeout(() => {
@@ -1646,6 +1736,23 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 ? { ...msg, status: 'read' as const }
                 : msg
         ));
+        
+        // Update unread counts
+        const message = messages.find(msg => msg.id === messageId);
+        if (message && currentUser && message.receiverId === currentUser.id) {
+            const senderId = message.senderId;
+            setUnreadMessageCounts(prev => ({
+                ...prev,
+                [currentUser.id]: Math.max(0, (prev[currentUser.id] || 0) - 1)
+            }));
+            
+            // Update recent conversations
+            setRecentConversations(prev => prev.map(conv => 
+                conv.userId === senderId 
+                    ? { ...conv, unread: false }
+                    : conv
+            ));
+        }
     };
     
     // ========== FIXED: Enhanced getUserStatus function ==========
@@ -1676,6 +1783,26 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             ...status,
             formattedLastSeen
         };
+    };
+    
+    // ========== MESSAGE ICON FUNCTIONALITY ==========
+    const handleOpenMessages = () => {
+        // This could open a full messages page or a modal
+        // For now, we'll show an alert and log to console
+        console.log('[DEBUG] Opening messages interface');
+        alert('Messages interface would open here. In a full implementation, this would show all conversations.');
+        
+        // You could also set a state to show a messages modal/page
+        // setShowMessagesPage(true);
+    };
+    
+    // Function to handle message icon click in UserProfile
+    const handleMessageIconClick = (userId: number) => {
+        const user = users.find(u => u.id === userId);
+        if (user) {
+            setActiveChatUser(user);
+            console.log('[DEBUG] Opening chat with user:', user.name);
+        }
     };
     
     // ========== FIXED LIKE AND REACT FUNCTIONS ==========
@@ -4135,7 +4262,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onReact={handleReact} 
                                     onComment={handleComment} 
                                     onShare={(id) => setActiveSharePostId(id)} 
-                                    onMessage={(id) => setActiveChatUser(users.find(u => u.id === id) || null)} 
+                                    onMessage={handleMessageIconClick} 
                                     onCreatePost={handleCreatePost} 
                                     onUpdateProfileImage={(f) => {}} 
                                     onUpdateCoverImage={(f) => {}} 
@@ -4192,6 +4319,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                         );
                                     }}
                                     renderRegularPost={renderRegularPost}
+                                    // MESSAGE ICON PROPS
+                                    unreadMessageCount={currentUserUnreadCount}
+                                    onOpenMessages={handleOpenMessages}
+                                    recentMessages={currentUserRecentConversations}
                                 />
                             )}
                             
