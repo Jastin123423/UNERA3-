@@ -1,5 +1,4 @@
-
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { User, Post as PostType, ReactionType, Reel, AudioTrack, Song, Episode } from '../types';
 import { CreatePost, Post, CreatePostModal } from './Feed';
 
@@ -262,8 +261,18 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     const [showCreatePostModal, setShowCreatePostModal] = useState(false);
     const [showEditProfile, setShowEditProfile] = useState(false);
     const [showMessagesPreview, setShowMessagesPreview] = useState(false);
+    const [refreshCounter, setRefreshCounter] = useState(0);
     
-    const userPosts = posts.filter(post => post.authorId === user.id);
+    // FIX: Use useMemo to ensure posts are recalculated when posts prop changes
+    const userPosts = useMemo(() => {
+        console.log('🔄 Recalculating user posts:', {
+            totalPosts: posts.length,
+            userId: user.id,
+            filteredCount: posts.filter(p => p.authorId === user.id).length
+        });
+        return posts.filter(post => post.authorId === user.id);
+    }, [posts, user.id]);
+    
     const userReels = reels.filter(reel => reel.userId === user.id);
     
     const isCurrentUser = currentUser && user.id === currentUser.id;
@@ -302,7 +311,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         if (!song) return null;
         
         return (
-            <div key={post.id} className="bg-[#242526] rounded-xl border border-[#3E4042] p-4 mb-4">
+            <div key={`music-${post.id}-${post.reactions.length}-${post.comments.length}-${refreshCounter}`} className="bg-[#242526] rounded-xl border border-[#3E4042] p-4 mb-4">
                 <div className="flex items-center gap-3 mb-4">
                     <img 
                         src={author.profileImage} 
@@ -387,22 +396,31 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         );
     };
 
-    // Function to render regular posts
+    // Function to render regular posts - FIXED VERSION
     const renderRegularPostDefault = (post: PostType, author: any, isFollowing?: boolean) => {
+        // FIX: Create fresh object references to force Post component to re-render
+        const freshPost = {
+            ...post,
+            // Force new array references
+            reactions: [...post.reactions],
+            comments: [...post.comments],
+            formattedTime: post.formattedTime || 'Recently'
+        };
+        
         return (
             <Post 
-                key={post.id} 
-                post={post} 
-                author={author} 
-                currentUser={currentUser} 
-                users={users} 
-                onProfileClick={onProfileClick} 
-                onReact={onReact} 
-                onShare={onShare} 
-                onDelete={onDeletePost} 
-                onEdit={onEditPost} 
-                onHashtagClick={onHashtagClick} 
-                onViewImage={onViewImage} 
+                key={`post-${post.id}-${post.reactions.length}-${post.comments.length}-${refreshCounter}`}
+                post={freshPost}
+                author={author}
+                currentUser={currentUser}
+                users={users}
+                onProfileClick={onProfileClick}
+                onReact={onReact}
+                onShare={onShare}
+                onDelete={onDeletePost}
+                onEdit={onEditPost}
+                onHashtagClick={onHashtagClick}
+                onViewImage={onViewImage}
                 onOpenComments={onOpenComments}
                 onVideoClick={onVideoClick}
                 onViewProduct={() => {}} 
@@ -430,6 +448,19 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         });
         return photos;
     };
+
+    // FIX: Add useEffect to refresh when posts change
+    useEffect(() => {
+        console.log('📊 UserProfile posts updated:', {
+            totalPosts: posts.length,
+            userPostsCount: userPosts.length,
+            samplePost: userPosts[0]?.id,
+            sampleReactions: userPosts[0]?.reactions?.length
+        });
+        
+        // Increment refresh counter to force Post components to re-render
+        setRefreshCounter(prev => prev + 1);
+    }, [posts, userPosts]);
 
     const renderContent = () => {
         switch (activeTab) {
@@ -710,23 +741,53 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                                 <button className="bg-[#3A3B3C] px-3 py-1.5 rounded-md text-[#E4E6EB] font-semibold text-sm hover:bg-[#4E4F50]">
                                     <i className="fas fa-sliders-h mr-1"></i> Filters
                                 </button>
+                                {/* DEBUG BUTTON */}
+                                {process.env.NODE_ENV === 'development' && (
+                                    <button 
+                                        onClick={() => {
+                                            console.log('🔍 DEBUG: Current posts data', {
+                                                totalPosts: userPosts.length,
+                                                posts: userPosts.map(p => ({
+                                                    id: p.id,
+                                                    reactions: p.reactions.length,
+                                                    comments: p.comments.length,
+                                                    hasCurrentUserReaction: currentUser ? 
+                                                        p.reactions.some(r => r.userId === currentUser.id) : false
+                                                }))
+                                            });
+                                            setRefreshCounter(prev => prev + 1);
+                                        }}
+                                        className="bg-blue-500 px-3 py-1.5 rounded-md text-white text-sm"
+                                    >
+                                        Debug
+                                    </button>
+                                )}
                             </div>
                         </div>
                         
+                        {/* FIXED: Posts rendering with proper keys and fresh data */}
                         {userPosts.map(post => {
                             const isFollowingPostAuthor = currentUser ? currentUser.following.includes(post.authorId) : false;
+                            
+                            // FIX: Create fresh object to force Post component to re-render
+                            const freshPost = {
+                                ...post,
+                                reactions: [...post.reactions],
+                                comments: [...post.comments],
+                                formattedTime: post.formattedTime || 'Recently'
+                            };
                             
                             // Use custom render functions if provided, otherwise use default
                             if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
                                 if (renderMusicPost) {
-                                    return renderMusicPost(post, user);
+                                    return renderMusicPost(freshPost, user);
                                 }
-                                return renderMusicPostDefault(post, user);
+                                return renderMusicPostDefault(freshPost, user);
                             } else {
                                 if (renderRegularPost) {
-                                    return renderRegularPost(post, user, isFollowingPostAuthor);
+                                    return renderRegularPost(freshPost, user, isFollowingPostAuthor);
                                 }
-                                return renderRegularPostDefault(post, user, isFollowingPostAuthor);
+                                return renderRegularPostDefault(freshPost, user, isFollowingPostAuthor);
                             }
                         })}
                         
