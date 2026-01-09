@@ -58,6 +58,8 @@ const parsePath = (path: string, users: User[]) => {
     if (path === '/settings') return { view: 'settings' };
     if (path === '/privacy') return { view: 'privacy_policy' };
     if (path === '/terms') return { view: 'terms_of_service' };
+    if (path === '/login') return { view: 'login' };
+    if (path === '/register') return { view: 'login' };
     
     return { view: 'home' };
 };
@@ -751,9 +753,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const [showForgotPassword, setShowForgotPassword] = useState(false);
     const [loginError, setLoginError] = useState('');
     
-    // Track if user intentionally navigated to login
-    const [userInitiatedLogin, setUserInitiatedLogin] = useState(false);
-    
     // ========== ENHANCED MESSAGING STATES ==========
     const [messages, setMessages] = useState<Message[]>([
         {
@@ -904,11 +903,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         // If guest is at root path, show them content, not login
         if (parsedPath.view === 'home' || path === '/') {
             return 'home';
-        }
-        
-        // Check if path is explicitly login
-        if (path === '/login' || path === '/register') {
-            return 'login';
         }
         
         return parsedPath.view;
@@ -1315,9 +1309,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             setActiveTab('brands');
         } else if (notification.senderId) {
             if (!currentUser) {
-                // Guest clicking notification - go to login
                 setView('login');
-                setUserInitiatedLogin(true);
                 return;
             }
             setSelectedUserId(notification.senderId);
@@ -1329,12 +1321,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     // Handle People You May Know actions
     const handleViewProfile = (userId: number) => {
-        if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
-            return;
-        }
-        
         // Mark the user as viewed and remove from suggestions
         setSuggestedUsers(prev => prev.filter(user => user.id !== userId));
         
@@ -1351,12 +1337,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleRemoveSuggestedUser = (userId: number) => {
-        if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
-            return;
-        }
-        
         // Remove from suggestions
         setSuggestedUsers(prev => prev.filter(user => user.id !== userId));
         
@@ -1372,12 +1352,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     // Handle Groups You May Like actions
     const handleViewGroup = (groupId: string) => {
-        if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
-            return;
-        }
-        
         // Navigate to group
         setInitialGroupIdToView(groupId);
         setView('groups');
@@ -1385,12 +1359,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleRemoveSuggestedGroup = (groupId: string) => {
-        if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
-            return;
-        }
-        
         // Remove from suggestions
         setSuggestedGroups(prev => prev.filter(group => group.id !== groupId));
         
@@ -1406,24 +1374,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     // Handle Brand Recommendations actions
     const handleViewBrand = (brandId: number) => {
-        if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
-            return;
-        }
-        
         setActiveBrandId(brandId);
         setView('brands');
         setActiveTab('brands');
     };
 
     const handleRemoveBrandRecommendation = (brandId: number) => {
-        if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
-            return;
-        }
-        
         if (isClient) {
             const removedBrands = JSON.parse(localStorage.getItem('universeRemovedBrandRecommendations') || '[]');
             localStorage.setItem('universeRemovedBrandRecommendations', JSON.stringify([...removedBrands, brandId]));
@@ -1510,7 +1466,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     if (freshUser) {
                         setCurrentUser(freshUser);
                         // If user was logged in, ensure view is home
-                        if (view === 'login' && !userInitiatedLogin) {
+                        if (view === 'login') {
                             setView('home');
                             setActiveTab('home');
                         }
@@ -1519,11 +1475,18 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     console.error('Error parsing stored user:', e);
                 }
             }
+            
+            // ========== CRITICAL FIX: Ensure guests see content ==========
+            if (!storedUser && view === 'login' && path === '/') {
+                // Guest at root path should see content, not login
+                setView('home');
+                setActiveTab('home');
+            }
         }
         
         // Set loading to false after data is loaded
         setTimeout(() => setIsLoading(false), 800);
-    }, [isClient, view, path, userInitiatedLogin]);
+    }, [isClient, view, path]);
 
     // Save People You May Know and Groups data to localStorage
     useEffect(() => {
@@ -1546,28 +1509,40 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const handleLogin = (email: string, pass: string) => {
         const user = users.find(u => u.email === email && u.password === pass);
         if (user) {
+            console.log('[DEBUG] Login successful for user:', user.id);
             setCurrentUser(user);
             setView('home');
             setActiveTab('home');
             setLoginError('');
             setShowRegister(false);
             setShowForgotPassword(false);
-            setUserInitiatedLogin(false); // Reset login flag
             if (isClient) window.history.pushState({}, '', '/');
         } else {
+            console.log('[DEBUG] Login failed for email:', email);
             setLoginError('Invalid email or password');
+            // Stay on login page, don't redirect
         }
     };
 
     const handleRegister = (newUser: Partial<User>) => {
         const id = Math.max(...users.map(u => u.id)) + 1;
-        const user: User = { ...newUser, id, role: 'user', followers: [], following: [], joinedDate: new Date().toISOString() } as User;
+        const user: User = { 
+            ...newUser, 
+            id, 
+            role: 'user', 
+            followers: [], 
+            following: [], 
+            joinedDate: new Date().toISOString() 
+        } as User;
+        
+        console.log('[DEBUG] Registration successful for user:', user.id);
         setUsers([...users, user]);
         setCurrentUser(user);
         setShowRegister(false);
         setShowForgotPassword(false);
         setView('home');
-        setUserInitiatedLogin(false); // Reset login flag
+        setActiveTab('home');
+        
         if (isClient) window.history.pushState({}, '', '/');
     };
 
@@ -1591,38 +1566,61 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     // ========== FIXED: Enhanced handleNavigate function ==========
     const handleNavigate = (targetView: string) => {
-        console.log('Navigating to:', targetView, 'currentUser:', !!currentUser, 'userInitiatedLogin:', userInitiatedLogin);
+        console.log('[DEBUG] handleNavigate called:', { 
+            targetView, 
+            currentUser: currentUser?.id,
+            currentView: view 
+        });
         
-        // Special handling for login/register navigation
-        if (targetView === 'login' || targetView === 'register') {
-            setView(targetView);
-            setActiveTab('login');
-            setUserInitiatedLogin(true); // Mark that user initiated login
-            if (isClient) {
-                window.history.pushState({}, '', `/${targetView}`);
-            }
+        // SPECIAL CASE: If target is login/register and user is already on login, stay there
+        if ((targetView === 'login' || targetView === 'register') && view === 'login') {
+            console.log('[DEBUG] Already on login page, staying put');
             return;
         }
         
         // Check if login is required for this view
         const requiresLogin = [
             'profile', 'create_event', 'create_post', 'create_story', 
-            'create_reel', 'marketplace_create', 'messages', 'settings',
-            'suggested_profiles'  // Added: profiles require login
+            'create_reel', 'marketplace_create', 'messages', 'settings'
         ].includes(targetView);
         
         if (requiresLogin && !currentUser) {
-            console.log('Login required for', targetView, 'redirecting to login');
+            console.log('[DEBUG] Login required for view:', targetView);
             setView('login');
             setActiveTab('login');
-            setUserInitiatedLogin(true); // Mark that user initiated login
+            
+            // Update URL if needed
             if (isClient) {
                 window.history.pushState({}, '', '/login');
             }
             return;
         }
         
-        // Update URL if client-side
+        // Handle navigation based on target view
+        if (targetView === 'login' || targetView === 'register') {
+            // Show login screen without redirecting
+            console.log('[DEBUG] Showing login/register screen');
+            setView('login');
+            setActiveTab('login');
+            setShowRegister(targetView === 'register');
+            setShowForgotPassword(false);
+            setLoginError('');
+            
+            if (isClient) {
+                window.history.pushState({}, '', '/login');
+            }
+            return;
+        }
+        
+        // Clear temporary states
+        setActiveTag(null);
+        setActiveReelId(null);
+        setActiveBrandId(null);
+        setInitialGroupIdToView(null);
+        setActiveGroupComments(null);
+        setActiveGroupShare(null);
+
+        // Update URL for the target view
         if (isClient) {
             const pathMap: { [key: string]: string } = {
                 home: '/',
@@ -1650,21 +1648,16 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             window.history.pushState({}, '', pathMap[targetView] || '/');
         }
 
-        setActiveTag(null);
+        // Handle post-specific navigation
         if (targetView.startsWith('post-')) {
             const postId = parseInt(targetView.split('-')[1]);
             setActiveSinglePostId(postId);
             setView('single_post');
+            setActiveTab('single_post');
             return;
         }
 
-        setActiveReelId(null);
-        setActiveBrandId(null);
-        setInitialGroupIdToView(null);
-        setActiveGroupComments(null);
-        setActiveGroupShare(null);
-
-        // Handle all menu views
+        // Handle all other views
         switch(targetView) {
             case 'home':
                 setView('home');
@@ -1734,7 +1727,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     setActiveTab('profile');
                 } else {
                     setView('login');
-                    setUserInitiatedLogin(true);
+                    setActiveTab('login');
                 }
                 break;
             case 'create_event':
@@ -1742,7 +1735,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     setShowCreateEventModal(true);
                 } else {
                     setView('login');
-                    setUserInitiatedLogin(true);
+                    setActiveTab('login');
                 }
                 break;
             case 'brand_view':
@@ -1751,7 +1744,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 break;
             default:
                 setView(targetView);
-                setActiveTab('home');
+                setActiveTab(targetView);
         }
     };
     
@@ -1994,8 +1987,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     // Function to handle message icon click in UserProfile
     const handleMessageIconClick = (userId: number) => {
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         const user = users.find(u => u.id === userId);
@@ -2008,8 +2000,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     // ========== FIXED LIKE AND REACT FUNCTIONS ==========
     const handleFollowUser = (userIdToToggle: number) => {
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         const currentUserId = currentUser.id;
@@ -2083,8 +2074,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         
         if (!currentUser) {
             console.log('[DEBUG] No current user, showing login');
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         
@@ -2173,8 +2163,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         
         if (!currentUser) {
             console.log('[DEBUG] No current user, showing login');
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         
@@ -2287,8 +2276,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     // FIXED: Prevent self-notifications for reel reactions
     const handleReelReact = (reelId: number, type: ReactionType | undefined) => {
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         setReels(prev => prev.map(reel => {
@@ -2335,8 +2323,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         linkPreview?: LinkPreview
     ) => {
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         
@@ -2418,8 +2405,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     // PROFESSIONAL BRAND MANAGEMENT FUNCTIONS WITH SELF-NOTIFICATION PREVENTION
     const handleCreateBrand = (brandData: Partial<Brand>) => {
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         
@@ -2466,8 +2452,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         content: any
     ) => {
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         
@@ -2579,8 +2564,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleFollowBrand = (brandId: number) => {
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         
@@ -2628,8 +2612,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleUpdateBrand = (brandId: number, updates: Partial<Brand>) => {
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         
@@ -2653,8 +2636,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleDeleteBrand = (brandId: number) => {
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         
@@ -2688,8 +2670,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleUpdateBrandImage = (brandId: number, type: 'cover' | 'profile', file: File) => {
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         
@@ -2735,8 +2716,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleDeletePost = (postId: number) => {
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         
@@ -2804,8 +2784,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         console.log("Creating product with data:", productData);
         
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
 
@@ -2866,8 +2845,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     // ENHANCED: Handle product likes from homepage feeds
     const handleLikeProduct = (productId: number) => {
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         
@@ -2915,8 +2893,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     // ENHANCED: Handle product comments from homepage feeds
     const handleCommentOnProduct = (productId: number, text: string) => {
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         
@@ -2953,8 +2930,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleCreateStory = (storyData: Partial<Story>) => {
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         const timestamp = Date.now();
@@ -2971,8 +2947,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleCreateReel = (videoFile: File, caption: string, song?: Song | { name: string, url: string }, effectName?: string) => {
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         const timestamp = Date.now();
@@ -2994,8 +2969,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleLikeStory = (storyId: number) => {
         if (!currentUser) { 
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return; 
         }
         setStories(prev => prev.map(s => {
@@ -3024,8 +2998,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     
     const handleReplyStory = (storyId: number, text: string) => {
         if (!currentUser) { 
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return; 
         }
         setStories(prev => prev.map(s => {
@@ -3052,8 +3025,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleCreateEvent = (eventData: Partial<Event>) => {
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         const timestamp = Date.now();
@@ -3085,8 +3057,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleJoinEvent = (eventId: number) => {
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         setEvents(prev => prev.map(ev => {
@@ -3121,8 +3092,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         
         if (!currentUser) {
             console.log('[DEBUG] No current user, showing login');
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         
@@ -3230,8 +3200,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleFeedPost = (data: any) => {
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         const timestamp = Date.now();
@@ -3580,8 +3549,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     // ========== MISSING FUNCTIONS ADDED ==========
     const handleDeleteSong = (songId: string) => {
         if (!currentUser || !isAdmin) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         
@@ -3594,8 +3562,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleDeleteEpisode = (episodeId: string) => {
         if (!currentUser || !isAdmin) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         
@@ -3641,8 +3608,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     // ========== ENHANCED GROUP FUNCTIONS WITH SELF-NOTIFICATION PREVENTION ==========
     const handleGroupComment = (groupId: string, postId: number, text: string, attachment?: any, parentId?: number) => {
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         
@@ -3714,8 +3680,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleInviteToGroup = (groupId: string, userIds: number[]) => {
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         
@@ -3747,8 +3712,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const handleJoinGroup = (groupId: string) => { 
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         
@@ -3779,8 +3743,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     
     const handleLeaveGroup = (groupId: string) => { 
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         
@@ -3793,8 +3756,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     
     const handleDeleteGroup = (groupId: string) => { 
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         
@@ -3823,8 +3785,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     // FIXED: Prevent self-notifications in group posts
     const handlePostToGroup = (groupId: string, content: string, files: File[] | null, type: any, background?: string) => { 
         if (!currentUser) {
-            setView('login');
-            setUserInitiatedLogin(true);
+            handleNavigate('login');
             return;
         }
         
@@ -3873,4 +3834,1357 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             video: video,
             timestamp: timestamp,
             formattedTime: formattedTime,
-            createdAt
+            createdAt: timestamp,
+            reactions: [], 
+            comments: [], 
+            shares: 0,
+            views: 0,
+            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')),
+            visibility: 'Public' as const,
+            groupId, 
+            groupName: groups.find(g => g.id === groupId)?.name,
+            background
+        }; 
+        
+        console.log("Creating group post:", newFeedPost);
+        
+        // 3. Add to main posts array
+        setPosts(prev => [newFeedPost, ...prev]); 
+        
+        // Notify group members (excluding the poster to prevent self-notification)
+        const group = groups.find(g => g.id === groupId);
+        if (group && group.memberPostingAllowed) {
+            group.members.forEach(memberId => {
+                if (memberId !== currentUser.id) {
+                    handleCreateNotification(
+                        memberId,
+                        currentUser.id,
+                        'group_post',
+                        `posted in ${group.name}`,
+                        { groupId, postId: timestamp }
+                    );
+                }
+            });
+        }
+        
+        alert("Post published to group successfully!");
+    };
+    
+    const handleCreateGroupEvent = (groupId: string, eventData: Partial<Event>) => {
+        if (!currentUser) {
+            handleNavigate('login');
+            return;
+        }
+        const timestamp = Date.now();
+        const formattedTime = formatRelativeTime(timestamp);
+        const newEvent: Event = { 
+            ...eventData, 
+            id: timestamp, 
+            attendees: [currentUser.id], 
+            interestedIds: [],
+            groupId: groupId,
+            groupName: groups.find(g => g.id === groupId)?.name
+        } as Event;
+        
+        // Add event to the group
+        setGroups(prev => prev.map(g => 
+            g.id === groupId 
+                ? { ...g, events: [...(g.events || []), newEvent] } 
+                : g
+        ));
+        
+        // Also add to global events
+        setEvents(prev => [newEvent, ...prev]);
+        
+        // Create a post about the event
+        const eventPost: PostType = { 
+            id: timestamp + 1, 
+            authorId: currentUser.id, 
+            content: `is hosting a new event in ${groups.find(g => g.id === groupId)?.name}: ${newEvent.title}`, 
+            timestamp: timestamp,
+            formattedTime: formattedTime,
+            createdAt: timestamp, 
+            reactions: [], 
+            comments: [], 
+            shares: 0, 
+            type: 'event', 
+            visibility: 'Public', 
+            event: newEvent, 
+            eventId: newEvent.id,
+            groupId: groupId,
+            groupName: groups.find(g => g.id === groupId)?.name
+        };
+        setPosts(prev => [eventPost, ...prev]);
+    };
+    
+    // FIXED: Prevent self-notifications in group shares
+    const handleGroupShare = (groupId: string, postId: number, targetType: 'profile' | 'group' | 'brand', targetId?: string | number, extraCaption?: string) => {
+        if (!currentUser) {
+            handleNavigate('login');
+            return;
+        }
+        
+        // Find the group post
+        const group = groups.find(g => g.id === groupId);
+        if (!group) return;
+        
+        const groupPost = group.posts.find(p => p.id === postId);
+        if (!groupPost) return;
+        
+        // Create a shared post for the feed
+        const timestamp = Date.now();
+        const formattedTime = formatRelativeTime(timestamp);
+        const newSharedPost: PostType = {
+            id: timestamp,
+            authorId: currentUser.id,
+            content: extraCaption ? `${extraCaption}\n\nShared from ${group.name}: ${groupPost.content}` : `Shared from ${group.name}: ${groupPost.content}`,
+            images: groupPost.images,
+            video: groupPost.video,
+            timestamp: timestamp,
+            formattedTime: formattedTime,
+            createdAt: timestamp,
+            reactions: [],
+            comments: [],
+            shares: 0,
+            views: 0,
+            type: groupPost.video ? 'video' : (groupPost.images ? 'image' : 'text'),
+            visibility: 'Public',
+            sharedPostId: postId,
+            groupId: groupId,
+            groupName: group.name
+        };
+        
+        // Add to main feed
+        setPosts(prev => [newSharedPost, ...prev]);
+        
+        // Update share count in the group post
+        setGroups(prev => prev.map(g => {
+            if (g.id === groupId) {
+                const updatedPosts = g.posts.map(p => {
+                    if (p.id === postId) {
+                        return { ...p, shares: (p.shares || 0) + 1 };
+                    }
+                    return p;
+                });
+                return { ...g, posts: updatedPosts };
+            }
+            return g;
+        }));
+        
+        // Send notification to original post author (prevent self-notification)
+        if (groupPost.authorId !== currentUser.id) {
+            handleCreateNotification(
+                groupPost.authorId,
+                currentUser.id,
+                'group_share',
+                `shared your post from ${group.name}.`,
+                { postId, groupId }
+            );
+        }
+        
+        setActiveGroupShare(null);
+        alert("Shared successfully from group!");
+    };
+    
+    const handleCreateGroup = (groupData: Partial<Group>) => {
+        if (!currentUser) {
+            handleNavigate('login');
+            return;
+        }
+        
+        const timestamp = Date.now();
+        const newGroup: Group = { 
+            ...groupData, 
+            id: `g${timestamp}`, 
+            adminId: currentUser.id, 
+            members: [currentUser.id], 
+            posts: [], 
+            createdDate: timestamp,
+            image: groupData.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(groupData.name || 'Group')}&background=random&size=150`,
+            coverImage: groupData.coverImage || 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-1.2.1&auto=format&fit=crop&w=1500&q=80',
+            events: [],
+            memberPostingAllowed: true
+        } as Group;
+        setGroups(prev => [newGroup, ...prev]);
+        
+        // Notify followers about new group (excluding self)
+        const followers = currentUser.followers || [];
+        followers.forEach(followerId => {
+            if (followerId !== currentUser.id) {
+                handleCreateNotification(
+                    followerId,
+                    currentUser.id,
+                    'group_created',
+                    `created a new group: ${newGroup.name}`,
+                    { groupId: newGroup.id }
+                );
+            }
+        });
+        
+        alert("Group created successfully!");
+    };
+    
+    // FIXED: Prevent self-notifications for group post reactions
+    const handleReactGroupPost = (groupId: string, postId: number, type: ReactionType) => { 
+        if (!currentUser) {
+            handleNavigate('login');
+            return;
+        }
+        
+        setGroups(prev => prev.map(g => {
+            if (g.id === groupId) {
+                const updatedPosts = g.posts.map(p => {
+                    if (p.id === postId) {
+                        const reactions = p.reactions || [];
+                        const existing = reactions.find(r => r.userId === currentUser.id);
+                        let newReactions = [...reactions];
+                        if (existing) {
+                            if (existing.type === type) {
+                                newReactions = newReactions.filter(r => r.userId !== currentUser!.id);
+                            } else {
+                                newReactions = newReactions.map(r => 
+                                    r.userId === currentUser!.id ? { ...r, type } : r
+                                );
+                            }
+                        } else {
+                            newReactions.push({ userId: currentUser!.id, type });
+                            
+                            // Send notification to post author (prevent self-notification)
+                            if (p.authorId !== currentUser.id) {
+                                const group = groups.find(g => g.id === groupId);
+                                handleCreateNotification(
+                                    p.authorId,
+                                    currentUser.id,
+                                    'group_reaction',
+                                    `reacted to your post in ${group?.name || 'the group'}.`,
+                                    { postId, groupId, reactionType: type }
+                                );
+                            }
+                        }
+                        return { ...p, reactions: newReactions };
+                    }
+                    return p;
+                });
+                return { ...g, posts: updatedPosts };
+            }
+            return g;
+        }));
+    };
+    
+    const handleOpenGroupComments = (groupId: string, postId: number) => {
+        console.log('Opening group comments:', { groupId, postId });
+        setActiveGroupComments({ groupId, postId });
+    };
+    
+    const handleShareGroupPost = (groupId: string, postId: number) => {
+        console.log('Sharing group post:', { groupId, postId });
+        setActiveGroupShare({ groupId, postId });
+    };
+    
+    const handleUpdateGroupSettings = (groupId: string, settings: Partial<Group>) => { 
+        setGroups(prev => prev.map(g => 
+            g.id === groupId ? { ...g, ...settings } : g
+        )); 
+    };
+    
+    const handleRemoveMember = (groupId: string, memberId: number) => { 
+        const group = groups.find(g => g.id === groupId); 
+        if (currentUser && group && (group.adminId === currentUser.id || isAdmin)) { 
+            setGroups(prev => prev.map(g => 
+                g.id === groupId 
+                    ? { ...g, members: g.members.filter(id => id !== memberId) } 
+                    : g
+            )); 
+            
+            // Notify removed member
+            handleCreateNotification(
+                memberId,
+                currentUser.id,
+                'group_removed',
+                `removed you from ${group.name}.`,
+                { groupId }
+            );
+        } 
+    };
+    
+    const handleDeleteGroupPost = (groupId: string, postId: number) => { 
+        const group = groups.find(g => g.id === groupId); 
+        const post = group?.posts.find(p => p.id === postId); 
+        if (currentUser && group && post && (group.adminId === currentUser.id || isAdmin || post.authorId === currentUser.id)) { 
+            if (window.confirm("Are you sure you want to delete this group post?")) {
+                setGroups(prev => prev.map(g => 
+                    (g.id === groupId) 
+                        ? { ...g, posts: g.posts.filter(p => p.id !== postId) } 
+                        : g
+                )); 
+                
+                // Also delete from main feed if it exists
+                setPosts(prev => prev.filter(p => !(p.id === postId && p.groupId === groupId)));
+                
+                alert("Group post deleted successfully!");
+            }
+        } else {
+            alert("You don't have permission to delete this post.");
+        }
+    };
+
+    // Birthday notification check with self-notification prevention
+    useEffect(() => {
+        const checkBirthdays = () => {
+            if (!currentUser) return;
+            
+            const today = new Date();
+            const todayStr = `${today.getMonth() + 1}/${today.getDate()}`;
+            
+            users.forEach(user => {
+                if (user.birthDate && user.id !== currentUser.id) {
+                    const birthDate = new Date(user.birthDate);
+                    const birthStr = `${birthDate.getMonth() + 1}/${birthDate.getDate()}`;
+                    
+                    if (birthStr === todayStr) {
+                        // Check if birthday notification was already sent today
+                        const alreadySent = notifications.some(n => 
+                            n.type === 'birthday' && 
+                            n.senderId === user.id && 
+                            new Date(n.timestamp).toDateString() === today.toDateString()
+                        );
+                        
+                        if (!alreadySent) {
+                            handleCreateNotification(
+                                currentUser.id,
+                                user.id,
+                                'birthday',
+                                `It's ${user.name}'s birthday today!`,
+                                {}
+                            );
+                        }
+                    }
+                }
+            });
+        };
+        
+        // Check birthdays on mount and every 24 hours
+        checkBirthdays();
+        const interval = setInterval(checkBirthdays, 24 * 60 * 60 * 1000);
+        
+        return () => clearInterval(interval);
+    }, [currentUser, users, notifications, handleCreateNotification]);
+
+    // Update user online status periodically - ENHANCED
+    useEffect(() => {
+        const updateOnlineStatus = () => {
+            console.log('[DEBUG] Updating online status');
+            
+            setUserStatus(prev => {
+                const updated: Record<number, { isOnline: boolean; lastSeen: string; typing: boolean }> = {};
+                
+                // Update current user as online
+                if (currentUser) {
+                    updated[currentUser.id] = {
+                        isOnline: true,
+                        lastSeen: new Date().toISOString(),
+                        typing: prev[currentUser.id]?.typing || false
+                    };
+                }
+                
+                // Update other users with random online status (for demo)
+                users.forEach(user => {
+                    if (user.id !== currentUser?.id) {
+                        const currentStatus = prev[user.id];
+                        // More realistic online status simulation
+                        const isOnline = currentStatus?.isOnline || Math.random() > 0.6;
+                        
+                        updated[user.id] = {
+                            isOnline,
+                            lastSeen: isOnline 
+                                ? new Date().toISOString() 
+                                : (currentStatus?.lastSeen || new Date(Date.now() - Math.random() * 86400000).toISOString()),
+                            typing: currentStatus?.typing || false
+                        };
+                    }
+                });
+                
+                return updated;
+            });
+        };
+        
+        updateOnlineStatus();
+        const interval = setInterval(updateOnlineStatus, 30000); // Update every 30 seconds
+        
+        return () => {
+            clearInterval(interval);
+            if (window['typingTimeout']) {
+                clearTimeout(window['typingTimeout']);
+            }
+        };
+    }, [currentUser, users]);
+
+    // ========== CRITICAL FIX: Ensure guests see content on reload ==========
+    useEffect(() => {
+        if (isClient && !isLoading) {
+            // If guest is on login view but at root path, show them content
+            if (!currentUser && view === 'login' && (path === '/' || path === '')) {
+                console.log('Guest at root path - showing content instead of login');
+                setView('home');
+                setActiveTab('home');
+            }
+        }
+    }, [isClient, isLoading, currentUser, view, path]);
+    
+    // Function to render music/podcast posts
+    const renderMusicPost = (post: PostType, author: any) => {
+        const song = getSongForPost(post, songs, episodes);
+        if (!song) return null;
+        
+        return (
+            <MusicFeedPost 
+                key={post.id}
+                song={song}
+                currentUser={currentUser}
+                users={users}
+                onPlayTrack={handlePlayTrack}
+                onProfileClick={(id) => { 
+                    if (!currentUser) {
+                        handleNavigate('login');
+                    } else {
+                        setSelectedUserId(id); 
+                        setView('profile'); 
+                    }
+                }}
+                onLikeTrack={handleLikeTrack}
+                onTrackComment={handleTrackComment}
+                onTrackShare={handleTrackShare}
+                isLiked={likedTracks.includes(song.id)}
+                showLoginPrompt={() => handleNavigate('login')}
+            />
+        );
+    };
+
+    // Function to render regular posts with brand support
+    const renderRegularPost = (post: PostType, author: any, isFollowing?: boolean) => {
+        const isBrandAuthor = author?.type === 'brand';
+        const isFollowingBrand = isBrandAuthor && currentUser ? 
+            brands.find(b => b.id === author.id)?.followers.includes(currentUser.id) || false : 
+            false;
+        
+        // Ensure post has formattedTime
+        const postWithFormattedTime = {
+            ...post,
+            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+        };
+        
+        return (
+            <Post 
+                key={post.id} 
+                post={postWithFormattedTime}
+                author={author as any} 
+                currentUser={currentUser} 
+                users={users} 
+                onProfileClick={(id) => { 
+                    if (!currentUser) {
+                        handleNavigate('login');
+                        return;
+                    }
+                    if (isBrandAuthor) {
+                        setActiveBrandId(id);
+                        handleNavigate('brand_view');
+                    } else {
+                        setSelectedUserId(id); 
+                        setView('profile');
+                    }
+                }} 
+                onReact={handleReact} 
+                onShare={(id) => setActiveSharePostId(id)} 
+                onViewImage={(url) => setFullScreenImage(url)} 
+                onOpenComments={(postId) => {
+                    if (!currentUser) {
+                        handleNavigate('login');
+                    } else {
+                        setActiveCommentsPostId(postId);
+                    }
+                }} 
+                onVideoClick={(p) => { setActiveReelId(p.id - 200000); setView('reels'); }} 
+                onViewProduct={(p) => setActiveProduct(p)} 
+                onGroupClick={(groupId) => { setInitialGroupIdToView(groupId); setView('groups'); setActiveTab('groups'); }} 
+                onPlayAudioTrack={handlePlayTrack} 
+                onFollow={isBrandAuthor ? handleFollowBrand : handleFollowUser} 
+                isFollowing={isBrandAuthor ? isFollowingBrand : isFollowing} 
+                onHashtagClick={handleTagClick} 
+                onDeletePost={handleDeletePost} 
+                isAdmin={isAdmin}
+                showLoginPrompt={() => handleNavigate('login')}
+            />
+        );
+    };
+    
+    // Function to render the main feed - FIXED to show to everyone
+    const renderMainFeed = () => {
+        return (
+            <>
+                {/* Feed posts - VISIBLE TO EVERYONE (logged-in and non-logged-in) */}
+                {rankedPosts.map(post => {
+                    const author = getAuthorForPost(post, users, brands);
+                    if (!author) return null;
+                    
+                    let isFollowing = false;
+                    if (author.type === 'user' && currentUser) {
+                        isFollowing = currentUser.following.includes(author.id);
+                    } else if (author.type === 'brand' && currentUser) {
+                        const brand = brands.find(b => b.id === author.id);
+                        isFollowing = brand ? brand.followers.includes(currentUser.id) : false;
+                    }
+                    
+                    if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
+                        return renderMusicPost(post, author);
+                    }
+                    
+                    return renderRegularPost(post, author, isFollowing);
+                })}
+                
+                {/* Additional recommendations for logged-in users only */}
+                {currentUser && (
+                    <>
+                        {/* Groups You May Like - Only for logged-in users */}
+                        {suggestedGroups.length > 0 && (
+                            <GroupsYouMayLike 
+                                suggestedGroups={suggestedGroups}
+                                currentUser={currentUser}
+                                onViewGroup={handleViewGroup}
+                                onJoinGroup={handleJoinGroup}
+                                onRemove={handleRemoveSuggestedGroup}
+                            />
+                        )}
+                        
+                        {/* Brand Recommendations - Only for logged-in users */}
+                        {brands.length > 0 && (
+                            <BrandRecommendations 
+                                brands={brands.slice(0, 4)}
+                                currentUser={currentUser}
+                                onViewBrand={(brandId) => {
+                                    handleViewBrand(brandId);
+                                    setBrandRotation(prev => prev + 1);
+                                }}
+                                onRemove={handleRemoveBrandRecommendation}
+                            />
+                        )}
+                    </>
+                )}
+            </>
+        );
+    };
+    
+    // ========== CRITICAL FIX: Determine what to render ==========
+    // Guests should see content, not login screen (unless explicitly on login)
+    const showLoginScreen = view === 'login' && !currentUser;
+    const showMainApp = !showLoginScreen || currentUser;
+    
+    return (
+        <div className="bg-[#18191A] min-h-screen flex flex-col font-sans">
+            {isLoading ? (
+                <div className="flex items-center justify-center min-h-screen bg-[#18191A] flex-col">
+                    <div className="w-20 h-20 border-4 border-[#1877F2] border-t-transparent rounded-full animate-spin mb-4"></div>
+                    <div className="text-[#1877F2] font-bold text-xl animate-pulse">Loading UNERA...</div>
+                </div>
+            ) : showLoginScreen ? (
+                // Show login/register only if view is 'login' AND user is not logged in
+                showRegister 
+                    ? <Register onRegister={handleRegister} onBackToLogin={() => { setShowRegister(false); setShowForgotPassword(false); }} /> 
+                    : showForgotPassword
+                    ? <ForgotPassword onBackToLogin={() => { setShowForgotPassword(false); setShowRegister(false); }} />
+                    : <Login onLogin={handleLogin} onNavigateToRegister={() => { setShowRegister(true); setShowForgotPassword(false); }} onNavigateToForgotPassword={() => { setShowForgotPassword(true); setShowRegister(false); }} onClose={() => { setView('home'); setCurrentUser(null); }} error={loginError} />
+            ) : (
+                // ========== MAIN APP LAYOUT - FOR BOTH GUESTS AND LOGGED-IN USERS ==========
+                <>
+                    {currentAudioTrack && (
+                        <GlobalAudioPlayer 
+                            currentTrack={currentAudioTrack} 
+                            isPlaying={isAudioPlaying} 
+                            onTogglePlay={() => setIsAudioPlaying(!isAudioPlaying)} 
+                            onNext={() => {}} 
+                            onPrevious={() => {}} 
+                            onClose={() => { setCurrentAudioTrack(null); setIsAudioPlaying(false); }} 
+                            onDownload={() => alert("Download started...")} 
+                            onLike={(id) => setLikedTracks(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])} 
+                            isLiked={likedTracks.includes(currentAudioTrack.id)} 
+                            uploaderProfile={users.find(u => u.id === currentAudioTrack.uploaderId)} 
+                            onArtistClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                        />
+                    )}
+                    
+                    {/* Header - Shows for both guests and logged-in users */}
+                    <Header 
+                        onHomeClick={() => handleNavigate('home')} 
+                        onProfileClick={(id) => { 
+                            if (!currentUser) {
+                                handleNavigate('login');
+                            } else {
+                                setSelectedUserId(id); 
+                                setView('profile');
+                            }
+                        }} 
+                        onReelsClick={() => handleNavigate('reels')} 
+                        onMarketplaceClick={() => handleNavigate('marketplace')} 
+                        onGroupsClick={() => handleNavigate('groups')} 
+                        currentUser={currentUser} 
+                        notifications={notifications} 
+                        users={users} 
+                        onLogout={handleLogout} 
+                        onLoginClick={() => handleNavigate('login')} 
+                        onMarkNotificationsRead={handleMarkAllNotificationsRead} 
+                        onNotificationClick={handleNotificationClick}
+                        activeTab={activeTab} 
+                        onNavigate={handleNavigate} 
+                        onMessageClick={(userId) => {
+                            if (!currentUser) {
+                                handleNavigate('login');
+                            } else {
+                                const user = users.find(u => u.id === userId);
+                                if (user) {
+                                    setActiveChatUser(user);
+                                }
+                            }
+                        }}
+                    />
+                    
+                    <div className="flex justify-center w-full max-w-[1920px] mx-auto relative flex-1">
+                        {/* Sidebar - Hidden for guests on mobile, shown for logged-in */}
+                        {currentUser && (
+                            <div className="sticky top-14 h-[calc(100vh-56px)] z-20 hidden lg:block">
+                                <Sidebar 
+                                    currentUser={currentUser || INITIAL_USERS[0]} 
+                                    onProfileClick={(id) => { 
+                                        if (!currentUser) {
+                                            handleNavigate('login');
+                                        } else {
+                                            setSelectedUserId(id); 
+                                            setView('profile'); 
+                                        }
+                                    }} 
+                                    onReelsClick={() => handleNavigate('reels')} 
+                                    onMarketplaceClick={() => handleNavigate('marketplace')} 
+                                    onGroupsClick={() => handleNavigate('groups')} 
+                                />
+                            </div>
+                        )}
+                        
+                        <div className="w-full lg:w-[740px] xl:w-[700px] min-h-screen">
+                            {view === 'home' && (
+                                <div className="w-full pt-4 md:px-8 pb-10">
+                                    {/* Stories - Visible to everyone */}
+                                    <StoryReel 
+                                        stories={storiesWithUsers} 
+                                        onProfileClick={(id) => { 
+                                            if (!currentUser) {
+                                                handleNavigate('login');
+                                            } else {
+                                                setSelectedUserId(id); 
+                                                setView('profile');
+                                            }
+                                        }} 
+                                        onCreateStory={() => {
+                                            if (!currentUser) {
+                                                handleNavigate('login');
+                                            } else {
+                                                setShowCreateStoryModal(true);
+                                            }
+                                        }} 
+                                        onViewStory={(s) => setActiveStory(s)} 
+                                        currentUser={currentUser} 
+                                        onRequestLogin={() => handleNavigate('login')} 
+                                    />
+                                    
+                                    {/* Create Post - Different for guests vs logged-in */}
+                                    {currentUser ? (
+                                        <CreatePost 
+                                            currentUser={currentUser} 
+                                            onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                            onClick={() => setShowCreatePostModal(true)} 
+                                            onCreateEventClick={() => setShowCreateEventModal(true)} 
+                                        />
+                                    ) : (
+                                        <GuestCreatePost onSignUp={() => handleNavigate('login')} />
+                                    )}
+                                    
+                                    {/* People You May Know - Only for logged-in users */}
+                                    {currentUser && suggestedUsers.length > 0 && (
+                                        <PeopleYouMayKnow 
+                                            suggestedUsers={suggestedUsers}
+                                            onViewProfile={(userId) => {
+                                                handleViewProfile(userId);
+                                                setSuggestionRotation(prev => prev + 1);
+                                            }}
+                                            onRemove={(userId) => {
+                                                handleRemoveSuggestedUser(userId);
+                                                setSuggestionRotation(prev => prev + 1);
+                                            }}
+                                        />
+                                    )}
+                                    
+                                    {/* Suggested Products Widget - Only for logged-in users */}
+                                    {currentUser && (
+                                        <SuggestedProductsWidget 
+                                            products={products} 
+                                            currentUser={currentUser} 
+                                            onViewProduct={(p) => { setActiveProduct(p); }} 
+                                            onSeeAll={() => handleNavigate('marketplace')} 
+                                        />
+                                    )}
+                                    
+                                    {/* Sign Up CTA for Guests */}
+                                    {!currentUser && (
+                                        <GuestSignUpCTA 
+                                            onSignUp={() => handleNavigate('login')}
+                                            title="Join UNERA to connect with friends"
+                                            description="Sign up to see more posts, share your thoughts, and join communities."
+                                        />
+                                    )}
+                                    
+                                    {/* Main Feed - VISIBLE TO EVERYONE */}
+                                    {renderMainFeed()}
+                                </div>
+                            )}
+                            
+                            {/* Other views... (profile, marketplace, etc.) */}
+                            {view === 'profile' && selectedUserId !== null && (
+                                <UserProfile 
+                                    user={users.find(u => u.id === selectedUserId)!} 
+                                    currentUser={currentUser} 
+                                    users={users} 
+                                    posts={(() => {
+                                        const userPosts = posts.filter(p => p.authorId === selectedUserId);
+                                        const enhancedPosts = userPosts.map(post => ({
+                                            ...post,
+                                            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+                                        }));
+                                        
+                                        return [
+                                            ...enhancedPosts,
+                                            ...products
+                                                .filter(p => p.sellerId === selectedUserId)
+                                                .map(p => ({
+                                                    id: p.id + 100000,
+                                                    authorId: p.sellerId,
+                                                    content: `Just listed a new item: ${p.title}`,
+                                                    timestamp: p.date,
+                                                    formattedTime: formatRelativeTime(p.date),
+                                                    createdAt: p.date,
+                                                    reactions: [],
+                                                    comments: [],
+                                                    shares: 0,
+                                                    views: p.views,
+                                                    type: 'product' as const,
+                                                    visibility: 'Public' as const,
+                                                    product: p,
+                                                    productId: p.id
+                                                }))
+                                        ];
+                                    })()}
+                                    onProfileClick={(id) => { 
+                                        if (!currentUser) {
+                                            handleNavigate('login');
+                                        } else {
+                                            setSelectedUserId(id); 
+                                            setView('profile'); 
+                                        }
+                                    }} 
+                                    onFollow={handleFollowUser} 
+                                    onReact={handleReact} 
+                                    onComment={handleComment} 
+                                    onShare={(id) => setActiveSharePostId(id)} 
+                                    onMessage={handleMessageIconClick} 
+                                    onCreatePost={handleCreatePost} 
+                                    onUpdateProfileImage={(f) => {}} 
+                                    onUpdateCoverImage={(f) => {}} 
+                                    onUpdateUserDetails={(d) => {}} 
+                                    onDeletePost={(id) => {
+                                        if (id > 100000) {
+                                            const productId = id - 100000;
+                                            setProducts(prev => prev.filter(p => p.id !== productId));
+                                        } else {
+                                            const postToDelete = posts.find(p => p.id === id);
+                                            if (postToDelete && (postToDelete.type === 'music' || postToDelete.type === 'podcast') && postToDelete.audioTrack) {
+                                                const trackId = postToDelete.audioTrack.id;
+                                                setSongs(prev => prev.filter(s => s.id !== trackId));
+                                                setEpisodes(prev => prev.filter(e => e.id !== trackId));
+                                            }
+                                            setPosts(posts.filter(p => p.id !== id));
+                                        }
+                                    }} 
+                                    onEditPost={() => {}} 
+                                    getCommentAuthor={(id) => users.find(u => u.id === id)} 
+                                    onViewImage={setFullScreenImage} 
+                                    onOpenComments={setActiveCommentsPostId} 
+                                    onVideoClick={() => {}} 
+                                    onCreateEventClick={() => setShowCreateEventModal(true)} 
+                                    onPlayAudioTrack={handlePlayTrack} 
+                                    onVerifyUser={handleVerifyUser} 
+                                    onRestrictUser={handleRestrictUser} 
+                                    onDeleteUser={handleDeleteUser} 
+                                    onMakeModerator={handleMakeModerator} 
+                                    onHashtagClick={handleTagClick} 
+                                    songs={songs}
+                                    episodes={episodes}
+                                    likedTracks={likedTracks}
+                                    onLikeTrack={handleLikeTrack}
+                                    onTrackComment={handleTrackComment}
+                                    onTrackShare={handleTrackShare}
+                                    renderMusicPost={(post: PostType, author: any) => {
+                                        const song = getSongForPost(post, songs, episodes);
+                                        if (!song) return null;
+                                        
+                                        return (
+                                            <MusicFeedPost 
+                                                key={post.id}
+                                                song={song}
+                                                currentUser={currentUser}
+                                                users={users}
+                                                onPlayTrack={handlePlayTrack}
+                                                onProfileClick={(id) => { 
+                                                    if (!currentUser) {
+                                                        handleNavigate('login');
+                                                    } else {
+                                                        setSelectedUserId(id); 
+                                                        setView('profile'); 
+                                                    }
+                                                }}
+                                                onLikeTrack={handleLikeTrack}
+                                                onTrackComment={handleTrackComment}
+                                                onTrackShare={handleTrackShare}
+                                                isLiked={likedTracks.includes(song.id)}
+                                                showLoginPrompt={() => handleNavigate('login')}
+                                            />
+                                        );
+                                    }}
+                                    renderRegularPost={renderRegularPost}
+                                    // MESSAGE ICON PROPS
+                                    unreadMessageCount={currentUserUnreadCount}
+                                    onOpenMessages={handleOpenMessages}
+                                    recentMessages={currentUserRecentConversations}
+                                />
+                            )}
+                            
+                            {/* Other view components remain the same... */}
+                            {/* (single_post, marketplace, reels, groups, etc.) */}
+                            {view === 'single_post' && activeSinglePostId !== null && (
+                                <div className="w-full pt-4 md:px-8 pb-10">
+                                    {(() => {
+                                        const post = posts.find(p => p.id === activeSinglePostId);
+                                        if (!post) return null;
+                                        
+                                        const author = getAuthorForPost(post, users, brands);
+                                        if (!author) return null;
+                                        
+                                        if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
+                                            return renderMusicPost(post, author);
+                                        }
+                                        
+                                        return renderRegularPost(post, author, false);
+                                    })()}
+                                </div>
+                            )}
+                            
+                            {view === 'marketplace' && (
+                                <MarketplacePage 
+                                    products={products} 
+                                    currentUser={currentUser} 
+                                    onNavigateHome={() => handleNavigate('home')}
+                                    onCreateProduct={handleCreateProduct}
+                                    onViewProduct={(product) => setActiveProduct(product)}
+                                    // Pass the product interaction handlers
+                                    onLikeProduct={handleLikeProduct}
+                                    onCommentOnProduct={handleCommentOnProduct}
+                                />
+                            )}
+                            
+                            {view === 'reels' && (
+                                <ReelsFeed 
+                                    reels={reels} 
+                                    users={users} 
+                                    currentUser={currentUser} 
+                                    activeReelId={activeReelId} 
+                                    onReelClick={setActiveReelId} 
+                                    onProfileClick={(id) => { 
+                                        if (!currentUser) {
+                                            handleNavigate('login');
+                                        } else {
+                                            setSelectedUserId(id); 
+                                            setView('profile'); 
+                                        }
+                                    }} 
+                                    onNavigate={handleNavigate} 
+                                    onReact={handleReelReact}
+                                    onShare={(reelId, type) => {
+                                        if (!currentUser) {
+                                            handleNavigate('login');
+                                            return;
+                                        }
+                                        
+                                        if (type === 'feed') {
+                                            const reel = reels.find(r => r.id === reelId);
+                                            if (reel && currentUser) {
+                                                const timestamp = Date.now();
+                                                const formattedTime = formatRelativeTime(timestamp);
+                                                const newPost: PostType = { 
+                                                    id: timestamp, 
+                                                    authorId: currentUser.id, 
+                                                    content: `Shared a reel: ${reel.caption}`, 
+                                                    video: reel.videoUrl,
+                                                    timestamp: timestamp,
+                                                    formattedTime: formattedTime,
+                                                    createdAt: timestamp, 
+                                                    reactions: [], 
+                                                    comments: [], 
+                                                    shares: 0, 
+                                                    views: 0, 
+                                                    type: 'video', 
+                                                    visibility: 'Public' 
+                                                };
+                                                setPosts([newPost, ...posts]);
+                                                setReels(prev => prev.map(r => 
+                                                    r.id === reelId 
+                                                        ? { ...r, shares: (r.shares || 0) + 1 }
+                                                        : r
+                                                ));
+                                                
+                                                // Send notification to reel owner (prevent self-notification)
+                                                if (reel.userId !== currentUser.id) {
+                                                    handleCreateNotification(
+                                                        reel.userId,
+                                                        currentUser.id,
+                                                        'reel_share',
+                                                        'shared your reel.',
+                                                        { reelId }
+                                                    );
+                                                }
+                                                
+                                                alert("Reel shared to your feed!");
+                                            }
+                                        } else if (type === 'copy' && isClient) {
+                                            navigator.clipboard.writeText(`https://unera.social/reels/${reelId}`);
+                                            alert("Link copied to clipboard!");
+                                        }
+                                    }}
+                                    onComment={(reelId, text) => {
+                                        if (!currentUser) {
+                                            handleNavigate('login');
+                                            return;
+                                        }
+                                        
+                                        const timestamp = Date.now();
+                                        const formattedTime = formatRelativeTime(timestamp);
+                                        const newComment = { 
+                                            id: timestamp, 
+                                            userId: currentUser.id, 
+                                            text, 
+                                            timestamp: timestamp,
+                                            formattedTime: formattedTime,
+                                            likes: 0,
+                                            authorName: currentUser.name,
+                                            authorImage: currentUser.profileImage
+                                        };
+                                        setReels(prev => prev.map(reel => 
+                                            reel.id === reelId 
+                                                ? { ...reel, comments: [...reel.comments, newComment] }
+                                                : reel
+                                        ));
+                                        
+                                        // Send notification to reel owner (prevent self-notification)
+                                        const reel = reels.find(r => r.id === reelId);
+                                        if (reel && reel.userId !== currentUser.id) {
+                                            handleCreateNotification(
+                                                reel.userId,
+                                                currentUser.id,
+                                                'reel_comment',
+                                                'commented on your reel.',
+                                                { reelId, commentId: newComment.id }
+                                            );
+                                        }
+                                    }}
+                                    onCreateReelClick={() => setShowCreateReelModal(true)}
+                                    onFollow={handleFollowUser}
+                                    getCommentAuthor={(id) => users.find(u => u.id === id)}
+                                />
+                            )}
+                            
+                            {view === 'groups' && (
+                                <GroupsPage 
+                                    key="groups-page"
+                                    groups={groups}
+                                    currentUser={currentUser}
+                                    users={users}
+                                    initialGroupId={initialGroupIdToView}
+                                    onCreateGroup={handleCreateGroup}
+                                    onJoinGroup={handleJoinGroup}
+                                    onLeaveGroup={handleLeaveGroup}
+                                    onDeleteGroup={handleDeleteGroup}
+                                    onUpdateGroupImage={handleUpdateGroupImage}
+                                    onPostToGroup={handlePostToGroup}
+                                    onCreateGroupEvent={handleCreateGroupEvent}
+                                    onInviteToGroup={handleInviteToGroup}
+                                    onProfileClick={(id) => { 
+                                        if (!currentUser) {
+                                            handleNavigate('login');
+                                        } else {
+                                            setSelectedUserId(id); 
+                                            setView('profile'); 
+                                            setActiveTab('profile');
+                                        }
+                                    }}
+                                    onLikePost={handleReactGroupPost}
+                                    onOpenComments={handleOpenGroupComments}
+                                    onSharePost={handleShareGroupPost}
+                                    onDeleteGroupPost={handleDeleteGroupPost}
+                                    onRemoveMember={handleRemoveMember}
+                                    onUpdateGroupSettings={handleUpdateGroupSettings}
+                                    onPlayAudioTrack={handlePlayTrack}
+                                />
+                            )}
+                            
+                            {/* Other view components... */}
+                            {view === 'brands' && (
+                                <BrandsPage 
+                                    currentUser={currentUser}
+                                    brands={brands}
+                                    posts={posts}
+                                    users={users}
+                                    onCreateBrand={handleCreateBrand}
+                                    onFollowBrand={handleFollowBrand}
+                                    onProfileClick={(id) => { 
+                                        if (!currentUser) {
+                                            handleNavigate('login');
+                                        } else {
+                                            setSelectedUserId(id); 
+                                            setView('profile'); 
+                                        }
+                                    }}
+                                    onPostAsBrand={handlePostAsBrand}
+                                    onReact={handleReact}
+                                    onShare={(id) => setActiveSharePostId(id)}
+                                    onOpenComments={(postId) => {
+                                        if (!currentUser) {
+                                            handleNavigate('login');
+                                        } else {
+                                            setActiveCommentsPostId(postId);
+                                        }
+                                    }}
+                                    onUpdateBrand={handleUpdateBrand}
+                                    onDeleteBrand={handleDeleteBrand}
+                                    onMessage={(brandId) => {
+                                        if (!currentUser) {
+                                            handleNavigate('login');
+                                            return;
+                                        }
+                                        const brand = brands.find(b => b.id === brandId);
+                                        if (brand && currentUser) {
+                                            alert(`Messaging ${brand.name} - Feature coming soon!`);
+                                        }
+                                    }}
+                                    onCreateEvent={(brandId, eventData) => {
+                                        if (!currentUser) {
+                                            handleNavigate('login');
+                                            return;
+                                        }
+                                        const eventWithBrand = {
+                                            ...eventData,
+                                            brandId: brandId,
+                                            brandName: brands.find(b => b.id === brandId)?.name
+                                        };
+                                        handleCreateEvent(eventWithBrand);
+                                    }}
+                                    onUpdateBrandImage={handleUpdateBrandImage}
+                                    onDeletePost={handleDeletePost}
+                                    onVerifyBrand={handleVerifyBrand}
+                                    initialBrandId={activeBrandId}
+                                    onPlayAudioTrack={handlePlayTrack}
+                                />
+                            )}
+                            
+                            {/* Continue with other view components... */}
+                            {view === 'events' && (
+                                <EventsPage 
+                                    events={events} 
+                                    users={users} 
+                                    currentUser={currentUser} 
+                                    onJoinEvent={handleJoinEvent} 
+                                    onProfileClick={(id) => { 
+                                        if (!currentUser) {
+                                            handleNavigate('login');
+                                        } else {
+                                            setSelectedUserId(id); 
+                                            setView('profile'); 
+                                        }
+                                    }} 
+                                    onCreateEvent={() => setShowCreateEventModal(true)} 
+                                />
+                            )}
+                            
+                            {view === 'birthdays' && (
+                                <BirthdaysPage 
+                                    users={users} 
+                                    currentUser={currentUser} 
+                                    onProfileClick={(id) => { 
+                                        if (!currentUser) {
+                                            handleNavigate('login');
+                                        } else {
+                                            setSelectedUserId(id); 
+                                            setView('profile'); 
+                                        }
+                                    }} 
+                                />
+                            )}
+                            
+                            {view === 'suggested_profiles' && (
+                                <SuggestedProfilesPage 
+                                    users={users} 
+                                    currentUser={currentUser} 
+                                    onFollow={handleFollowUser} 
+                                    onProfileClick={(id) => { 
+                                        if (!currentUser) {
+                                            handleNavigate('login');
+                                        } else {
+                                            setSelectedUserId(id); 
+                                            setView('profile'); 
+                                        }
+                                    }} 
+                                />
+                            )}
+                            
+                            {view === 'memories' && (
+                                <MemoriesPage 
+                                    posts={posts} 
+                                    currentUser={currentUser} 
+                                    users={users} 
+                                    onProfileClick={(id) => { 
+                                        if (!currentUser) {
+                                            handleNavigate('login');
+                                        } else {
+                                            setSelectedUserId(id); 
+                                            setView('profile'); 
+                                        }
+                                    }} 
+                                    onPostClick={(postId) => { setActiveSinglePostId(postId); setView('single_post'); }} 
+                                />
+                            )}
+                            
+                            {view === 'music' && (
+                                <MusicSystem 
+                                    songs={songs} 
+                                    episodes={episodes} 
+                                    currentUser={currentUser} 
+                                    onPlayTrack={handlePlayTrack} 
+                                    onProfileClick={(id) => { 
+                                        if (!currentUser) {
+                                            handleNavigate('login');
+                                        } else {
+                                            setSelectedUserId(id); 
+                                            setView('profile'); 
+                                        }
+                                    }} 
+                                    onDeleteSong={handleDeleteSong} 
+                                    onDeleteEpisode={handleDeleteEpisode} 
+                                    likedTracks={likedTracks} 
+                                    onToggleLike={handleLikeTrack} 
+                                    onUploadToFeed={handleUploadToFeed} 
+                                    onAddSong={handleAddSong} 
+                                    onAddEpisode={handleAddEpisode} 
+                                    playHistory={playHistory}
+                                />
+                            )}
+                            
+                            {view === 'tools' && (
+                                <ToolsPage 
+                                    currentUser={currentUser} 
+                                    onNavigate={handleNavigate} 
+                                />
+                            )}
+                            
+                            {view === 'help_support' && (
+                                <HelpSupportPage 
+                                    currentUser={currentUser} 
+                                />
+                            )}
+                            
+                            {view === 'settings' && (
+                                <SettingsPage 
+                                    currentUser={currentUser} 
+                                    onUpdateUser={(updates) => { 
+                                        if (currentUser) {
+                                            const updatedUser = { ...currentUser, ...updates };
+                                            setCurrentUser(updatedUser);
+                                            setUsers(users.map(u => u.id === currentUser.id ? updatedUser : u));
+                                        }
+                                    }} 
+                                    onLogout={handleLogout} 
+                                />
+                            )}
+                            
+                            {view === 'privacy_policy' && (
+                                <PrivacyPolicyPage />
+                            )}
+                            
+                            {view === 'terms_of_service' && (
+                                <TermsOfServicePage />
+                            )}
+                        </div>
+                        
+                        {/* Right Sidebar - Only for logged-in users */}
+                        {currentUser && (
+                            <div className="sticky top-14 h-[calc(100vh-56px)] z-20 hidden xl:block pl-4">
+                                <RightSidebar 
+                                    contacts={users.filter(u => u.id !== currentUser?.id)} 
+                                    onProfileClick={(id) => { 
+                                        if (!currentUser) {
+                                            handleNavigate('login');
+                                        } else {
+                                            setSelectedUserId(id); 
+                                            setView('profile'); 
+                                        }
+                                    }} 
+                                    onMessageClick={(userId) => {
+                                        if (!currentUser) {
+                                            handleNavigate('login');
+                                        } else {
+                                            const user = users.find(u => u.id === userId);
+                                            if (user) {
+                                                setActiveChatUser(user);
+                                            }
+                                        }
+                                    }}
+                                    getUserStatus={getUserStatus}
+                                />
+                            </div>
+                        )}
+                    </div>
+                    
+                    {/* Modals (only for logged-in users) */}
+                    {showCreatePostModal && currentUser && (
+                        <CreatePostModal 
+                            currentUser={currentUser} 
+                            users={users} 
+                            onClose={() => setShowCreatePostModal(false)} 
+                            onCreatePost={handleCreatePost} 
+                        />
+                    )}
+                    
+                    {showCreateStoryModal && currentUser && (
+                        <CreateStoryModal 
+                            currentUser={currentUser} 
+                            songs={songs} 
+                            onClose={() => setShowCreateStoryModal(false)} 
+                            onCreate={handleCreateStory} 
+                        />
+                    )}
+                    
+                    {showCreateReelModal && currentUser && (
+                        <CreateReelModal 
+                            currentUser={currentUser} 
+                            songs={songs} 
+                            onClose={() => setShowCreateReelModal(false)} 
+                            onSubmit={handleCreateReel} 
+                        />
+                    )}
+                    
+                    {showCreateEventModal && currentUser && (
+                        <CreateEventModal 
+                            currentUser={currentUser} 
+                            onClose={() => setShowCreateEventModal(false)} 
+                            onCreate={handleCreateEvent} 
+                        />
+                    )}
+                    
+                    {/* Chat Window */}
+                    {activeChatUser && currentUser && (
+                        <ChatWindow 
+                            key={`chat-${currentUser.id}-${activeChatUser.id}`}
+                            currentUser={currentUser}
+                            recipient={activeChatUser}
+                            messages={messages.filter(msg => 
+                                (msg.senderId === currentUser.id && msg.receiverId === activeChatUser.id) ||
+                                (msg.senderId === activeChatUser.id && msg.receiverId === currentUser.id)
+                            ).sort((a, b) => a.timestamp - b.timestamp)}
+                            onClose={() => {
+                                console.log('[DEBUG] Closing chat window');
+                                setActiveChatUser(null);
+                            }}
+                            onSendMessage={handleSendMessage}
+                            onDeleteMessage={handleDeleteMessage}
+                            onReactToMessage={handleReactToMessage}
+                            onTyping={handleTyping}
+                            onMarkAsRead={handleMarkAsRead}
+                            getUserStatus={getUserStatus}
+                            gifApiKey="YOUR_GIPHY_API_KEY"
+                        />
+                    )}
+                    
+                    {/* Comments Sheet */}
+                    {activeCommentsPostId && currentUser && (
+                        <CommentsSheet 
+                            post={posts.find(p => p.id === activeCommentsPostId)!} 
+                            currentUser={currentUser} 
+                            users={users} 
+                            onClose={() => setActiveCommentsPostId(null)} 
+                            onComment={handleComment} 
+                            onLikeComment={() => {}} 
+                            getCommentAuthor={(id) => users.find(u => u.id === id)} 
+                            onProfileClick={(id) => { 
+                                setSelectedUserId(id); 
+                                setView('profile'); 
+                                setActiveCommentsPostId(null); 
+                            }} 
+                        />
+                    )}
+                    
+                    {/* Share Sheet */}
+                    {activeSharePostId && currentUser && (
+                        <ShareSheet 
+                            currentUser={currentUser} 
+                            groups={groups} 
+                            brands={brands} 
+                            postId={activeSharePostId} 
+                            onClose={() => setActiveSharePostId(null)} 
+                            onShare={(type, id, caption) => handleShare(activeSharePostId, type, id, caption)} 
+                            onCopyLink={() => { if(isClient) { navigator.clipboard.writeText(`https://unera.social/posts/${activeSharePostId}`); alert("Link copied!"); } }} 
+                        />
+                    )}
+                    
+                    {/* Story Viewer */}
+                    {activeStory && (
+                        <StoryViewer 
+                            story={activeStory} 
+                            user={users.find(u => u.id === activeStory.userId)!} 
+                            currentUser={currentUser} 
+                            allStories={storiesWithUsers} 
+                            onClose={() => setActiveStory(null)} 
+                            onLike={() => handleLikeStory(activeStory.id)} 
+                            onReply={(text) => handleReplyStory(activeStory.id, text)} 
+                            onNext={() => {}} 
+                            onPrev={() => {}} 
+                            onFollow={handleFollowUser} 
+                            isFollowing={currentUser ? currentUser.following.includes(activeStory.userId) : false} 
+                        />
+                    )}
+                    
+                    {/* Product Detail Modal */}
+                    {activeProduct && (
+                        <ProductDetailModal 
+                            product={activeProduct} 
+                            currentUser={currentUser} 
+                            onClose={() => setActiveProduct(null)} 
+                            onMessage={(sid) => setActiveChatUser(users.find(u => u.id === sid) || null)} 
+                            onLike={() => handleLikeProduct(activeProduct.id)}
+                            onComment={(text) => handleCommentOnProduct(activeProduct.id, text)}
+                        />
+                    )}
+                    
+                    {/* Image Viewer */}
+                    {fullScreenImage && (
+                        <ImageViewer 
+                            imageUrl={fullScreenImage} 
+                            onClose={() => setFullScreenImage(null)} 
+                        />
+                    )}
+                </>
+            )}
+        </div>
+    );
+}
