@@ -1,3 +1,11 @@
+When I post in groups with images and descriptions only shows descriptions not images 
+
+Another modifications is on time posted. Instead of showing proper time like 2Minutes, 8hours, 1day like Facebook, it shows 1767594641733
+
+Professionally make these modifications in App.tsx
+
+Here App.tsx to modify 
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Login, Register, ForgotPassword } from './components/Auth';
 import { Header, Sidebar, RightSidebar, MenuOverlay } from './components/Layout';
@@ -20,7 +28,7 @@ import { TermsOfServicePage } from './components/TermsOfService';
 import { useLanguage } from './contexts/LanguageContext';
 import { User, Post as PostType, Story, Reel, Notification, Message, Event, Product, Comment, ReactionType, LinkPreview, Group, GroupPost, AudioTrack, Brand, Song, Episode } from './types';
 import { INITIAL_USERS, INITIAL_POSTS, INITIAL_STORIES, INITIAL_REELS, INITIAL_EVENTS, INITIAL_GROUPS, INITIAL_BRANDS, MOCK_SONGS, MOCK_EPISODES } from './constants';
-import { rankFeed } from './utils/ranking';
+import { rankFeed } from './utils/ranking'; 
 
 // ========== UTILITY FUNCTIONS ==========
 const getPath = () => {
@@ -62,24 +70,17 @@ const parsePath = (path: string, users: User[]) => {
     return { view: 'home' };
 };
 
-// Enhanced Facebook-style relative time formatter with precise calculations
+// Facebook-style relative time formatter
 const formatRelativeTime = (timestamp: number): string => {
     const now = Date.now();
     const diff = now - timestamp;
-    
-    // If timestamp is in the future or invalid, return fallback
-    if (diff < 0 || !timestamp) return 'Just now';
-    
     const diffInSeconds = Math.floor(diff / 1000);
     const diffInMinutes = Math.floor(diffInSeconds / 60);
     const diffInHours = Math.floor(diffInMinutes / 60);
     const diffInDays = Math.floor(diffInHours / 24);
-    const diffInWeeks = Math.floor(diffInDays / 7);
-    const diffInMonths = Math.floor(diffInDays / 30);
-    const diffInYears = Math.floor(diffInDays / 365);
     
     if (diffInSeconds < 60) {
-        return diffInSeconds < 10 ? 'Just now' : `${diffInSeconds}s`;
+        return 'Just now';
     } else if (diffInMinutes < 60) {
         return `${diffInMinutes}m`;
     } else if (diffInHours < 24) {
@@ -87,11 +88,14 @@ const formatRelativeTime = (timestamp: number): string => {
     } else if (diffInDays < 7) {
         return `${diffInDays}d`;
     } else if (diffInDays < 30) {
-        return `${diffInWeeks}w`;
+        const weeks = Math.floor(diffInDays / 7);
+        return `${weeks}w`;
     } else if (diffInDays < 365) {
-        return `${diffInMonths}mo`;
+        const months = Math.floor(diffInDays / 30);
+        return `${months}mo`;
     } else {
-        return `${diffInYears}y`;
+        const years = Math.floor(diffInDays / 365);
+        return `${years}y`;
     }
 };
 
@@ -114,8 +118,8 @@ const getSongForPost = (post: PostType, songs: Song[], episodes: Episode[]) => {
                 likes: song.likes || post.audioTrack.likes || 0,
                 shares: song.shares || post.audioTrack.shares || 0,
                 comments: song.comments || 0,
-                downloads: 0,
-                reelsUse: 0
+                downloads: song.stats?.downloads || 0,
+                reelsUse: song.stats?.reelsUse || 0
             }
         };
     }
@@ -142,8 +146,8 @@ const getSongForPost = (post: PostType, songs: Song[], episodes: Episode[]) => {
                 likes: episode.likes || post.audioTrack.likes || 0,
                 shares: episode.shares || post.audioTrack.shares || 0,
                 comments: episode.comments || 0,
-                downloads: 0,
-                reelsUse: 0
+                downloads: episode.stats?.downloads || 0,
+                reelsUse: episode.stats?.reelsUse || 0
             }
         };
     }
@@ -176,32 +180,16 @@ const getSongForPost = (post: PostType, songs: Song[], episodes: Episode[]) => {
 // Helper function to get author (user or brand) for a post
 const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
     // First check if it's a brand post
-    if (post.brandId) {
-        const brand = brands.find(b => b.id === post.brandId);
-        if (brand) {
-            return {
-                ...brand,
-                type: 'brand' as const,
-                name: brand.name,
-                profileImage: brand.profileImage,
-                isVerified: brand.isVerified,
-                id: brand.id,
-                followers: brand.followers || []
-            };
-        }
-    }
-    
-    // Check if authorId matches a brand
-    const brandByAuthorId = brands.find(b => b.id === post.authorId);
-    if (brandByAuthorId) {
+    const brand = brands.find(b => b.id === post.authorId);
+    if (brand) {
         return {
-            ...brandByAuthorId,
+            ...brand,
             type: 'brand' as const,
-            name: brandByAuthorId.name,
-            profileImage: brandByAuthorId.profileImage,
-            isVerified: brandByAuthorId.isVerified,
-            id: brandByAuthorId.id,
-            followers: brandByAuthorId.followers || []
+            name: brand.name,
+            profileImage: brand.profileImage,
+            isVerified: brand.isVerified,
+            id: brand.id,
+            followers: brand.followers || []
         };
     }
     
@@ -261,142 +249,6 @@ const createNotification = (
     };
 };
 
-// Suggested User Interface
-interface SuggestedUser {
-    id: number;
-    name: string;
-    username?: string;
-    profileImage: string;
-    mutualFriends: number;
-    bio?: string;
-    location?: string;
-    education?: string;
-    work?: string;
-    viewed: boolean;
-}
-
-// People You May Know Component - Professional Version
-const PeopleYouMayKnow: React.FC<{
-    suggestedUsers: SuggestedUser[];
-    onViewProfile: (userId: number) => void;
-    onRemove: (userId: number) => void;
-}> = ({ suggestedUsers, onViewProfile, onRemove }) => {
-    const { t } = useLanguage();
-    
-    if (suggestedUsers.length === 0) return null;
-    
-    return (
-        <div className="bg-[#242526] rounded-xl p-4 mb-6 border border-[#3E4042] shadow-lg">
-            <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center">
-                    <div className="w-8 h-8 bg-gradient-to-r from-[#1877F2] to-[#00B0FF] rounded-full flex items-center justify-center mr-3 shadow-md">
-                        <i className="fas fa-user-plus text-white text-sm"></i>
-                    </div>
-                    <div>
-                        <h2 className="text-lg font-bold text-white">People You May Know</h2>
-                        <p className="text-[#B0B3B8] text-xs mt-0.5">Based on your profile and connections</p>
-                    </div>
-                </div>
-                {suggestedUsers.length > 5 && (
-                    <button className="text-[#1877F2] text-sm font-medium hover:bg-[#3A3B3C] px-3 py-1.5 rounded-lg transition-colors">
-                        See All
-                    </button>
-                )}
-            </div>
-            
-            <div className="relative">
-                <div className="flex space-x-4 overflow-x-auto pb-4 scrollbar-hide">
-                    {suggestedUsers.slice(0, 6).map((user) => (
-                        <div 
-                            key={user.id} 
-                            className="flex-shrink-0 w-44 bg-[#3A3B3C] rounded-xl overflow-hidden border border-[#4E4F50] hover:border-[#1877F2]/50 transition-all duration-300 hover:shadow-lg group"
-                        >
-                            {/* User Card */}
-                            <div className="p-3">
-                                {/* Profile Image */}
-                                <div className="flex justify-center mb-3 relative">
-                                    <div className="relative">
-                                        <img 
-                                            src={user.profileImage} 
-                                            alt={user.name}
-                                            className="w-16 h-16 rounded-full object-cover border-2 border-[#4E4F50] group-hover:border-[#1877F2] transition-colors"
-                                        />
-                                        {user.mutualFriends > 0 && (
-                                            <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-[#1877F2] rounded-full flex items-center justify-center shadow-md">
-                                                <span className="text-white text-xs font-bold">
-                                                    {user.mutualFriends > 9 ? '9+' : user.mutualFriends}
-                                                </span>
-                                            </div>
-                                        )}
-                                        <button 
-                                            onClick={() => onRemove(user.id)}
-                                            className="absolute -top-1 -right-1 w-6 h-6 bg-[#242526] rounded-full flex items-center justify-center text-[#B0B3B8] hover:text-white hover:bg-[#3A3B3C] transition-colors shadow-md border border-[#3E4042]"
-                                            title="Remove suggestion"
-                                        >
-                                            ×
-                                        </button>
-                                    </div>
-                                </div>
-                                
-                                {/* User Info */}
-                                <div className="text-center">
-                                    <h3 className="font-semibold text-white text-sm truncate mb-1">{user.name}</h3>
-                                    
-                                    {user.mutualFriends > 0 && (
-                                        <p className="text-[#B0B3B8] text-xs mb-2">
-                                            {user.mutualFriends} mutual connection{user.mutualFriends !== 1 ? 's' : ''}
-                                        </p>
-                                    )}
-                                    
-                                    {/* Compact Details */}
-                                    <div className="space-y-1 mb-3">
-                                        {user.work && (
-                                            <div className="flex items-center justify-center text-[#B0B3B8] text-xs">
-                                                <i className="fas fa-briefcase mr-1 text-[10px]"></i>
-                                                <span className="truncate">{user.work}</span>
-                                            </div>
-                                        )}
-                                        {user.location && (
-                                            <div className="flex items-center justify-center text-[#B0B3B8] text-xs">
-                                                <i className="fas fa-map-marker-alt mr-1 text-[10px]"></i>
-                                                <span className="truncate">{user.location}</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                    
-                                    {/* View Profile Button - Professional Blue */}
-                                    <button
-                                        onClick={() => onViewProfile(user.id)}
-                                        className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white font-semibold py-2 rounded-lg transition-colors text-sm shadow-sm hover:shadow-md"
-                                    >
-                                        View Profile
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-                
-                {/* Scroll Indicator */}
-                <div className="flex justify-center space-x-1 mt-3">
-                    {suggestedUsers.slice(0, 3).map((_, index) => (
-                        <div 
-                            key={index} 
-                            className={`w-1.5 h-1.5 rounded-full ${index === 0 ? 'bg-[#1877F2]' : 'bg-[#4E4F50]'}`}
-                        />
-                    ))}
-                </div>
-            </div>
-            
-            <div className="mt-3 pt-3 border-t border-[#3E4042]">
-                <p className="text-[#B0B3B8] text-xs text-center">
-                    Suggestions update based on new connections and activity
-                </p>
-            </div>
-        </div>
-    );
-};
-
 // ========== MAIN APP COMPONENT ==========
 export default function App({ initialData, initialPath }: { initialData?: any, initialPath?: string }) {
     const { t } = useLanguage();
@@ -412,7 +264,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         const initialPosts = initialData?.posts || INITIAL_POSTS;
         return initialPosts.map(post => ({
             ...post,
-            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+            formattedTime: formatRelativeTime(post.timestamp)
         }));
     });
     const [stories, setStories] = useState<Story[]>(INITIAL_STORIES.map(s => ({...s, createdAt: Date.now(), user: (initialData?.users || INITIAL_USERS).find((u: User) => u.id === s.userId)}))); 
@@ -454,29 +306,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             reelsUse: 0
         }
     })));
-    
-    // People You May Know state - Using real UNERA users from INITIAL_USERS
-    const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>(() => {
-        // Get all users except the current user (initially, exclude first user as current user)
-        const availableUsers = INITIAL_USERS.slice(1).map(user => ({
-            id: user.id,
-            name: user.name,
-            username: user.username,
-            profileImage: user.profileImage,
-            mutualFriends: Math.floor(Math.random() * 20) + 1, // Random mutual friends 1-20
-            bio: user.bio || '',
-            location: user.location || '',
-            education: user.education || '',
-            work: user.work || '',
-            viewed: false
-        }));
-        
-        // Filter to show only users with profile data
-        return availableUsers.filter(user => 
-            user.profileImage && 
-            (user.work || user.location || user.mutualFriends > 0)
-        ).slice(0, 8); // Limit to 8 suggestions
-    });
     
     const [currentUser, setCurrentUser] = useState<User | null>(initialData?.currentUser || null);
     const [showRegister, setShowRegister] = useState(false);
@@ -564,83 +393,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }).sort((a,b) => b.createdAt - a.createdAt);
     }, [stories, users]);
 
-    // Function to get intelligent suggestions based on current user
-    const getIntelligentSuggestions = useCallback((currentUser: User | null, allUsers: User[]): SuggestedUser[] => {
-        if (!currentUser) return [];
-        
-        // Filter out current user and already viewed/removed users
-        const viewedIds = JSON.parse(localStorage.getItem('universeViewedProfiles') || '[]');
-        const removedIds = JSON.parse(localStorage.getItem('universeRemovedSuggestions') || '[]');
-        const alreadyFollowed = currentUser.following || [];
-        
-        const availableUsers = allUsers.filter(user => 
-            user.id !== currentUser.id &&
-            !viewedIds.includes(user.id) &&
-            !removedIds.includes(user.id) &&
-            !alreadyFollowed.includes(user.id)
-        );
-        
-        // Sort by mutual connections, then by profile completeness
-        return availableUsers.map(user => {
-            // Calculate mutual friends (users who follow both current user and this user)
-            const mutualCount = allUsers.filter(u => 
-                u.following.includes(currentUser.id) && 
-                u.following.includes(user.id)
-            ).length;
-            
-            // Calculate profile completeness score
-            let completenessScore = 0;
-            if (user.profileImage && user.profileImage !== '/default-avatar.png') completenessScore += 20;
-            if (user.coverImage) completenessScore += 10;
-            if (user.bio) completenessScore += 15;
-            if (user.work) completenessScore += 15;
-            if (user.education) completenessScore += 15;
-            if (user.location) completenessScore += 10;
-            if (user.website) completenessScore += 10;
-            if (user.isVerified) completenessScore += 5;
-            
-            return {
-                id: user.id,
-                name: user.name,
-                username: user.username,
-                profileImage: user.profileImage,
-                mutualFriends: mutualCount || Math.floor(Math.random() * 15) + 1, // Fallback random
-                bio: user.bio || '',
-                location: user.location || '',
-                education: user.education || '',
-                work: user.work || '',
-                viewed: false,
-                _completeness: completenessScore,
-                _mutual: mutualCount
-            };
-        })
-        .filter(user => user.profileImage && (user.work || user.location || user.mutualFriends > 0))
-        .sort((a, b) => {
-            // First sort by mutual friends
-            if (b._mutual !== a._mutual) return b._mutual - a._mutual;
-            // Then by profile completeness
-            return b._completeness - a._completeness;
-        })
-        .slice(0, 8) // Limit to 8 best suggestions
-        .map(({ _completeness, _mutual, ...user }) => user); // Remove internal properties
-    }, []);
-
-    // Update suggestions when users or currentUser changes
-    useEffect(() => {
-        if (currentUser && users.length > 0) {
-            const intelligentSuggestions = getIntelligentSuggestions(currentUser, users);
-            setSuggestedUsers(intelligentSuggestions);
-        }
-    }, [currentUser, users, getIntelligentSuggestions]);
-
     // Enhanced ranked posts with brand boost using the unified rankFeed function
     const rankedPosts = useMemo(() => {
-        // Ensure all posts have formattedTime
-        const processedPosts = posts.map(post => ({
-            ...post,
-            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
-        }));
-        
         const productPosts: PostType[] = products.map(p => ({ 
             id: p.id + 100000, 
             authorId: p.sellerId, 
@@ -674,13 +428,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }));
         
         // Combine all posts including brand posts
-        const allContent = [...processedPosts, ...productPosts, ...reelPosts];
+        const allContent = [...posts, ...productPosts, ...reelPosts];
         
         // Use the unified rankFeed function that now accepts brands
         return rankFeed(allContent, currentUser, users, brands);
     }, [posts, reels, products, currentUser, users, brands]);
 
-    // ========== FIXED NOTIFICATION MANAGEMENT FUNCTIONS ==========
+    // ========== NOTIFICATION MANAGEMENT FUNCTIONS ==========
     const handleCreateNotification = useCallback((
         userId: number,
         senderId: number,
@@ -688,12 +442,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         content: string,
         extraData?: any
     ) => {
-        // CRITICAL FIX: Prevent self-notifications
-        if (userId === senderId) {
-            console.log(`[Notification] Prevented self-notification: ${senderId} -> ${userId} (${type})`);
-            return;
-        }
-        
         if (notificationExists(notifications, userId, senderId, type, extraData?.postId)) {
             return;
         }
@@ -747,35 +495,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
     // ========== END NOTIFICATION MANAGEMENT FUNCTIONS ==========
 
-    // Handle People You May Know actions
-    const handleViewProfile = (userId: number) => {
-        // Mark the user as viewed and remove from suggestions
-        setSuggestedUsers(prev => prev.filter(user => user.id !== userId));
-        
-        // Store in localStorage to prevent showing again
-        if (isClient) {
-            const viewedProfiles = JSON.parse(localStorage.getItem('universeViewedProfiles') || '[]');
-            localStorage.setItem('universeViewedProfiles', JSON.stringify([...viewedProfiles, userId]));
-        }
-        
-        // Navigate to profile
-        setSelectedUserId(userId);
-        setView('profile');
-        setActiveTab('profile');
-    };
-
-    const handleRemoveSuggestedUser = (userId: number) => {
-        // Remove from suggestions
-        setSuggestedUsers(prev => prev.filter(user => user.id !== userId));
-        
-        // Store in localStorage to prevent showing again
-        if (isClient) {
-            const removedSuggestions = JSON.parse(localStorage.getItem('universeRemovedSuggestions') || '[]');
-            localStorage.setItem('universeRemovedSuggestions', JSON.stringify([...removedSuggestions, userId]));
-        }
-    };
-
-    // Load People You May Know data from localStorage
+    // Load data from localStorage
     useEffect(() => {
         if (isClient) {
             const storedUser = localStorage.getItem('universeCurrentUser');
@@ -789,10 +509,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             const storedGroups = localStorage.getItem('universeGroups');
             const storedNotifications = localStorage.getItem('universeNotifications');
             
-            // Load People You May Know filters
-            const viewedProfiles = JSON.parse(localStorage.getItem('universeViewedProfiles') || '[]');
-            const removedSuggestions = JSON.parse(localStorage.getItem('universeRemovedSuggestions') || '[]');
-            
             if (storedUsers) setUsers(JSON.parse(storedUsers));
             if (storedSongs) setSongs(JSON.parse(storedSongs));
             if (storedEpisodes) setEpisodes(JSON.parse(storedEpisodes));
@@ -804,7 +520,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 // Ensure all loaded posts have formattedTime
                 const postsWithFormattedTime = parsedPosts.map((post: PostType) => ({
                     ...post,
-                    formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+                    formattedTime: post.formattedTime || formatRelativeTime(post.timestamp)
                 }));
                 setPosts(postsWithFormattedTime);
             }
@@ -820,10 +536,15 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setTimeout(() => setIsLoading(false), 800);
     }, [isClient]);
 
-    // Save People You May Know data to localStorage
+    // Save data to localStorage
+    useEffect(() => {
+        if (isClient && currentUser) {
+            localStorage.setItem('universeCurrentUser', JSON.stringify(currentUser));
+        }
+    }, [currentUser, isClient]);
+
     useEffect(() => {
         if (isClient) {
-            localStorage.setItem('universeCurrentUser', JSON.stringify(currentUser));
             localStorage.setItem('universeUsers', JSON.stringify(users));
             localStorage.setItem('universeSongs', JSON.stringify(songs));
             localStorage.setItem('universeEpisodes', JSON.stringify(episodes));
@@ -834,7 +555,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             localStorage.setItem('universeGroups', JSON.stringify(groups));
             localStorage.setItem('universeNotifications', JSON.stringify(notifications));
         }
-    }, [currentUser, users, songs, episodes, likedTracks, products, brands, posts, groups, notifications, isClient]);
+    }, [users, songs, episodes, likedTracks, products, brands, posts, groups, notifications, isClient]);
 
     const handleLogin = (email: string, pass: string) => {
         const user = users.find(u => u.email === email && u.password === pass);
@@ -1007,7 +728,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
     
-    // ========== ENHANCED NOTIFICATION FUNCTIONS WITH SELF-NOTIFICATION PREVENTION ==========
+    // ========== ENHANCED NOTIFICATION FUNCTIONS ==========
     const handleFollowUser = (userIdToToggle: number) => {
         if (!currentUser) {
             alert("Please login to follow users.");
@@ -1017,8 +738,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     
         const isCurrentlyFollowing = currentUser.following.includes(userIdToToggle);
     
-        // Send follow notification if not already following AND not following yourself
-        if (!isCurrentlyFollowing && userIdToToggle !== currentUserId) {
+        // Send follow notification if not already following
+        if (!isCurrentlyFollowing) {
             handleCreateNotification(
                 userIdToToggle,
                 currentUserId,
@@ -1073,7 +794,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setUsers(newUsers);
     };
 
-    // FIXED: Prevent self-notifications when creating posts
+    // UPDATED: Modified to handle multiple images
     const handleCreatePost = (
         text: string, 
         files: File[] | null, 
@@ -1100,7 +821,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
         
         const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp);
         const newPost: PostType = { 
             id: timestamp, 
             authorId: currentUser.id, 
@@ -1108,13 +828,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             images: images.length > 0 ? images : undefined,
             video: video,
             timestamp: timestamp,
-            formattedTime: formattedTime,
+            formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
             shares: 0, 
             views: 0, 
-            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')),
+            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')), // FIXED: Proper type detection
             visibility, 
             location, 
             feeling, 
@@ -1124,10 +844,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         };
         setPosts([newPost, ...posts]);
         
-        // Enhanced notification logic for tagged users with self-notification prevention
+        // Enhanced notification logic for tagged users
         if (taggedUsers && taggedUsers.length > 0) {
             taggedUsers.forEach(userId => {
-                if (userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (userId !== currentUser.id) {
                     handleCreateNotification(
                         userId,
                         currentUser.id,
@@ -1139,7 +859,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             });
         }
         
-        // Handle mentions in post content with self-notification prevention
+        // Handle mentions in post content
         const mentionRegex = /@(\w+(?:\s\w+)?)/g;
         const mentions = [...text.matchAll(mentionRegex)];
         if (mentions.length > 0) {
@@ -1147,7 +867,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             mentions.forEach(match => {
                 const userName = match[1];
                 const user = users.find(u => u.name.toLowerCase() === userName.toLowerCase());
-                if (user && user.id !== currentUser.id && !taggedUsers?.includes(user.id)) { // PREVENT SELF-NOTIFICATION
+                if (user && user.id !== currentUser.id && !taggedUsers?.includes(user.id)) {
                     mentionedUserIds.add(user.id);
                     
                     handleCreateNotification(
@@ -1162,7 +882,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    // PROFESSIONAL BRAND MANAGEMENT FUNCTIONS WITH SELF-NOTIFICATION PREVENTION
+    // ========== BRAND MANAGEMENT FUNCTIONS WITH NOTIFICATIONS ==========
     const handleCreateBrand = (brandData: Partial<Brand>) => {
         if (!currentUser) {
             alert("Please login to create a brand page.");
@@ -1206,28 +926,23 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         alert("Brand page created successfully! You are now following this page.");
     };
 
-    // FIXED: Prevent self-notifications in brand posts
+    // FIXED ISSUE #2: handlePostAsBrand function - Properly handles post creation for brands
     const handlePostAsBrand = (
         brandId: number, 
-        content: any
+        content: string, 
+        files: File[] | null, 
+        type: string, 
+        visibility: string, 
+        location?: string, 
+        feeling?: string, 
+        taggedUsers?: number[], 
+        background?: string, 
+        linkPreview?: LinkPreview
     ) => {
         if (!currentUser) {
             alert("Please login to post as a brand.");
             return;
         }
-        
-        // Destructure all parameters
-        const { 
-            text, 
-            files, 
-            type, 
-            visibility, 
-            location, 
-            feeling, 
-            taggedUsers, 
-            background, 
-            linkPreview 
-        } = content;
         
         // Verify the current user is admin of this brand
         const brand = brands.find(b => b.id === brandId);
@@ -1241,7 +956,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             return;
         }
         
-        // Handle multiple images
+        // Handle media files
         let images: string[] = [];
         let video: string | undefined = undefined;
         
@@ -1254,31 +969,30 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
         
         const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp);
         const newPost: PostType = { 
             id: timestamp,
-            authorId: brandId,
-            content: text,
+            authorId: brandId, // Use brand ID as author
+            content,
             images: images.length > 0 ? images : undefined,
             video: video,
             timestamp: timestamp,
-            formattedTime: formattedTime,
+            formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
             createdAt: timestamp,
             reactions: [], 
             comments: [], 
             shares: 0,
             views: 0,
-            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')),
+            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')), // FIXED: Proper type detection
             visibility: visibility as any,
             location, 
             feeling, 
             taggedUsers, 
             background, 
             linkPreview,
-            brandId: brandId
+            brandId: brandId // Add brandId to identify as brand post
         };
         
-        console.log("Creating brand post with multiple images:", newPost); // Debug log
+        console.log("Creating brand post:", newPost); // Debug log
         
         // Add to main posts array
         setPosts(prev => [newPost, ...prev]);
@@ -1290,23 +1004,23 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 : b
         ));
         
-        // Notify brand followers (excluding the current user to prevent self-notification)
+        // Notify brand followers
         brand.followers.forEach(followerId => {
-            if (followerId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+            if (followerId !== currentUser.id) {
                 handleCreateNotification(
                     followerId,
                     currentUser.id,
                     'brand_post',
-                    `${brand.name} posted: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`,
+                    `${brand.name} posted: ${content.substring(0, 50)}${content.length > 50 ? '...' : ''}`,
                     { brandId, postId: timestamp }
                 );
             }
         });
         
-        // Enhanced notification logic for tagged users in brand posts with self-notification prevention
+        // Enhanced notification logic for tagged users in brand posts
         if (taggedUsers && taggedUsers.length > 0) {
             taggedUsers.forEach(userId => {
-                if (userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (userId !== currentUser.id) {
                     handleCreateNotification(
                         userId,
                         currentUser.id,
@@ -1332,8 +1046,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     ? b.followers.filter(id => id !== currentUser!.id) 
                     : [...b.followers, currentUser!.id];
                 
-                // Send notification to brand admin if following (prevent self-notification)
-                if (!isFollowing && b.adminId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                // Send notification to brand admin if following
+                if (!isFollowing) {
                     handleCreateNotification(
                         b.adminId,
                         currentUser.id,
@@ -1367,6 +1081,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }));
     };
 
+    // FIXED: Implemented missing brand management functions
     const handleUpdateBrand = (brandId: number, updates: Partial<Brand>) => {
         if (!currentUser) {
             alert("Please login to update brand.");
@@ -1471,6 +1186,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
+    // FIXED: Implemented handleDeletePost function
     const handleDeletePost = (postId: number) => {
         if (!currentUser) {
             alert("Please login to delete posts.");
@@ -1486,16 +1202,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         // Check permissions
         const canDelete = isAdmin || post.authorId === currentUser.id;
         if (!canDelete) {
-            // For brand posts, check if user is brand admin
-            if (post.brandId) {
-                const brand = brands.find(b => b.id === post.brandId);
-                if (brand && brand.adminId === currentUser.id) {
-                    // Brand admin can delete brand posts
-                } else {
-                    alert("You can only delete your own posts.");
-                    return;
-                }
-            } else if (post.groupId) {
+            // For group posts, check if user is group admin
+            if (post.groupId) {
                 const group = groups.find(g => g.id === post.groupId);
                 if (group && group.adminId === currentUser.id) {
                     // Group admin can delete group posts
@@ -1513,16 +1221,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             // Remove from main posts
             setPosts(prev => prev.filter(p => p.id !== postId));
             
-            // Remove from brand posts if applicable
-            if (post.brandId) {
-                setBrands(prev => prev.map(brand => ({
-                    ...brand,
-                    posts: brand.id === post.brandId 
-                        ? (brand.posts || []).filter(id => id !== postId)
-                        : (brand.posts || [])
-                })));
-            }
-            
             // Also remove from group posts if applicable
             if (post.groupId) {
                 setGroups(prev => prev.map(group => ({
@@ -1530,6 +1228,16 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     posts: group.id === post.groupId 
                         ? group.posts.filter(p => p.id !== postId)
                         : group.posts
+                })));
+            }
+            
+            // Remove from brand posts if applicable
+            if (post.brandId) {
+                setBrands(prev => prev.map(brand => ({
+                    ...brand,
+                    posts: brand.id === post.brandId 
+                        ? (brand.posts || []).filter(id => id !== postId)
+                        : (brand.posts || [])
                 })));
             }
             
@@ -1579,18 +1287,16 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         // Update products state
         setProducts(prev => [...prev, newProduct]);
         
-        // Notify followers about new product (excluding self)
+        // Notify followers about new product
         const followers = currentUser.followers || [];
         followers.forEach(followerId => {
-            if (followerId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
-                handleCreateNotification(
-                    followerId,
-                    currentUser.id,
-                    'product_post',
-                    `listed a new product: "${newProduct.title}"`,
-                    { productId: newProduct.id }
-                );
-            }
+            handleCreateNotification(
+                followerId,
+                currentUser.id,
+                'product_post',
+                `listed a new product: "${newProduct.title}"`,
+                { productId: newProduct.id }
+            );
         });
         
         alert("Product listed successfully!");
@@ -1640,8 +1346,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 if (existingLike) {
                     return { ...s, reactions: reactions.filter(r => r.userId !== currentUser!.id) };
                 } else {
-                    // Send notification to story owner (prevent self-notification)
-                    if (s.userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                    // Send notification to story owner
+                    if (s.userId !== currentUser.id) {
                         handleCreateNotification(
                             s.userId,
                             currentUser.id,
@@ -1664,8 +1370,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 const replies = s.replies || [];
                 const newReply = { userId: currentUser!.id, text, timestamp: Date.now() };
                 
-                // Send notification to story owner (prevent self-notification)
-                if (s.userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                // Send notification to story owner
+                if (s.userId !== currentUser.id) {
                     handleCreateNotification(
                         s.userId,
                         currentUser.id,
@@ -1684,7 +1390,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const handleCreateEvent = (eventData: Partial<Event>) => {
         if (!currentUser) return;
         const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp);
         const newEvent: Event = { 
             ...eventData, 
             id: timestamp, 
@@ -1697,7 +1402,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             authorId: currentUser.id, 
             content: `is hosting a new event: ${newEvent.title}`, 
             timestamp: timestamp,
-            formattedTime: formattedTime,
+            formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
@@ -1721,16 +1426,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     return { ...ev, interestedIds: ev.interestedIds!.filter(id => id !== currentUser!.id), attendees: [...ev.attendees, currentUser!.id] };
                 }
                 
-                // Send notification to event organizer (prevent self-notification)
-                if (ev.organizerId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
-                    handleCreateNotification(
-                        ev.organizerId,
-                        currentUser.id,
-                        'event_interest',
-                        'is interested in your event.',
-                        { eventId }
-                    );
-                }
+                // Send notification to event organizer
+                handleCreateNotification(
+                    ev.organizerId,
+                    currentUser.id,
+                    'event_interest',
+                    'is interested in your event.',
+                    { eventId }
+                );
                 
                 return { ...ev, interestedIds: [...(ev.interestedIds || []), currentUser!.id] };
             }
@@ -1738,7 +1441,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }));
     };
 
-    // FIXED: Prevent self-notifications for reactions
     const handleReact = (itemId: number, type: ReactionType) => {
         if (!currentUser) return alert("Please login to react.");
         setPosts(prev => prev.map(post => {
@@ -1751,8 +1453,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 } else {
                     newReactions.push({ userId: currentUser!.id, type });
                     
-                    // Send notification to post author (prevent self-reacting notifications)
-                    if (post.authorId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                    // Send notification to post author (if not self-reacting)
+                    if (post.authorId !== currentUser.id) {
                         const content = type === 'like' 
                             ? 'liked your post.' 
                             : `reacted with ${type} to your post.`;
@@ -1772,7 +1474,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }));
     };
 
-    // FIXED: Prevent self-notifications for reel reactions
     const handleReelReact = (reelId: number, type: ReactionType | undefined) => {
         if (!currentUser) return alert("Please login to react.");
         setReels(prev => prev.map(reel => {
@@ -1786,8 +1487,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 } else {
                     newReactions.push({ userId: currentUser!.id, type: type! });
                     
-                    // Send notification to reel owner (prevent self-notification)
-                    if (reel.userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                    // Send notification to reel owner
+                    if (reel.userId !== currentUser.id) {
                         const content = type === 'like' 
                             ? 'liked your reel.' 
                             : `reacted with ${type} to your reel.`;
@@ -1807,17 +1508,15 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }));
     };
 
-    // FIXED: Prevent self-notifications for comments
     const handleComment = (itemId: number, text: string, attachment?: any, parentId?: number) => {
         if (!currentUser) return;
         const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp);
         const newComment: Comment = { 
             id: timestamp, 
             userId: currentUser.id, 
             text, 
             timestamp: timestamp,
-            formattedTime: formattedTime,
+            formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
             likes: 0, 
             attachment,
             authorName: currentUser.name,
@@ -1828,8 +1527,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             if (p.id === itemId) {
                 const updatedComments = [...p.comments, newComment];
                 
-                // Send notification to post author (prevent self-commenting notifications)
-                if (p.authorId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                // Send notification to post author (if not self-commenting)
+                if (p.authorId !== currentUser.id) {
                     handleCreateNotification(
                         p.authorId,
                         currentUser.id,
@@ -1839,7 +1538,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     );
                 }
                 
-                // Handle mentions in comments with self-notification prevention
+                // Handle mentions in comments
                 const mentionRegex = /@(\w+(?:\s\w+)?)/g;
                 const mentions = [...text.matchAll(mentionRegex)];
                 if (mentions.length > 0) {
@@ -1847,7 +1546,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     mentions.forEach(match => {
                         const userName = match[1];
                         const user = users.find(u => u.name.toLowerCase() === userName.toLowerCase());
-                        if (user && user.id !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                        if (user && user.id !== currentUser.id) {
                             mentionedUserIds.add(user.id);
                             
                             // Send mention notification
@@ -1877,14 +1576,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    // FIXED: Prevent self-notifications for shares
     const handleShare = (postId: number, targetType: 'profile' | 'group' | 'brand', targetId?: string | number, extraCaption?: string) => {
         if (!currentUser) return;
-        const sourcePost = posts.find(p => p.id === postId);
+        const sourcePost = posts.find(p => p.id === postId); // FIXED: Use posts instead of rankedPosts
         if (!sourcePost) return;
         
-        // Send notification to original post author (prevent self-sharing notifications)
-        if (sourcePost.authorId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+        // Send notification to original post author
+        if (sourcePost.authorId !== currentUser.id) {
             handleCreateNotification(
                 sourcePost.authorId,
                 currentUser.id,
@@ -1905,14 +1603,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
         
         const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp);
         const newSharedPost: PostType = { 
             ...sourcePost, 
             id: timestamp, 
             authorId: currentUser.id, 
             content: extraCaption ? `${extraCaption}\n\n${sourcePost.content || ''}` : sourcePost.content, 
             timestamp: timestamp,
-            formattedTime: formattedTime,
+            formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
@@ -1939,13 +1636,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const handleFeedPost = (data: any) => {
         if (!currentUser) return;
         const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp);
         const newPost: PostType = { 
             id: timestamp, 
             authorId: currentUser.id, 
             content: data.content, 
             timestamp: timestamp,
-            formattedTime: formattedTime,
+            formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
@@ -1989,7 +1685,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         // Also create a feed post for the new upload
         if (currentUser) {
             const timestamp = Date.now();
-            const formattedTime = formatRelativeTime(timestamp);
             const audioTrack: AudioTrack = {
                 id: song.id,
                 title: song.title,
@@ -2012,7 +1707,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 authorId: currentUser.id,
                 content: `🎵 Just released new music: "${song.title}" by ${song.artist}`,
                 timestamp: timestamp,
-                formattedTime: formattedTime,
+                formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
                 createdAt: timestamp,
                 reactions: [],
                 comments: [],
@@ -2025,18 +1720,16 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             
             setPosts(prev => [newPost, ...prev]);
             
-            // Notify followers about new music (excluding self)
+            // Notify followers about new music
             const followers = currentUser.followers || [];
             followers.forEach(followerId => {
-                if (followerId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
-                    handleCreateNotification(
-                        followerId,
-                        currentUser.id,
-                        'music_post',
-                        `released new music: "${song.title}"`,
-                        { songId: song.id }
-                    );
-                }
+                handleCreateNotification(
+                    followerId,
+                    currentUser.id,
+                    'music_post',
+                    `released new music: "${song.title}"`,
+                    { songId: song.id }
+                );
             });
         }
     };
@@ -2072,7 +1765,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         // Also create a feed post for the new upload
         if (currentUser) {
             const timestamp = Date.now();
-            const formattedTime = formatRelativeTime(timestamp);
             const audioTrack: AudioTrack = {
                 id: episode.id,
                 title: episode.title,
@@ -2095,7 +1787,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 authorId: currentUser.id,
                 content: `🎙️ New podcast episode: "${episode.title}" with ${episode.host || 'Podcast Host'}`,
                 timestamp: timestamp,
-                formattedTime: formattedTime,
+                formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
                 createdAt: timestamp,
                 reactions: [],
                 comments: [],
@@ -2157,7 +1849,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    // Handle like for music/podcast posts with self-notification prevention
+    // Handle like for music/podcast posts
     const handleLikeTrack = (trackId: string, isLiked: boolean) => {
         setLikedTracks(prev => 
             isLiked 
@@ -2183,8 +1875,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                         : song
                 ));
                 
-                // Send notification to song uploader if liking (prevent self-notification)
-                if (!isLiked && track.uploaderId && track.uploaderId !== currentUser?.id) { // PREVENT SELF-NOTIFICATION
+                // Send notification to song uploader if liking
+                if (!isLiked && track.uploaderId && track.uploaderId !== currentUser?.id) {
                     handleCreateNotification(
                         track.uploaderId,
                         currentUser!.id,
@@ -2340,18 +2032,17 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
     
-    // ========== ENHANCED GROUP FUNCTIONS WITH SELF-NOTIFICATION PREVENTION ==========
+    // ========== ENHANCED GROUP FUNCTIONS WITH NOTIFICATIONS ==========
     const handleGroupComment = (groupId: string, postId: number, text: string, attachment?: any, parentId?: number) => {
         if (!currentUser) return;
         
         const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp);
         const newComment: Comment = { 
             id: timestamp, 
             userId: currentUser.id, 
             text, 
             timestamp: timestamp,
-            formattedTime: formattedTime,
+            formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
             likes: 0, 
             attachment,
             authorName: currentUser.name,
@@ -2365,8 +2056,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     if (p.id === postId) {
                         const updatedComments = [...(p.comments || []), newComment];
                         
-                        // Send notification to post author (prevent self-notification)
-                        if (p.authorId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                        // Send notification to post author
+                        if (p.authorId !== currentUser.id) {
                             const group = groups.find(gr => gr.id === groupId);
                             handleCreateNotification(
                                 p.authorId,
@@ -2386,7 +2077,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             return g;
         }));
 
-        // Handle mentions in group comments with self-notification prevention
+        // Handle mentions in group comments
         const mentionRegex = /@(\w+(?:\s\w+)?)/g;
         const mentions = [...text.matchAll(mentionRegex)];
         if (mentions.length > 0) {
@@ -2394,7 +2085,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             mentions.forEach(match => {
                 const userName = match[1];
                 const user = users.find(u => u.name.toLowerCase() === userName.toLowerCase());
-                if (user && user.id !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (user && user.id !== currentUser.id) {
                     mentionedUserIds.add(user.id);
                     
                     const group = groups.find(g => g.id === groupId);
@@ -2425,15 +2116,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         // Send notifications to invited users
         const group = groups.find(g => g.id === groupId);
         userIds.forEach(userId => {
-            if (userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
-                handleCreateNotification(
-                    userId,
-                    currentUser.id,
-                    'group_invite',
-                    `invited you to join ${group?.name || 'a group'}.`,
-                    { groupId }
-                );
-            }
+            handleCreateNotification(
+                userId,
+                currentUser.id,
+                'group_invite',
+                `invited you to join ${group?.name || 'a group'}.`,
+                { groupId }
+            );
         });
         
         alert(`Invited ${userIds.length} user(s) to the group!`);
@@ -2450,9 +2139,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 : g
         )); 
         
-        // Notify group admin (prevent self-notification)
+        // Notify group admin
         const group = groups.find(g => g.id === groupId);
-        if (group && group.adminId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+        if (group && group.adminId !== currentUser.id) {
             handleCreateNotification(
                 group.adminId,
                 currentUser.id,
@@ -2496,7 +2185,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         )); 
     };
     
-    // FIXED: Prevent self-notifications in group posts
+    // FIXED ISSUE #1: handlePostToGroup - Now properly handles images and posts to both group and main feed
     const handlePostToGroup = (groupId: string, content: string, files: File[] | null, type: any, background?: string) => { 
         if (!currentUser) return;
         
@@ -2513,8 +2202,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
         
         const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp);
-        
         const newGroupPost: GroupPost = { 
             id: timestamp,
             authorId: currentUser.id, 
@@ -2522,7 +2209,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             images: images.length > 0 ? images : undefined,
             video: video,
             timestamp: timestamp, 
-            formattedTime: formattedTime,
+            formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
             reactions: [], 
             comments: [], 
             shares: 0,
@@ -2541,32 +2228,32 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             id: timestamp,
             authorId: currentUser.id, 
             content,
-            images: images.length > 0 ? images : undefined,
+            images: images.length > 0 ? images : undefined, // FIX: Ensure images are passed
             video: video,
             timestamp: timestamp,
-            formattedTime: formattedTime,
+            formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
             createdAt: timestamp,
             reactions: [], 
             comments: [], 
             shares: 0,
             views: 0,
-            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')),
+            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')), // FIXED: Proper type detection
             visibility: 'Public' as const,
             groupId, 
             groupName: groups.find(g => g.id === groupId)?.name,
             background
         }; 
         
-        console.log("Creating group post:", newFeedPost);
+        console.log("Creating group post:", newFeedPost); // Debug log
         
         // 3. Add to main posts array
         setPosts(prev => [newFeedPost, ...prev]); 
         
-        // Notify group members (excluding the poster to prevent self-notification)
+        // Notify group members (excluding the poster)
         const group = groups.find(g => g.id === groupId);
         if (group && group.memberPostingAllowed) {
             group.members.forEach(memberId => {
-                if (memberId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (memberId !== currentUser.id) {
                     handleCreateNotification(
                         memberId,
                         currentUser.id,
@@ -2584,7 +2271,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const handleCreateGroupEvent = (groupId: string, eventData: Partial<Event>) => {
         if (!currentUser) return;
         const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp);
         const newEvent: Event = { 
             ...eventData, 
             id: timestamp, 
@@ -2610,7 +2296,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             authorId: currentUser.id, 
             content: `is hosting a new event in ${groups.find(g => g.id === groupId)?.name}: ${newEvent.title}`, 
             timestamp: timestamp,
-            formattedTime: formattedTime,
+            formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
             createdAt: timestamp, 
             reactions: [], 
             comments: [], 
@@ -2625,7 +2311,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setPosts(prev => [eventPost, ...prev]);
     };
     
-    // FIXED: Prevent self-notifications in group shares
     const handleGroupShare = (groupId: string, postId: number, targetType: 'profile' | 'group' | 'brand', targetId?: string | number, extraCaption?: string) => {
         if (!currentUser) return;
         
@@ -2638,7 +2323,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         
         // Create a shared post for the feed
         const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp);
         const newSharedPost: PostType = {
             id: timestamp,
             authorId: currentUser.id,
@@ -2646,7 +2330,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             images: groupPost.images,
             video: groupPost.video,
             timestamp: timestamp,
-            formattedTime: formattedTime,
+            formattedTime: formatRelativeTime(timestamp), // ADDED: formattedTime
             createdAt: timestamp,
             reactions: [],
             comments: [],
@@ -2676,8 +2360,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             return g;
         }));
         
-        // Send notification to original post author (prevent self-notification)
-        if (groupPost.authorId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+        // Send notification to original post author
+        if (groupPost.authorId !== currentUser.id) {
             handleCreateNotification(
                 groupPost.authorId,
                 currentUser.id,
@@ -2708,10 +2392,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         } as Group;
         setGroups(prev => [newGroup, ...prev]);
         
-        // Notify followers about new group (excluding self)
+        // Notify followers about new group
         const followers = currentUser.followers || [];
         followers.forEach(followerId => {
-            if (followerId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+            if (followerId !== currentUser.id) {
                 handleCreateNotification(
                     followerId,
                     currentUser.id,
@@ -2725,7 +2409,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         alert("Group created successfully!");
     };
     
-    // FIXED: Prevent self-notifications for group post reactions
     const handleReactGroupPost = (groupId: string, postId: number, type: ReactionType) => { 
         if (!currentUser) return; 
         setGroups(prev => prev.map(g => {
@@ -2746,8 +2429,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                         } else {
                             newReactions.push({ userId: currentUser!.id, type });
                             
-                            // Send notification to post author (prevent self-notification)
-                            if (p.authorId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                            // Send notification to post author
+                            if (p.authorId !== currentUser.id) {
                                 const group = groups.find(g => g.id === groupId);
                                 handleCreateNotification(
                                     p.authorId,
@@ -2825,7 +2508,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    // Birthday notification check with self-notification prevention
+    // Birthday notification check
     useEffect(() => {
         const checkBirthdays = () => {
             if (!currentUser) return;
@@ -2834,7 +2517,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             const todayStr = `${today.getMonth() + 1}/${today.getDate()}`;
             
             users.forEach(user => {
-                if (user.birthDate && user.id !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                if (user.birthDate && user.id !== currentUser.id) {
                     const birthDate = new Date(user.birthDate);
                     const birthStr = `${birthDate.getMonth() + 1}/${birthDate.getDate()}`;
                     
@@ -2890,7 +2573,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         );
     };
 
-    // Function to render regular posts with brand support
+    // Function to render regular posts with brand support - FIXED ISSUE #3: Ensure formattedTime is always present
     const renderRegularPost = (post: PostType, author: any, isFollowing?: boolean) => {
         const isBrandAuthor = author?.type === 'brand';
         const isFollowingBrand = isBrandAuthor && currentUser ? 
@@ -2900,7 +2583,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         // Ensure post has formattedTime
         const postWithFormattedTime = {
             ...post,
-            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp)
         };
         
         return (
@@ -3011,16 +2694,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 onClick={() => setShowCreatePostModal(true)} 
                                                 onCreateEventClick={() => setShowCreateEventModal(true)} 
                                             /> 
-                                            
-                                            {/* People You May Know Section - Professional Version */}
-                                            {suggestedUsers.length > 0 && (
-                                                <PeopleYouMayKnow 
-                                                    suggestedUsers={suggestedUsers}
-                                                    onViewProfile={handleViewProfile}
-                                                    onRemove={handleRemoveSuggestedUser}
-                                                />
-                                            )}
-                                            
                                             <SuggestedProductsWidget 
                                                 products={products} 
                                                 currentUser={currentUser} 
@@ -3059,7 +2732,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                         const userPosts = posts.filter(p => p.authorId === selectedUserId);
                                         const enhancedPosts = userPosts.map(post => ({
                                             ...post,
-                                            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+                                            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp)
                                         }));
                                         
                                         return [
@@ -3165,7 +2838,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                         return (
                                             <Post
                                                 key={activeSinglePostId}
-                                                post={{...post, formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())}}
+                                                post={{...post, formattedTime: post.formattedTime || formatRelativeTime(post.timestamp)}}
                                                 author={author}
                                                 currentUser={currentUser}
                                                 users={users}
@@ -3223,14 +2896,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                             const reel = reels.find(r => r.id === reelId);
                                             if (reel && currentUser) {
                                                 const timestamp = Date.now();
-                                                const formattedTime = formatRelativeTime(timestamp);
                                                 const newPost: PostType = { 
                                                     id: timestamp, 
                                                     authorId: currentUser.id, 
                                                     content: `Shared a reel: ${reel.caption}`, 
                                                     video: reel.videoUrl,
                                                     timestamp: timestamp,
-                                                    formattedTime: formattedTime,
+                                                    formattedTime: formatRelativeTime(timestamp),
                                                     createdAt: timestamp, 
                                                     reactions: [], 
                                                     comments: [], 
@@ -3246,8 +2918,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                         : r
                                                 ));
                                                 
-                                                // Send notification to reel owner (prevent self-notification)
-                                                if (reel.userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                                                // Send notification to reel owner
+                                                if (reel.userId !== currentUser.id) {
                                                     handleCreateNotification(
                                                         reel.userId,
                                                         currentUser.id,
@@ -3267,13 +2939,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onComment={(reelId, text) => {
                                         if (!currentUser) return;
                                         const timestamp = Date.now();
-                                        const formattedTime = formatRelativeTime(timestamp);
                                         const newComment = { 
                                             id: timestamp, 
                                             userId: currentUser.id, 
                                             text, 
                                             timestamp: timestamp,
-                                            formattedTime: formattedTime,
+                                            formattedTime: formatRelativeTime(timestamp),
                                             likes: 0,
                                             authorName: currentUser.name,
                                             authorImage: currentUser.profileImage
@@ -3284,9 +2955,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 : reel
                                         ));
                                         
-                                        // Send notification to reel owner (prevent self-notification)
+                                        // Send notification to reel owner
                                         const reel = reels.find(r => r.id === reelId);
-                                        if (reel && reel.userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                                        if (reel && reel.userId !== currentUser.id) {
                                             handleCreateNotification(
                                                 reel.userId,
                                                 currentUser.id,
