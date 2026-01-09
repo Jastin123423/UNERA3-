@@ -1,3 +1,5 @@
+Here App.tsx, professionally update it and provide me full updated App.tsx basing on information I provided 
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Login, Register, ForgotPassword } from './components/Auth';
 import { Header, Sidebar, RightSidebar, MenuOverlay } from './components/Layout';
@@ -1506,31 +1508,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     }, [currentUser, users, songs, episodes, likedTracks, products, brands, posts, groups, notifications, messages, userStatus, isClient, isLoading]);
 
-    // ========== DEBUG USEFFECTS ==========
-    // Add this useEffect to debug posts state changes
-    useEffect(() => {
-        console.log('📊 [APP] Posts state updated:', {
-            totalPosts: posts.length,
-            recentPosts: posts.slice(0, 3).map(p => ({
-                id: p.id,
-                authorId: p.authorId,
-                reactions: p.reactions.length,
-                comments: p.comments.length
-            }))
-        });
-    }, [posts]);
-
-    // Debug when UserProfile should re-render
-    useEffect(() => {
-        if (view === 'profile' && selectedUserId) {
-            console.log('👤 [APP] UserProfile should render for user:', {
-                userId: selectedUserId,
-                userPostsCount: posts.filter(p => p.authorId === selectedUserId).length,
-                currentUser: currentUser?.id
-            });
-        }
-    }, [view, selectedUserId, posts, currentUser]);
-
     const handleLogin = (email: string, pass: string) => {
         const user = users.find(u => u.email === email && u.password === pass);
         if (user) {
@@ -1590,7 +1567,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     // ========== FIXED: Enhanced handleNavigate function ==========
-    const handleNavigate = useCallback((targetView: string) => {
+    const handleNavigate = (targetView: string) => {
         console.log('[DEBUG] handleNavigate called:', { 
             targetView, 
             currentUser: currentUser?.id,
@@ -1771,7 +1748,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 setView(targetView);
                 setActiveTab(targetView);
         }
-    }, [currentUser, view, isClient, setSelectedUserId, setActiveTab]);
+    };
     
     // ========== ENHANCED MESSAGING FUNCTIONS WITH UNREAD COUNT TRACKING ==========
     const handleSendMessage = (text: string, attachments?: any[], gifUrl?: string, emoji?: string) => {
@@ -2089,8 +2066,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     // ========== CRITICAL FIX: Enhanced handleReact function ==========
-    const handleReact = useCallback((itemId: number, type: ReactionType) => {
-        console.log('🎯 [REACT] handleReact called:', { 
+    const handleReact = (itemId: number, type: ReactionType) => {
+        console.log('[DEBUG] handleReact called:', { 
             itemId, 
             type, 
             currentUserId: currentUser?.id,
@@ -2111,7 +2088,21 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             return { success: true };
         }
         
-        // Use functional update to ensure we get latest state
+        // Find the post first
+        const postToUpdate = posts.find(p => p.id === itemId);
+        if (!postToUpdate) {
+            console.log('[DEBUG] Post not found:', itemId);
+            return { success: false, error: 'Post not found' };
+        }
+        
+        console.log('[DEBUG] Found post:', {
+            postId: postToUpdate.id,
+            authorId: postToUpdate.authorId,
+            currentReactions: postToUpdate.reactions.length,
+            postAuthorName: users.find(u => u.id === postToUpdate.authorId)?.name || 'Unknown'
+        });
+        
+        // Update posts state using functional update to ensure latest state
         setPosts(prev => {
             return prev.map(post => {
                 if (post.id === itemId) {
@@ -2124,18 +2115,18 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                         if (existingReaction.type === type) {
                             // Remove reaction if same type clicked
                             newReactions = newReactions.filter(r => r.userId !== currentUser.id);
-                            console.log('🔽 [REACT] Removed reaction for post:', post.id);
+                            console.log('[DEBUG] Removed reaction for post:', post.id);
                         } else {
                             // Update reaction type
                             newReactions = newReactions.map(r => 
                                 r.userId === currentUser.id ? { ...r, type } : r
                             );
-                            console.log('🔄 [REACT] Updated reaction type to:', type, 'for post:', post.id);
+                            console.log('[DEBUG] Updated reaction type to:', type, 'for post:', post.id);
                         }
                     } else {
                         // Add new reaction
                         newReactions.push({ userId: currentUser.id, type });
-                        console.log('➕ [REACT] Added new reaction:', type, 'for post:', post.id);
+                        console.log('[DEBUG] Added new reaction:', type, 'for post:', post.id);
                         
                         // Send notification to post author (prevent self-notification)
                         if (post.authorId !== currentUser.id) {
@@ -2156,23 +2147,18 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                         }
                     }
                     
-                    // Return updated post with NEW array reference
-                    return { 
-                        ...post, 
-                        reactions: newReactions, // This is a new array
-                        formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
-                    };
+                    return { ...post, reactions: newReactions };
                 }
                 return post;
             });
         });
         
         return { success: true };
-    }, [currentUser, handleCreateNotification, handleLikeProduct, handleNavigate]);
+    };
 
     // ========== CRITICAL FIX: Enhanced handleComment function ==========
-    const handleComment = useCallback((itemId: number, text: string, attachment?: any, parentId?: number) => {
-        console.log('💬 [COMMENT] handleComment called:', { 
+    const handleComment = (itemId: number, text: string, attachment?: any, parentId?: number) => {
+        console.log('[DEBUG] handleComment called:', { 
             itemId, 
             text: text.substring(0, 50) + (text.length > 50 ? '...' : ''),
             currentUserId: currentUser?.id,
@@ -2198,6 +2184,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             return { success: true, commentId: Date.now() };
         }
         
+        // Find the post first
+        const postToUpdate = posts.find(p => p.id === itemId);
+        if (!postToUpdate) {
+            console.log('[DEBUG] Post not found:', itemId);
+            return { success: false, error: 'Post not found' };
+        }
+        
         const timestamp = Date.now();
         const formattedTime = formatRelativeTime(timestamp);
         const newComment: Comment = { 
@@ -2213,20 +2206,21 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             parentId
         };
         
-        console.log('➕ [COMMENT] Adding comment:', {
+        console.log('[DEBUG] Adding comment to post:', {
             postId: itemId,
+            postAuthorId: postToUpdate.authorId,
             commentId: newComment.id,
             commentTextPreview: text.substring(0, 30)
         });
         
-        // Use functional update
+        // Update posts state using functional update
         setPosts(prev => {
             return prev.map(p => {
                 if (p.id === itemId) {
                     const updatedComments = [...p.comments, newComment];
-                    console.log('📈 [COMMENT] Updated comments for post', p.id, ':', updatedComments.length);
+                    console.log('[DEBUG] Updated comments for post', p.id, ':', updatedComments.length);
                     
-                    // Send notification to post author
+                    // Send notification to post author (prevent self-commenting notifications)
                     if (p.authorId !== currentUser.id) {
                         console.log('[DEBUG] Sending comment notification to author:', p.authorId);
                         handleCreateNotification(
@@ -2240,12 +2234,31 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                         console.log('[DEBUG] Self-comment, skipping notification');
                     }
                     
-                    // Return with NEW array reference
-                    return { 
-                        ...p, 
-                        comments: updatedComments, // This is a new array
-                        formattedTime: p.formattedTime || formatRelativeTime(p.timestamp || p.createdAt || Date.now())
-                    };
+                    // Handle mentions in comments with self-notification prevention
+                    const mentionRegex = /@(\w+(?:\s\w+)?)/g;
+                    const mentions = [...text.matchAll(mentionRegex)];
+                    if (mentions.length > 0) {
+                        const mentionedUserIds = new Set<number>();
+                        mentions.forEach(match => {
+                            const userName = match[1];
+                            const user = users.find(u => u.name.toLowerCase() === userName.toLowerCase());
+                            if (user && user.id !== currentUser.id) {
+                                mentionedUserIds.add(user.id);
+                                
+                                // Send mention notification
+                                console.log('[DEBUG] Sending mention notification to user:', user.id);
+                                handleCreateNotification(
+                                    user.id,
+                                    currentUser.id,
+                                    'mention_comment',
+                                    'mentioned you in a comment.',
+                                    { postId: itemId, commentId: newComment.id }
+                                );
+                            }
+                        });
+                    }
+                    
+                    return { ...p, comments: updatedComments };
                 }
                 return p;
             });
@@ -2266,9 +2279,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             setActiveCommentsPostId(null);
         }
         
-        console.log('✅ [COMMENT] Comment added successfully to post:', itemId);
+        console.log('[DEBUG] Comment added successfully to post:', itemId);
         return { success: true, commentId: newComment.id };
-    }, [currentUser, posts, songs, episodes, activeCommentsPostId, handleCommentOnProduct, handleCreateNotification, handleTrackComment, handleNavigate]);
+    };
 
     // FIXED: Prevent self-notifications for reel reactions
     const handleReelReact = (reelId: number, type: ReactionType | undefined) => {
@@ -4234,7 +4247,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     }, [isClient, isLoading, currentUser, view, path]);
     
     // Function to render music/podcast posts
-    const renderMusicPost = useCallback((post: PostType, author: any) => {
+    const renderMusicPost = (post: PostType, author: any) => {
         const song = getSongForPost(post, songs, episodes);
         if (!song) return null;
         
@@ -4260,28 +4273,25 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 showLoginPrompt={() => handleNavigate('login')}
             />
         );
-    }, [currentUser, users, songs, episodes, likedTracks, handlePlayTrack, handleLikeTrack, handleTrackComment, handleTrackShare, handleNavigate]);
+    };
 
-    // ========== CRITICAL FIX: renderRegularPost function with useCallback ==========
-    const renderRegularPost = useCallback((post: PostType, author: any, isFollowing?: boolean) => {
+    // Function to render regular posts with brand support
+    const renderRegularPost = (post: PostType, author: any, isFollowing?: boolean) => {
         const isBrandAuthor = author?.type === 'brand';
         const isFollowingBrand = isBrandAuthor && currentUser ? 
             brands.find(b => b.id === author.id)?.followers.includes(currentUser.id) || false : 
             false;
         
-        // CRITICAL: Create fresh object with new references
-        const freshPost = {
+        // Ensure post has formattedTime
+        const postWithFormattedTime = {
             ...post,
-            // Force new array references to ensure Post component re-renders
-            reactions: [...(post.reactions || [])],
-            comments: [...(post.comments || [])],
             formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
         };
         
         return (
             <Post 
-                key={`post-${post.id}-${post.reactions?.length || 0}-${post.comments?.length || 0}`}
-                post={freshPost}
+                key={post.id} 
+                post={postWithFormattedTime}
                 author={author as any} 
                 currentUser={currentUser} 
                 users={users} 
@@ -4326,71 +4336,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 showLoginPrompt={() => handleNavigate('login')}
             />
         );
-    }, [
-        currentUser, 
-        users, 
-        brands, 
-        handleReact, 
-        handleFollowUser, 
-        handleFollowBrand, 
-        handleDeletePost, 
-        handlePlayTrack, 
-        handleTagClick, 
-        isAdmin,
-        handleNavigate
-    ]);
-    
-    // ========== CRITICAL FIX: UserProfile posts memoization ==========
-    const userPostsForProfile = useMemo(() => {
-        if (!selectedUserId) return [];
-        
-        // Get user's posts with current reactions/comments
-        const userPosts = posts
-            .filter(p => p.authorId === selectedUserId)
-            .map(post => {
-                // Create fresh object with new references
-                return {
-                    ...post,
-                    // Ensure all posts have the same structure
-                    formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || Date.now()),
-                    reactions: [...(post.reactions || [])], // New array reference
-                    comments: [...(post.comments || [])],   // New array reference
-                    // Add any other arrays that might need new references
-                    taggedUsers: post.taggedUsers ? [...post.taggedUsers] : undefined
-                };
-            });
-        
-        // Add product posts
-        const productPosts = products
-            .filter(p => p.sellerId === selectedUserId)
-            .map(p => ({
-                id: p.id + 100000,
-                authorId: p.sellerId,
-                content: `Just listed a new item: ${p.title}`,
-                timestamp: p.date,
-                formattedTime: formatRelativeTime(p.date),
-                createdAt: p.date,
-                reactions: [...(p.ratings?.map(r => ({ userId: r.userId, type: 'like' as ReactionType })) || [])],
-                comments: [...(p.comments?.map(c => ({
-                    id: Date.now() + Math.random(),
-                    userId: c.userId,
-                    text: c.text,
-                    timestamp: c.timestamp,
-                    formattedTime: formatRelativeTime(c.timestamp),
-                    likes: 0,
-                    authorName: c.authorName,
-                    authorImage: c.authorImage
-                })) || [])],
-                shares: 0,
-                views: p.views,
-                type: 'product' as const,
-                visibility: 'Public' as const,
-                product: p,
-                productId: p.id
-            }));
-        
-        return [...userPosts, ...productPosts];
-    }, [posts, products, selectedUserId]);
+    };
     
     // Function to render the main feed - FIXED to show to everyone
     const renderMainFeed = () => {
@@ -4622,11 +4568,38 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             {/* Other views... (profile, marketplace, etc.) */}
                             {view === 'profile' && selectedUserId !== null && (
                                 <UserProfile 
-                                    key={`user-profile-${selectedUserId}-${posts.length}-${Date.now()}`}
                                     user={users.find(u => u.id === selectedUserId)!} 
                                     currentUser={currentUser} 
                                     users={users} 
-                                    posts={userPostsForProfile}
+                                    posts={(() => {
+                                        const userPosts = posts.filter(p => p.authorId === selectedUserId);
+                                        const enhancedPosts = userPosts.map(post => ({
+                                            ...post,
+                                            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+                                        }));
+                                        
+                                        return [
+                                            ...enhancedPosts,
+                                            ...products
+                                                .filter(p => p.sellerId === selectedUserId)
+                                                .map(p => ({
+                                                    id: p.id + 100000,
+                                                    authorId: p.sellerId,
+                                                    content: `Just listed a new item: ${p.title}`,
+                                                    timestamp: p.date,
+                                                    formattedTime: formatRelativeTime(p.date),
+                                                    createdAt: p.date,
+                                                    reactions: [],
+                                                    comments: [],
+                                                    shares: 0,
+                                                    views: p.views,
+                                                    type: 'product' as const,
+                                                    visibility: 'Public' as const,
+                                                    product: p,
+                                                    productId: p.id
+                                                }))
+                                        ];
+                                    })()}
                                     onProfileClick={(id) => { 
                                         if (!currentUser) {
                                             handleNavigate('login');
@@ -4644,19 +4617,25 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onUpdateProfileImage={(f) => {}} 
                                     onUpdateCoverImage={(f) => {}} 
                                     onUpdateUserDetails={(d) => {}} 
-                                    onDeletePost={handleDeletePost} 
-                                    onEditPost={(postId, content) => {
-                                        console.log('Edit post:', postId, content);
-                                    }}
+                                    onDeletePost={(id) => {
+                                        if (id > 100000) {
+                                            const productId = id - 100000;
+                                            setProducts(prev => prev.filter(p => p.id !== productId));
+                                        } else {
+                                            const postToDelete = posts.find(p => p.id === id);
+                                            if (postToDelete && (postToDelete.type === 'music' || postToDelete.type === 'podcast') && postToDelete.audioTrack) {
+                                                const trackId = postToDelete.audioTrack.id;
+                                                setSongs(prev => prev.filter(s => s.id !== trackId));
+                                                setEpisodes(prev => prev.filter(e => e.id !== trackId));
+                                            }
+                                            setPosts(posts.filter(p => p.id !== id));
+                                        }
+                                    }} 
+                                    onEditPost={() => {}} 
                                     getCommentAuthor={(id) => users.find(u => u.id === id)} 
                                     onViewImage={setFullScreenImage} 
                                     onOpenComments={setActiveCommentsPostId} 
-                                    onVideoClick={(post) => {
-                                        if (post.type === 'video') {
-                                            setActiveReelId(post.id - 200000);
-                                            setView('reels');
-                                        }
-                                    }} 
+                                    onVideoClick={() => {}} 
                                     onCreateEventClick={() => setShowCreateEventModal(true)} 
                                     onPlayAudioTrack={handlePlayTrack} 
                                     onVerifyUser={handleVerifyUser} 
@@ -4670,8 +4649,35 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onLikeTrack={handleLikeTrack}
                                     onTrackComment={handleTrackComment}
                                     onTrackShare={handleTrackShare}
-                                    renderMusicPost={renderMusicPost}
+                                    renderMusicPost={(post: PostType, author: any) => {
+                                        const song = getSongForPost(post, songs, episodes);
+                                        if (!song) return null;
+                                        
+                                        return (
+                                            <MusicFeedPost 
+                                                key={post.id}
+                                                song={song}
+                                                currentUser={currentUser}
+                                                users={users}
+                                                onPlayTrack={handlePlayTrack}
+                                                onProfileClick={(id) => { 
+                                                    if (!currentUser) {
+                                                        handleNavigate('login');
+                                                    } else {
+                                                        setSelectedUserId(id); 
+                                                        setView('profile'); 
+                                                    }
+                                                }}
+                                                onLikeTrack={handleLikeTrack}
+                                                onTrackComment={handleTrackComment}
+                                                onTrackShare={handleTrackShare}
+                                                isLiked={likedTracks.includes(song.id)}
+                                                showLoginPrompt={() => handleNavigate('login')}
+                                            />
+                                        );
+                                    }}
                                     renderRegularPost={renderRegularPost}
+                                    // MESSAGE ICON PROPS
                                     unreadMessageCount={currentUserUnreadCount}
                                     onOpenMessages={handleOpenMessages}
                                     recentMessages={currentUserRecentConversations}
@@ -4705,6 +4711,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onNavigateHome={() => handleNavigate('home')}
                                     onCreateProduct={handleCreateProduct}
                                     onViewProduct={(product) => setActiveProduct(product)}
+                                    // Pass the product interaction handlers
                                     onLikeProduct={handleLikeProduct}
                                     onCommentOnProduct={handleCommentOnProduct}
                                 />
