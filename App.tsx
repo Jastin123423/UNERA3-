@@ -1,10 +1,4 @@
-When I post in groups with images and descriptions only shows descriptions not images 
 
-Another modifications is on time posted. Instead of showing proper time like 2Minutes, 8hours, 1day like Facebook, it shows 1767594641733
-
-Professionally make these modifications in App.tsx
-
-Here App.tsx to modify 
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Login, Register, ForgotPassword } from './components/Auth';
