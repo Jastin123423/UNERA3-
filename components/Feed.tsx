@@ -4,10 +4,6 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { INITIAL_USERS, LOCATIONS_DATA, REACTION_ICONS, REACTION_COLORS, GIF_CATEGORIES, MARKETPLACE_COUNTRIES, MARKETPLACE_CATEGORIES } from '../constants';
 import { StickerPicker, EmojiPicker } from './Pickers';
 
-// --- RECOMMENDATION INTERVALS ---
-const PROFILE_RECOMMENDATION_INTERVALS = [5, 15, 25];
-const BRAND_RECOMMENDATION_INTERVALS = [10, 35, 55];
-const GROUP_RECOMMENDATION_INTERVALS = [9, 18, 40];
 
 // Helper function to check if should show recommendation
 export const shouldShowRecommendation = (postIndex: number, intervals: number[]): boolean => {
