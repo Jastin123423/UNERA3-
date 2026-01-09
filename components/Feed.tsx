@@ -1088,6 +1088,7 @@ export const CommentsSheet: React.FC<CommentsSheetProps> = ({ post, currentUser,
 };
 
 // --- MAIN POST COMPONENT WITH MULTI-IMAGE SUPPORT ---
+// UPDATED: Added missing props to match App.tsx
 interface PostProps {
     post: PostType;
     author: User | Brand;
@@ -1108,6 +1109,10 @@ interface PostProps {
     onFollow?: (userId: number) => void;
     isFollowing?: boolean;
     onPlayAudioTrack?: (track: AudioTrack) => void;
+    // ADDED: Missing props from App.tsx
+    isAdmin?: boolean;
+    showLoginPrompt?: () => void;
+    onDeletePost?: (postId: number) => void;
 }
 
 export const Post: React.FC<PostProps> = ({ 
@@ -1129,7 +1134,11 @@ export const Post: React.FC<PostProps> = ({
     sharedPost, 
     onFollow, 
     isFollowing, 
-    onPlayAudioTrack 
+    onPlayAudioTrack,
+    // ADDED: New props
+    isAdmin = false,
+    showLoginPrompt,
+    onDeletePost
 }) => {
     const [showMenu, setShowMenu] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);
@@ -1137,15 +1146,20 @@ export const Post: React.FC<PostProps> = ({
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const myReaction = currentUser ? post.reactions.find(r => r.userId === currentUser.id)?.type : undefined;
     const isOwner = currentUser?.id === post.authorId;
-    const isAdmin = currentUser?.role === 'admin';
+    const isAdminUser = currentUser?.role === 'admin' || isAdmin;
     const isVideo = post.type === 'video';
 
-    // FIXED: Handle react function properly
+    // FIXED: Handle react function properly - matches App.tsx logic
     const handleReact = (type: ReactionType) => {
         console.log('Post component: handleReact called', { postId: post.id, type, currentUser });
         if (!currentUser) {
-            console.log('Post component: No current user, showing alert');
-            return; // This will trigger the ReactionButton's isGuest behavior
+            console.log('Post component: No current user, showing login prompt');
+            if (showLoginPrompt) {
+                showLoginPrompt();
+            } else {
+                alert("Please login to react");
+            }
+            return;
         }
         onReact(post.id, type);
     };
@@ -1155,7 +1169,12 @@ export const Post: React.FC<PostProps> = ({
         console.log('Post component: handleOpenComments called', { postId: post.id, currentUser });
         if (!currentUser) {
             console.log('Post component: No current user, cannot open comments');
-            return; // This should show alert from the button click
+            if (showLoginPrompt) {
+                showLoginPrompt();
+            } else {
+                alert("Please login to comment");
+            }
+            return;
         }
         onOpenComments(post.id);
     };
@@ -1205,6 +1224,27 @@ export const Post: React.FC<PostProps> = ({
         );
     };
 
+    // Handle delete post - uses either onDelete or onDeletePost prop
+    const handleDeletePost = () => {
+        if (onDeletePost) {
+            onDeletePost(post.id);
+        } else if (onDelete) {
+            onDelete(post.id);
+        }
+        setShowMenu(false);
+    };
+
+    // Handle edit post
+    const handleEditPost = () => {
+        if (onEdit) {
+            const newContent = prompt('Edit post content:', post.content);
+            if (newContent !== null && newContent !== post.content) {
+                onEdit(post.id, newContent);
+            }
+        }
+        setShowMenu(false);
+    };
+
     return (
         <>
             {/* Full Screen Image Viewer */}
@@ -1251,12 +1291,12 @@ export const Post: React.FC<PostProps> = ({
                                     <div className="px-3 py-2 hover:bg-[#3A3B3C] cursor-pointer flex items-center gap-3 text-[#E4E6EB]">
                                         <i className="far fa-bookmark w-5"></i> Save Post
                                     </div>
-                                    {(isOwner || isAdmin) && (
+                                    {(isOwner || isAdminUser) && (
                                         <>
-                                            <div className="px-3 py-2 hover:bg-[#3A3B3C] cursor-pointer flex items-center gap-3 text-[#E4E6EB]">
+                                            <div className="px-3 py-2 hover:bg-[#3A3B3C] cursor-pointer flex items-center gap-3 text-[#E4E6EB]" onClick={handleEditPost}>
                                                 <i className="fas fa-pen w-5"></i> Edit Post
                                             </div>
-                                            <div className="px-3 py-2 hover:bg-[#3A3B3C] cursor-pointer flex items-center gap-3 text-[#E4E6EB]" onClick={() => onDelete && onDelete(post.id)}>
+                                            <div className="px-3 py-2 hover:bg-[#3A3B3C] cursor-pointer flex items-center gap-3 text-[#E4E6EB]" onClick={handleDeletePost}>
                                                 <i className="fas fa-trash w-5"></i> Move to trash
                                             </div>
                                         </>
@@ -1397,7 +1437,11 @@ export const Post: React.FC<PostProps> = ({
                             className="flex-1 flex items-center justify-center gap-2 h-10 rounded hover:bg-[#3A3B3C] transition-colors group text-[#B0B3B8]" 
                             onClick={() => {
                                 if (!currentUser) {
-                                    alert("Please login to comment");
+                                    if (showLoginPrompt) {
+                                        showLoginPrompt();
+                                    } else {
+                                        alert("Please login to comment");
+                                    }
                                     return;
                                 }
                                 handleOpenComments();
@@ -1411,7 +1455,11 @@ export const Post: React.FC<PostProps> = ({
                             className="flex-1 flex items-center justify-center gap-2 h-10 rounded hover:bg-[#3A3B3C] transition-colors group text-[#B0B3B8]" 
                             onClick={() => {
                                 if (!currentUser) {
-                                    alert("Please login to share");
+                                    if (showLoginPrompt) {
+                                        showLoginPrompt();
+                                    } else {
+                                        alert("Please login to share");
+                                    }
                                     return;
                                 }
                                 onShare(post.id);
