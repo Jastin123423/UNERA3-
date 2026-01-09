@@ -1,4 +1,3 @@
-Here App.tsx, professionally update it and provide me full updated App.tsx basing on information I provided 
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Login, Register, ForgotPassword } from './components/Auth';
