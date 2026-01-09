@@ -242,7 +242,7 @@ const ImageGrid: React.FC<ImageGridProps> = ({ images, onImageClick }) => {
     const remainingCount = images.length - displayedImages.length;
     
     const getGridClass = () => {
-        const count = displayedImages.length;1";
+        const count = displayedImages.length;
         if (count === 2) return "grid-cols-2 gap-1";
         if (count === 3) return "grid-cols-2";
         if (count === 4) return "grid-cols-2 gap-1";
