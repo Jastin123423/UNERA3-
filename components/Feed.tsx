@@ -1,19 +1,9 @@
+
 import React, { useState, useRef, useEffect, TouchEvent } from 'react';
 import { User, Post as PostType, ReactionType, Comment, Product, LinkPreview, Group, Brand, AudioTrack } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 import { INITIAL_USERS, LOCATIONS_DATA, REACTION_ICONS, REACTION_COLORS, GIF_CATEGORIES, MARKETPLACE_COUNTRIES, MARKETPLACE_CATEGORIES } from '../constants';
 import { StickerPicker, EmojiPicker } from './Pickers';
-
-// --- RECOMMENDATION INTERVALS ---
-const PROFILE_RECOMMENDATION_INTERVALS = [5, 15, 25];
-const BRAND_RECOMMENDATION_INTERVALS = [10, 35, 55];
-const GROUP_RECOMMENDATION_INTERVALS = [9, 18, 40];
-
-// Helper function to check if should show recommendation
-export const shouldShowRecommendation = (postIndex: number, intervals: number[]): boolean => {
-    // +1 because index starts at 0, but users count from 1
-    return intervals.includes(postIndex + 1);
-};
 
 // Facebook-style relative time formatter (same as in App.tsx)
 const formatRelativeTime = (timestamp: number): string => {
@@ -89,6 +79,7 @@ const FullScreenImageViewer: React.FC<FullScreenImageViewerProps> = ({ images, c
     const [touchEnd, setTouchEnd] = useState<number | null>(null);
     const [isTransitioning, setIsTransitioning] = useState(false);
 
+    // Minimum swipe distance required
     const minSwipeDistance = 50;
 
     const handleTouchStart = (e: TouchEvent) => {
@@ -159,6 +150,7 @@ const FullScreenImageViewer: React.FC<FullScreenImageViewerProps> = ({ images, c
 
     return (
         <div className="fixed inset-0 z-[300] bg-black flex items-center justify-center">
+            {/* Close button */}
             <button 
                 onClick={onClose}
                 className="absolute top-4 right-4 z-40 w-10 h-10 bg-black/50 rounded-full flex items-center justify-center hover:bg-black/70 transition-colors"
@@ -166,6 +158,7 @@ const FullScreenImageViewer: React.FC<FullScreenImageViewerProps> = ({ images, c
                 <i className="fas fa-times text-white text-xl"></i>
             </button>
 
+            {/* Previous button */}
             {currentIndex > 0 && (
                 <button 
                     onClick={goToPrev}
@@ -175,6 +168,7 @@ const FullScreenImageViewer: React.FC<FullScreenImageViewerProps> = ({ images, c
                 </button>
             )}
 
+            {/* Next button */}
             {currentIndex < images.length - 1 && (
                 <button 
                     onClick={goToNext}
@@ -184,6 +178,7 @@ const FullScreenImageViewer: React.FC<FullScreenImageViewerProps> = ({ images, c
                 </button>
             )}
 
+            {/* Main image */}
             <div 
                 className="relative w-full h-full flex items-center justify-center"
                 onTouchStart={handleTouchStart}
@@ -197,12 +192,14 @@ const FullScreenImageViewer: React.FC<FullScreenImageViewerProps> = ({ images, c
                 />
             </div>
 
+            {/* Image counter */}
             <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-40 bg-black/50 backdrop-blur-sm px-4 py-2 rounded-full">
                 <span className="text-white font-medium">
                     {currentIndex + 1} / {images.length}
                 </span>
             </div>
 
+            {/* Thumbnail strip */}
             {images.length > 1 && (
                 <div className="absolute bottom-20 left-0 right-0 overflow-x-auto px-4 pb-2 flex justify-center">
                     <div className="flex gap-2">
@@ -245,8 +242,7 @@ const ImageGrid: React.FC<ImageGridProps> = ({ images, onImageClick }) => {
     const remainingCount = images.length - displayedImages.length;
     
     const getGridClass = () => {
-        const count = displayedImages.length;
-        if (count === 1) return "grid-cols-1";
+        const count = displayedImages.length;1";
         if (count === 2) return "grid-cols-2 gap-1";
         if (count === 3) return "grid-cols-2";
         if (count === 4) return "grid-cols-2 gap-1";
@@ -279,6 +275,7 @@ const ImageGrid: React.FC<ImageGridProps> = ({ images, onImageClick }) => {
                         className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                     />
                     
+                    {/* Overlay for remaining count */}
                     {index === displayedImages.length - 1 && remainingCount > 0 && (
                         <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
                             <span className="text-white text-2xl md:text-3xl font-bold">
@@ -287,6 +284,7 @@ const ImageGrid: React.FC<ImageGridProps> = ({ images, onImageClick }) => {
                         </div>
                     )}
                     
+                    {/* Multi-image indicator for first image */}
                     {images.length > 1 && index === 0 && (
                         <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm rounded-full w-8 h-8 flex items-center justify-center">
                             <i className="fas fa-layer-group text-white text-sm"></i>
@@ -328,53 +326,34 @@ const BACKGROUNDS = [
 
 const FEELINGS = ['Happy', 'Blessed', 'Loved', 'Sad', 'Excited', 'Thankful', 'Crazy', 'Tired', 'Cool', 'Relaxed'];
 
-// --- FIXED REACTION BUTTON COMPONENT ---
 interface ReactionButtonProps {
     currentUserReactions: ReactionType | undefined;
     reactionCount: number;
     onReact: (type: ReactionType) => void;
     isGuest?: boolean;
-    showLoginPrompt?: () => void;
 }
 
-export const ReactionButton: React.FC<ReactionButtonProps> = ({ 
-    currentUserReactions, 
-    reactionCount, 
-    onReact, 
-    isGuest,
-    showLoginPrompt 
-}) => {
+export const ReactionButton: React.FC<ReactionButtonProps> = ({ currentUserReactions, reactionCount, onReact, isGuest }) => {
     const [showDock, setShowDock] = useState(false);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     
     const handleMouseEnter = () => { 
         if (isGuest) return; 
-        timerRef.current = setTimeout(() => setShowDock(true), 300); 
+        timerRef.current = setTimeout(() => setShowDock(true), 500); 
     };
     
     const handleMouseLeave = () => { 
         if (timerRef.current) clearTimeout(timerRef.current); 
-        setTimeout(() => setShowDock(false), 200); 
+        setTimeout(() => setShowDock(false), 300); 
     };
     
-    // FIXED: Handle click properly for all reaction types
     const handleClick = () => { 
         if (isGuest) { 
             console.log("ReactionButton: Guest user attempting to react");
-            if (showLoginPrompt) {
-                showLoginPrompt();
-            }
             return; 
-        }
-        
-        // If user already reacted, remove reaction
-        if (currentUserReactions) {
-            // Send 'like' to indicate removal (parent should handle toggle)
-            onReact('like');
-        } else {
-            // No reaction yet, add like
-            onReact('like'); 
-        }
+        } 
+        console.log("ReactionButton: Reacting with 'like'");
+        onReact('like'); 
     };
     
     const reactionConfig = [
@@ -388,19 +367,6 @@ export const ReactionButton: React.FC<ReactionButtonProps> = ({
     
     const activeReaction = currentUserReactions ? reactionConfig.find(r => r.type === currentUserReactions) : null;
     
-    const handleReactionClick = (type: ReactionType, e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (isGuest) {
-            if (showLoginPrompt) {
-                showLoginPrompt();
-            }
-            return;
-        }
-        console.log(`ReactionButton: Clicked ${type} reaction`);
-        onReact(type);
-        setShowDock(false);
-    };
-    
     return (
         <div className="flex-1 relative group" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
             {showDock && (
@@ -409,8 +375,12 @@ export const ReactionButton: React.FC<ReactionButtonProps> = ({
                         <div 
                             key={reaction.type} 
                             className="text-2xl hover:scale-125 transition-transform cursor-pointer hover:-translate-y-2 duration-200" 
-                            onClick={(e) => handleReactionClick(reaction.type, e)}
-                            title={reaction.type.charAt(0).toUpperCase() + reaction.type.slice(1)}
+                            onClick={(e) => { 
+                                e.stopPropagation(); 
+                                console.log(`ReactionButton: Clicked ${reaction.type} reaction`);
+                                onReact(reaction.type); 
+                                setShowDock(false); 
+                            }}
                         >
                             {reaction.icon}
                         </div>
@@ -547,7 +517,6 @@ export const ShareSheet: React.FC<ShareSheetProps> = ({ currentUser, groups, bra
     );
 };
 
-// --- SUGGESTED PRODUCTS WIDGET ---
 interface SuggestedProductsWidgetProps {
     products: Product[];
     currentUser: User;
@@ -558,253 +527,24 @@ interface SuggestedProductsWidgetProps {
 export const SuggestedProductsWidget: React.FC<SuggestedProductsWidgetProps> = ({ products, currentUser, onViewProduct, onSeeAll }) => {
     const scrollRef = useRef<HTMLDivElement>(null);
     const [isHovered, setIsHovered] = useState(false);
-    
     useEffect(() => {
         const interval = setInterval(() => {
             if (scrollRef.current && !isHovered) {
-                if (scrollRef.current.scrollLeft + scrollRef.current.clientWidth >= scrollRef.current.scrollWidth) {
-                    scrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
-                } else {
-                    scrollRef.current.scrollBy({ left: 200, behavior: 'smooth' });
-                }
+                if (scrollRef.current.scrollLeft + scrollRef.current.clientWidth >= scrollRef.current.scrollWidth) scrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+                else scrollRef.current.scrollBy({ left: 200, behavior: 'smooth' });
             }
         }, 3000);
         return () => clearInterval(interval);
     }, [isHovered]);
-    
     if (products.length === 0) return null;
-    
     return (
         <div className="bg-[#242526] rounded-xl border border-[#3E4042] mb-4 p-4 shadow-sm" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
-            <div className="flex justify-between items-center mb-3">
-                <h3 className="text-[#E4E6EB] font-bold text-[17px]">Suggested for you</h3>
-                <span className="text-[#1877F2] text-[15px] cursor-pointer hover:underline" onClick={onSeeAll}>See more</span>
-            </div>
-            <div ref={scrollRef} className="flex gap-3 overflow-x-auto scrollbar-hide pb-2 scroll-smooth">
-                {products.slice(0, 8).map(p => (
-                    <div key={p.id} className="min-w-[140px] bg-[#18191A] rounded-lg overflow-hidden border border-[#3E4042] cursor-pointer flex-shrink-0" onClick={() => onViewProduct(p)}>
-                        <div className="h-32 bg-white">
-                            <img src={p.images[0]} className="w-full h-full object-cover" alt="" />
-                        </div>
-                        <div className="p-2">
-                            <div className="font-bold text-[#E4E6EB] text-[15px] truncate">{p.title}</div>
-                            <div className="text-[#F02849] font-bold text-[15px]">
-                                {MARKETPLACE_COUNTRIES.find(c => c.code === p.country)?.symbol || '$'}{p.mainPrice}
-                            </div>
-                        </div>
-                    </div>
-                ))}
-            </div>
+            <div className="flex justify-between items-center mb-3"><h3 className="text-[#E4E6EB] font-bold text-[17px]">Suggested for you</h3><span className="text-[#1877F2] text-[15px] cursor-pointer hover:underline" onClick={onSeeAll}>See more</span></div>
+            <div ref={scrollRef} className="flex gap-3 overflow-x-auto scrollbar-hide pb-2 scroll-smooth">{products.slice(0, 8).map(p => (<div key={p.id} className="min-w-[140px] bg-[#18191A] rounded-lg overflow-hidden border border-[#3E4042] cursor-pointer flex-shrink-0" onClick={() => onViewProduct(p)}><div className="h-32 bg-white"><img src={p.images[0]} className="w-full h-full object-cover" alt="" /></div><div className="p-2"><div className="font-bold text-[#E4E6EB] text-[15px] truncate">{p.title}</div><div className="text-[#F02849] font-bold text-[15px]">{MARKETPLACE_COUNTRIES.find(c => c.code === p.country)?.symbol || '$'}{p.mainPrice}</div></div></div>))}</div>
         </div>
     );
 };
 
-// --- SCROLLABLE BRANDS WIDGET ---
-interface SuggestedBrandsWidgetProps {
-    brands: Brand[];
-    onBrandClick: (brand: Brand) => void;
-    currentUser: User | null;
-}
-
-export const SuggestedBrandsWidget: React.FC<SuggestedBrandsWidgetProps> = ({ brands, onBrandClick, currentUser }) => {
-    const scrollRef = useRef<HTMLDivElement>(null);
-    
-    if (brands.length === 0) return null;
-    
-    return (
-        <div className="bg-[#242526] rounded-xl border border-[#3E4042] mb-4 p-4 shadow-sm">
-            <div className="flex justify-between items-center mb-3">
-                <h3 className="text-[#E4E6EB] font-bold text-[17px]">Suggested Brands</h3>
-                <span className="text-[#1877F2] text-[15px] cursor-pointer hover:underline">See All</span>
-            </div>
-            <div 
-                ref={scrollRef}
-                className="flex gap-3 overflow-x-auto scrollbar-hide pb-2 scroll-smooth"
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-            >
-                {brands.slice(0, 10).map(brand => (
-                    <div 
-                        key={brand.id} 
-                        className="min-w-[180px] bg-[#18191A] rounded-lg overflow-hidden border border-[#3E4042] cursor-pointer flex-shrink-0 hover:scale-[1.02] transition-transform"
-                        onClick={() => onBrandClick(brand)}
-                    >
-                        <div className="h-32 bg-black relative">
-                            <img 
-                                src={brand.coverImage || brand.profileImage} 
-                                className="w-full h-full object-cover"
-                                alt={brand.name}
-                            />
-                            <div className="absolute bottom-2 right-2 w-12 h-12 bg-[#242526]/90 rounded-full flex items-center justify-center border border-[#3E4042]">
-                                <img 
-                                    src={brand.profileImage} 
-                                    className="w-10 h-10 rounded-full object-cover"
-                                    alt={brand.name}
-                                />
-                            </div>
-                        </div>
-                        <div className="p-3">
-                            <div className="font-bold text-[#E4E6EB] text-[15px] truncate mb-1">{brand.name}</div>
-                            <div className="text-[#B0B3B8] text-xs truncate">{brand.category}</div>
-                            <div className="flex items-center gap-1 mt-2">
-                                <i className="fas fa-users text-[#B0B3B8] text-xs"></i>
-                                <span className="text-[#B0B3B8] text-xs">{brand.followers?.toLocaleString() || '0'} followers</span>
-                            </div>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-// --- SCROLLABLE PROFILES WIDGET ---
-interface SuggestedProfilesWidgetProps {
-    profiles: User[];
-    currentUser: User | null;
-    onProfileClick: (id: number) => void;
-    onFollow?: (userId: number) => void;
-}
-
-export const SuggestedProfilesWidget: React.FC<SuggestedProfilesWidgetProps> = ({ profiles, currentUser, onProfileClick, onFollow }) => {
-    const scrollRef = useRef<HTMLDivElement>(null);
-    
-    if (profiles.length === 0) return null;
-    
-    const filteredProfiles = profiles.filter(profile => 
-        currentUser ? profile.id !== currentUser.id : true
-    ).slice(0, 10);
-    
-    return (
-        <div className="bg-[#242526] rounded-xl border border-[#3E4042] mb-4 p-4 shadow-sm">
-            <div className="flex justify-between items-center mb-3">
-                <h3 className="text-[#E4E6EB] font-bold text-[17px]">People you may know</h3>
-                <span className="text-[#1877F2] text-[15px] cursor-pointer hover:underline">See All</span>
-            </div>
-            <div 
-                ref={scrollRef}
-                className="flex gap-3 overflow-x-auto scrollbar-hide pb-2 scroll-smooth"
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-            >
-                {filteredProfiles.map(profile => (
-                    <div 
-                        key={profile.id} 
-                        className="min-w-[150px] bg-[#18191A] rounded-lg overflow-hidden border border-[#3E4042] cursor-pointer flex-shrink-0"
-                    >
-                        <div className="h-32 bg-black relative">
-                            <img 
-                                src={profile.coverImage || profile.profileImage} 
-                                className="w-full h-full object-cover"
-                                alt={profile.name}
-                            />
-                            <div className="absolute bottom-2 right-2 w-12 h-12 bg-[#242526]/90 rounded-full flex items-center justify-center border border-[#3E4042]">
-                                <img 
-                                    src={profile.profileImage} 
-                                    className="w-10 h-10 rounded-full object-cover cursor-pointer"
-                                    alt={profile.name}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onProfileClick(profile.id);
-                                    }}
-                                />
-                            </div>
-                        </div>
-                        <div className="p-3">
-                            <div 
-                                className="font-bold text-[#E4E6EB] text-[15px] truncate mb-1 cursor-pointer hover:underline"
-                                onClick={() => onProfileClick(profile.id)}
-                            >
-                                {profile.name}
-                            </div>
-                            <div className="text-[#B0B3B8] text-xs truncate mb-2">
-                                {profile.mutualFriends > 0 ? `${profile.mutualFriends} mutual friends` : 'Suggested for you'}
-                            </div>
-                            {onFollow && (
-                                <button 
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onFollow(profile.id);
-                                    }}
-                                    className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold py-1.5 rounded-md text-sm transition-colors"
-                                >
-                                    Follow
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-// --- SCROLLABLE GROUPS WIDGET ---
-interface SuggestedGroupsWidgetProps {
-    groups: Group[];
-    onGroupClick: (groupId: string) => void;
-    onJoinGroup?: (groupId: string) => void;
-}
-
-export const SuggestedGroupsWidget: React.FC<SuggestedGroupsWidgetProps> = ({ groups, onGroupClick, onJoinGroup }) => {
-    const scrollRef = useRef<HTMLDivElement>(null);
-    
-    if (groups.length === 0) return null;
-    
-    return (
-        <div className="bg-[#242526] rounded-xl border border-[#3E4042] mb-4 p-4 shadow-sm">
-            <div className="flex justify-between items-center mb-3">
-                <h3 className="text-[#E4E6EB] font-bold text-[17px]">Suggested Groups</h3>
-                <span className="text-[#1877F2] text-[15px] cursor-pointer hover:underline">See All</span>
-            </div>
-            <div 
-                ref={scrollRef}
-                className="flex gap-3 overflow-x-auto scrollbar-hide pb-2 scroll-smooth"
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-            >
-                {groups.slice(0, 10).map(group => (
-                    <div 
-                        key={group.id} 
-                        className="min-w-[180px] bg-[#18191A] rounded-lg overflow-hidden border border-[#3E4042] cursor-pointer flex-shrink-0 hover:scale-[1.02] transition-transform"
-                        onClick={() => onGroupClick(group.id)}
-                    >
-                        <div className="h-32 bg-black relative">
-                            <img 
-                                src={group.image} 
-                                className="w-full h-full object-cover"
-                                alt={group.name}
-                            />
-                            <div className="absolute bottom-2 right-2 w-12 h-12 bg-[#45BD62]/90 rounded-full flex items-center justify-center border border-[#3E4042]">
-                                <i className="fas fa-users text-white text-lg"></i>
-                            </div>
-                        </div>
-                        <div className="p-3">
-                            <div className="font-bold text-[#E4E6EB] text-[15px] truncate mb-1">{group.name}</div>
-                            <div className="text-[#B0B3B8] text-xs truncate mb-2">{group.description}</div>
-                            <div className="flex items-center justify-between">
-                                <span className="text-[#B0B3B8] text-xs">
-                                    <i className="fas fa-users mr-1"></i>
-                                    {group.members.length.toLocaleString()} members
-                                </span>
-                                {onJoinGroup && (
-                                    <button 
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            onJoinGroup(group.id);
-                                        }}
-                                        className="bg-[#45BD62] hover:bg-[#3DA856] text-white px-3 py-1 rounded-md text-xs font-bold transition-colors"
-                                    >
-                                        Join
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-// --- CREATE POST COMPONENT ---
 interface CreatePostProps {
     currentUser: User;
     onProfileClick: (id: number) => void;
@@ -815,34 +555,8 @@ interface CreatePostProps {
 export const CreatePost: React.FC<CreatePostProps> = ({ currentUser, onProfileClick, onClick, onCreateEventClick }) => {
     return (
         <div className="bg-[#242526] rounded-xl p-3 md:p-4 mb-4 shadow-sm border border-[#3E4042]">
-            <div className="flex gap-2 mb-3">
-                <img 
-                    src={currentUser.profileImage} 
-                    alt="Profile" 
-                    className="w-10 h-10 rounded-full object-cover cursor-pointer border border-[#3E4042]" 
-                    onClick={() => onProfileClick(currentUser.id)} 
-                />
-                <div 
-                    className="flex-1 bg-[#3A3B3C] rounded-full px-3 md:px-4 py-2 hover:bg-[#4E4F50] cursor-pointer flex items-center transition-colors" 
-                    onClick={onClick}
-                >
-                    <span className="text-[#B0B3B8] text-[17px] truncate">What's on your mind?</span>
-                </div>
-            </div>
-            <div className="border-t border-[#3E4042] pt-2 flex justify-between">
-                <div className="flex items-center justify-center flex-1 gap-2 p-2 hover:bg-[#3A3B3C] rounded-lg cursor-pointer transition-colors" onClick={onClick}>
-                    <i className="fas fa-video text-[#F3425F] text-[22px]"></i>
-                    <span className="text-[#B0B3B8] font-semibold text-[15px] hidden sm:block">Live Video</span>
-                </div>
-                <div className="flex items-center justify-center flex-1 gap-2 p-2 hover:bg-[#3A3B3C] rounded-lg cursor-pointer transition-colors" onClick={onClick}>
-                    <i className="fas fa-images text-[#45BD62] text-[22px]"></i>
-                    <span className="text-[#B0B3B8] font-semibold text-[15px] hidden sm:block">Photo/Video</span>
-                </div>
-                <div className="flex items-center justify-center flex-1 gap-2 p-2 hover:bg-[#3A3B3C] rounded-lg cursor-pointer transition-colors" onClick={onCreateEventClick}>
-                    <i className="fas fa-flag text-[#F7B928] text-[22px]"></i>
-                    <span className="text-[#B0B3B8] font-semibold text-[15px] hidden sm:block">Life Event</span>
-                </div>
-            </div>
+            <div className="flex gap-2 mb-3"><img src={currentUser.profileImage} alt="Profile" className="w-10 h-10 rounded-full object-cover cursor-pointer border border-[#3E4042]" onClick={() => onProfileClick(currentUser.id)} /><div className="flex-1 bg-[#3A3B3C] rounded-full px-3 md:px-4 py-2 hover:bg-[#4E4F50] cursor-pointer flex items-center transition-colors" onClick={onClick}><span className="text-[#B0B3B8] text-[17px] truncate">What's on your mind?</span></div></div>
+            <div className="border-t border-[#3E4042] pt-2 flex justify-between"><div className="flex items-center justify-center flex-1 gap-2 p-2 hover:bg-[#3A3B3C] rounded-lg cursor-pointer transition-colors" onClick={onClick}><i className="fas fa-video text-[#F3425F] text-[22px]"></i><span className="text-[#B0B3B8] font-semibold text-[15px] hidden sm:block">Live Video</span></div><div className="flex items-center justify-center flex-1 gap-2 p-2 hover:bg-[#3A3B3C] rounded-lg cursor-pointer transition-colors" onClick={onClick}><i className="fas fa-images text-[#45BD62] text-[22px]"></i><span className="text-[#B0B3B8] font-semibold text-[15px] hidden sm:block">Photo/Video</span></div><div className="flex items-center justify-center flex-1 gap-2 p-2 hover:bg-[#3A3B3C] rounded-lg cursor-pointer transition-colors" onClick={onCreateEventClick}><i className="fas fa-flag text-[#F7B928] text-[22px]"></i><span className="text-[#B0B3B8] font-semibold text-[15px] hidden sm:block">Life Event</span></div></div>
         </div>
     );
 };
@@ -852,6 +566,7 @@ interface CreatePostModalProps {
     currentUser: User;
     users: User[]; 
     onClose: () => void;
+    // UPDATED: Now accepts multiple files for multi-image posts
     onCreatePost: (text: string, files: File[] | null, type: any, visibility: any, location?: string, feeling?: string, taggedUsers?: number[], background?: string, linkPreview?: LinkPreview) => void;
     onCreateEventClick?: () => void;
 }
@@ -933,28 +648,29 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ currentUser, u
         );
       };
 
-    useEffect(() => { 
-        const preview = getLinkPreview(text); 
-        setLinkPreview(preview); 
-    }, [text]);
+    useEffect(() => { const preview = getLinkPreview(text); setLinkPreview(preview); }, [text]);
     
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
             const newFiles = Array.from(e.target.files);
             
+            // Check if total files exceed limit (9 max like Facebook)
             const totalFiles = files.length + newFiles.length;
             if (totalFiles > 9) {
                 alert("You can only upload up to 9 images.");
                 return;
             }
             
+            // Filter to only allow images
             const imageFiles = newFiles.filter(file => file.type.startsWith('image/'));
             
             setFiles(prev => [...prev, ...imageFiles]);
             
+            // Create previews
             const newPreviews = imageFiles.map(file => URL.createObjectURL(file));
             setPreviews(prev => [...prev, ...newPreviews]);
             
+            // Set type based on number of images
             const totalImages = files.length + imageFiles.length;
             setType(totalImages === 1 ? 'image' : 'multimage');
             
@@ -967,21 +683,24 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ currentUser, u
         setFiles(prev => prev.filter((_, i) => i !== index));
         setPreviews(prev => prev.filter((_, i) => i !== index));
         
+        // Update type based on remaining files
         if (files.length === 1) {
             setType('text');
         } else if (files.length === 2) {
-            setType('image');
+            setType('image'); // Only one file left, switch to single image
         }
     };
 
     const handleSubmit = () => { 
         if (!text && files.length === 0 && !activeBackground) return; 
         
+        // Determine post type based on content
         let postType = type;
         if (files.length > 0) {
             postType = files.length === 1 ? 'image' : 'multimage';
         }
         
+        // Pass all files to onCreatePost
         onCreatePost(text, files.length > 0 ? files : null, postType, visibility, location, feeling, taggedUsers, activeBackground, linkPreview || undefined); 
         onClose(); 
     };
@@ -993,6 +712,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ currentUser, u
         </div>
     );
 
+    // Render Image Grid for previews
     const renderImageGrid = (images: string[]) => {
         if (images.length === 0) return null;
         
@@ -1033,6 +753,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ currentUser, u
                             className="w-full h-full object-cover"
                         />
                         
+                        {/* Remove button */}
                         <div 
                             onClick={() => removeFile(index)}
                             className="absolute top-2 right-2 w-6 h-6 bg-black/80 rounded-full flex items-center justify-center cursor-pointer hover:bg-black"
@@ -1040,6 +761,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ currentUser, u
                             <i className="fas fa-times text-white text-xs"></i>
                         </div>
                         
+                        {/* Overlay for remaining count */}
                         {index === displayedImages.length - 1 && remainingCount > 0 && (
                             <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
                                 <span className="text-white text-xl font-bold">
@@ -1048,6 +770,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ currentUser, u
                             </div>
                         )}
                         
+                        {/* Multi-image indicator for first image */}
                         {images.length > 1 && index === 0 && (
                             <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm rounded-full w-8 h-8 flex items-center justify-center">
                                 <i className="fas fa-layer-group text-white text-sm"></i>
@@ -1186,6 +909,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ currentUser, u
                         <div className="mb-4">
                             {renderImageGrid(previews)}
                             
+                            {/* Add more images button */}
                             {previews.length < 9 && (
                                 <div className="flex gap-2 mt-2">
                                     <div 
@@ -1236,7 +960,6 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ currentUser, u
     );
 };
 
-// --- FIXED COMMENTS SHEET COMPONENT ---
 interface CommentsSheetProps {
     post: PostType;
     currentUser: User;
@@ -1254,35 +977,6 @@ export const CommentsSheet: React.FC<CommentsSheetProps> = ({ post, currentUser,
     const [replyingTo, setReplyingTo] = useState<{ id: number, name: string } | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     
-    // DEBUG: Add safety check
-    useEffect(() => {
-        console.log('CommentsSheet: Post data received:', post);
-        console.log('CommentsSheet: Comments array:', post?.comments);
-        
-        if (!post) {
-            console.error('CommentsSheet: No post provided');
-            onClose();
-        }
-    }, [post, onClose]);
-    
-    // Safety check
-    if (!post) {
-        return (
-            <div className="fixed inset-0 z-[120] flex flex-col justify-end md:items-center md:justify-center">
-                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
-                <div className="bg-[#242526] w-full md:w-[600px] md:h-[80vh] md:rounded-xl z-20 animate-slide-up flex flex-col h-[70vh] shadow-2xl overflow-hidden border border-[#3E4042]">
-                    <div className="p-4 flex items-center justify-between">
-                        <h3 className="text-[#E4E6EB] font-bold">Error</h3>
-                        <button onClick={onClose} className="text-[#1877F2]">Close</button>
-                    </div>
-                    <div className="flex-1 flex items-center justify-center">
-                        <p className="text-[#B0B3B8]">Post not found</p>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-    
     const handleSubmit = (e: React.FormEvent) => { 
         e.preventDefault(); 
         if(text.trim()) { 
@@ -1294,12 +988,10 @@ export const CommentsSheet: React.FC<CommentsSheetProps> = ({ post, currentUser,
         }
     };
     
+    // Use formattedTime from comment or calculate it if missing
     const getCommentTime = (timestamp: number, formattedTime?: string) => {
         return formattedTime || formatRelativeTime(timestamp);
     };
-    
-    // Ensure comments is always an array
-    const comments = Array.isArray(post.comments) ? post.comments : [];
     
     return (
         <div className="fixed inset-0 z-[120] flex flex-col justify-end md:items-center md:justify-center">
@@ -1310,7 +1002,7 @@ export const CommentsSheet: React.FC<CommentsSheetProps> = ({ post, currentUser,
                         <div className="bg-[#1877F2] p-1.5 rounded-full">
                             <i className="fas fa-thumbs-up text-white text-xs"></i>
                         </div>
-                        <span className="text-[#B0B3B8] text-[15px] hover:underline cursor-pointer">{post.reactions?.length || 0}</span>
+                        <span className="text-[#B0B3B8] text-[15px] hover:underline cursor-pointer">{post.reactions.length}</span>
                         <i className="fas fa-chevron-right text-[#B0B3B8] text-xs"></i>
                     </div>
                     <div onClick={onClose} className="w-8 h-8 rounded-full bg-[#3A3B3C] flex items-center justify-center cursor-pointer">
@@ -1319,7 +1011,7 @@ export const CommentsSheet: React.FC<CommentsSheetProps> = ({ post, currentUser,
                 </div>
                 
                 <div className="flex-1 overflow-y-auto p-4">
-                    {comments.length === 0 ? (
+                    {post.comments.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-[#B0B3B8] gap-2">
                             <div className="w-16 h-16 bg-[#3A3B3C] rounded-full flex items-center justify-center">
                                 <i className="far fa-comments text-3xl"></i>
@@ -1329,12 +1021,9 @@ export const CommentsSheet: React.FC<CommentsSheetProps> = ({ post, currentUser,
                         </div>
                     ) : (
                         <div className="flex flex-col gap-4">
-                            {comments.map(comment => { 
+                            {post.comments.map(comment => { 
                                 const author = getCommentAuthor(comment.userId); 
-                                if (!author) {
-                                    console.warn('Comment author not found:', comment.userId);
-                                    return null;
-                                }
+                                if (!author) return null; 
                                 return (
                                     <div key={comment.id} className="flex flex-col gap-2">
                                         <div className="flex gap-2">
@@ -1398,7 +1087,8 @@ export const CommentsSheet: React.FC<CommentsSheetProps> = ({ post, currentUser,
     );
 };
 
-// --- MAIN POST COMPONENT WITH ALL FIXES ---
+// --- MAIN POST COMPONENT WITH MULTI-IMAGE SUPPORT ---
+// UPDATED: Added missing props to match App.tsx
 interface PostProps {
     post: PostType;
     author: User | Brand;
@@ -1411,7 +1101,7 @@ interface PostProps {
     onDelete?: (postId: number) => void;
     onEdit?: (postId: number, content: string) => void;
     onHashtagClick?: (tag: string) => void;
-    onViewImage: (url: string) => void;
+    onViewImage: (url: string) => void; // Updated: Now only needs url for single image clicks
     onOpenComments: (postId: number) => void;
     onViewProduct?: (product: Product) => void;
     onVideoClick: (post: PostType) => void;
@@ -1419,6 +1109,7 @@ interface PostProps {
     onFollow?: (userId: number) => void;
     isFollowing?: boolean;
     onPlayAudioTrack?: (track: AudioTrack) => void;
+    // ADDED: Missing props from App.tsx
     isAdmin?: boolean;
     showLoginPrompt?: () => void;
     onDeletePost?: (postId: number) => void;
@@ -1444,6 +1135,7 @@ export const Post: React.FC<PostProps> = ({
     onFollow, 
     isFollowing, 
     onPlayAudioTrack,
+    // ADDED: New props
     isAdmin = false,
     showLoginPrompt,
     onDeletePost
@@ -1457,7 +1149,7 @@ export const Post: React.FC<PostProps> = ({
     const isAdminUser = currentUser?.role === 'admin' || isAdmin;
     const isVideo = post.type === 'video';
 
-    // FIXED: Handle react function properly
+    // FIXED: Handle react function properly - matches App.tsx logic
     const handleReact = (type: ReactionType) => {
         console.log('Post component: handleReact called', { postId: post.id, type, currentUser });
         if (!currentUser) {
@@ -1487,7 +1179,7 @@ export const Post: React.FC<PostProps> = ({
         onOpenComments(post.id);
     };
 
-    // Helper to get all images from post
+    // Helper to get all images from post (supports both single image and multi-image arrays)
     const getAllImages = () => {
         if (post.images && post.images.length > 0) {
             return post.images;
@@ -1502,13 +1194,16 @@ export const Post: React.FC<PostProps> = ({
 
     const handleImageClick = (index: number) => {
         if (images.length === 1) {
+            // Single image - use the existing onViewImage callback
             onViewImage(images[0]);
         } else {
+            // Multiple images - open full-screen viewer
             setCurrentImageIndex(index);
             setShowFullScreenViewer(true);
         }
     };
 
+    // Use formattedTime from post or calculate it if missing
     const getPostTime = () => {
         return post.formattedTime || formatRelativeTime(post.timestamp);
     };
@@ -1529,7 +1224,7 @@ export const Post: React.FC<PostProps> = ({
         );
     };
 
-    // Handle delete post
+    // Handle delete post - uses either onDelete or onDeletePost prop
     const handleDeletePost = () => {
         if (onDeletePost) {
             onDeletePost(post.id);
@@ -1550,62 +1245,9 @@ export const Post: React.FC<PostProps> = ({
         setShowMenu(false);
     };
 
-    // Handle share post
-    const handleSharePost = () => {
-        if (!currentUser) {
-            if (showLoginPrompt) {
-                showLoginPrompt();
-            } else {
-                alert("Please login to share");
-            }
-            return;
-        }
-        onShare(post.id);
-    };
-
-    // Improved reaction display
-    const renderReactionIcons = () => {
-        if (!post.reactions || post.reactions.length === 0) return null;
-        
-        const reactionCounts: Record<ReactionType, number> = {
-            like: 0, love: 0, haha: 0, wow: 0, sad: 0, angry: 0
-        };
-        
-        post.reactions.forEach(reaction => {
-            if (reactionCounts[reaction.type] !== undefined) {
-                reactionCounts[reaction.type]++;
-            }
-        });
-        
-        const activeReactions = Object.entries(reactionCounts)
-            .filter(([_, count]) => count > 0)
-            .slice(0, 3);
-        
-        if (activeReactions.length === 0) return null;
-        
-        return (
-            <div className="flex -space-x-1">
-                {activeReactions.map(([type, count], index) => (
-                    <div 
-                        key={type}
-                        className="rounded-full p-[2px] z-10 border border-[#242526]"
-                        style={{ 
-                            backgroundColor: REACTION_COLORS[type as ReactionType] || '#1877F2',
-                            marginLeft: index > 0 ? '-4px' : '0'
-                        }}
-                        title={`${count} ${type}`}
-                    >
-                        <span className="text-white text-[10px]">
-                            {REACTION_ICONS[type as ReactionType] || '👍'}
-                        </span>
-                    </div>
-                ))}
-            </div>
-        );
-    };
-
     return (
         <>
+            {/* Full Screen Image Viewer */}
             {showFullScreenViewer && images.length > 0 && (
                 <FullScreenImageViewer
                     images={images}
@@ -1735,6 +1377,7 @@ export const Post: React.FC<PostProps> = ({
                     </div>
                 )}
                 
+                {/* MULTI-IMAGE SUPPORT - Full width with no frames */}
                 {images.length > 0 && post.type === 'image' && !post.background && (
                     <div className="w-full mt-2">
                         <ImageGrid images={images} onImageClick={handleImageClick} />
@@ -1759,35 +1402,68 @@ export const Post: React.FC<PostProps> = ({
                 {!isVideo && (
                     <div className="px-3 md:px-4 py-2.5 flex items-center justify-between text-[#B0B3B8] text-[14px]">
                         <div className="flex items-center gap-1.5 cursor-pointer">
-                            {renderReactionIcons()}
-                            <span className="hover:underline">{post.reactions?.length > 0 ? post.reactions.length : ''}</span>
+                            {post.reactions.length > 0 && (
+                                <div className="flex -space-x-1">
+                                    <div className="bg-[#1877F2] rounded-full p-[2px] z-10">
+                                        <i className="fas fa-thumbs-up text-white text-[10px]"></i>
+                                    </div>
+                                    {post.reactions.some(r => r.type === 'love') && (
+                                        <div className="bg-[#F3425F] rounded-full p-[2px]">
+                                            <i className="fas fa-heart text-white text-[10px]"></i>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            <span className="hover:underline">{post.reactions.length > 0 ? post.reactions.length : ''}</span>
                         </div>
                         <div className="flex gap-4">
-                            <span className="hover:underline cursor-pointer" onClick={handleOpenComments}>{post.comments?.length || 0} comments</span>
-                            <span className="hover:underline cursor-pointer">{post.shares || 0} shares</span>
+                            <span className="hover:underline cursor-pointer" onClick={handleOpenComments}>{post.comments.length} comments</span>
+                            <span className="hover:underline cursor-pointer">{post.shares} shares</span>
                         </div>
                     </div>
                 )}
                 
                 {!isVideo && (
                     <div className="px-2 py-1 border-t border-[#3E4042] mx-2 mb-1 flex items-center justify-between">
+                        {/* FIXED: Use handleReact function and properly pass isGuest flag */}
                         <ReactionButton 
                             currentUserReactions={myReaction} 
-                            reactionCount={post.reactions?.length || 0} 
+                            reactionCount={post.reactions.length} 
                             onReact={handleReact} 
                             isGuest={!currentUser} 
-                            showLoginPrompt={showLoginPrompt}
                         />
+                        {/* FIXED: Fixed comment button to properly handle logged out users */}
                         <button 
                             className="flex-1 flex items-center justify-center gap-2 h-10 rounded hover:bg-[#3A3B3C] transition-colors group text-[#B0B3B8]" 
-                            onClick={handleOpenComments}
+                            onClick={() => {
+                                if (!currentUser) {
+                                    if (showLoginPrompt) {
+                                        showLoginPrompt();
+                                    } else {
+                                        alert("Please login to comment");
+                                    }
+                                    return;
+                                }
+                                handleOpenComments();
+                            }}
                         >
                             <i className="far fa-comment-alt text-[20px] group-hover:text-[#E4E6EB]"></i>
                             <span className="text-[17px] font-medium group-hover:text-[#E4E6EB]">Comment</span>
                         </button>
+                        {/* FIXED: Share button should work for everyone */}
                         <button 
                             className="flex-1 flex items-center justify-center gap-2 h-10 rounded hover:bg-[#3A3B3C] transition-colors group text-[#B0B3B8]" 
-                            onClick={handleSharePost}
+                            onClick={() => {
+                                if (!currentUser) {
+                                    if (showLoginPrompt) {
+                                        showLoginPrompt();
+                                    } else {
+                                        alert("Please login to share");
+                                    }
+                                    return;
+                                }
+                                onShare(post.id);
+                            }}
                         >
                             <i className="fas fa-share text-[20px] group-hover:text-[#E4E6EB]"></i>
                             <span className="text-[17px] font-medium group-hover:text-[#E4E6EB]">Share</span>
@@ -1797,15 +1473,4 @@ export const Post: React.FC<PostProps> = ({
             </div>
         </>
     );
-};
-
-// ⚠️ IMPORTANT: KEEP ONLY THIS ONE EXPORT STATEMENT AT THE END
-// DELETE ANY OTHER EXPORT STATEMENTS YOU SEE IN THE FILE
-export {
-    PROFILE_RECOMMENDATION_INTERVALS,
-    BRAND_RECOMMENDATION_INTERVALS,
-    GROUP_RECOMMENDATION_INTERVALS,
-    SuggestedBrandsWidget,
-    SuggestedProfilesWidget,
-    SuggestedGroupsWidget
 };
