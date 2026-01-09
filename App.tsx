@@ -2075,7 +2075,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         if (!currentUser) {
             console.log('[DEBUG] No current user, showing login');
             handleNavigate('login');
-            return;
+            return { success: false, error: 'Login required' };
         }
         
         // Check if it's a product post (ID > 100000)
@@ -2083,14 +2083,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             console.log('[DEBUG] Product post detected, calling handleLikeProduct');
             const productId = itemId - 100000;
             handleLikeProduct(productId);
-            return;
+            return { success: true };
         }
         
         // Find the post first
         const postToUpdate = posts.find(p => p.id === itemId);
         if (!postToUpdate) {
             console.log('[DEBUG] Post not found:', itemId);
-            return;
+            return { success: false, error: 'Post not found' };
         }
         
         console.log('[DEBUG] Found post:', {
@@ -2100,7 +2100,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             postAuthorName: users.find(u => u.id === postToUpdate.authorId)?.name || 'Unknown'
         });
         
-        // Update posts state
+        // Update posts state using functional update to ensure latest state
         setPosts(prev => {
             return prev.map(post => {
                 if (post.id === itemId) {
@@ -2150,6 +2150,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 return post;
             });
         });
+        
+        return { success: true };
     };
 
     // ========== CRITICAL FIX: Enhanced handleComment function ==========
@@ -2164,7 +2166,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         if (!currentUser) {
             console.log('[DEBUG] No current user, showing login');
             handleNavigate('login');
-            return;
+            return { success: false, error: 'Login required' };
+        }
+        
+        if (!text.trim() && !attachment) {
+            console.log('[DEBUG] Empty comment');
+            return { success: false, error: 'Comment cannot be empty' };
         }
         
         // Check if it's a product post (ID > 100000)
@@ -2172,14 +2179,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             console.log('[DEBUG] Product post detected, calling handleCommentOnProduct');
             const productId = itemId - 100000;
             handleCommentOnProduct(productId, text);
-            return;
+            return { success: true, commentId: Date.now() };
         }
         
         // Find the post first
         const postToUpdate = posts.find(p => p.id === itemId);
         if (!postToUpdate) {
             console.log('[DEBUG] Post not found:', itemId);
-            return;
+            return { success: false, error: 'Post not found' };
         }
         
         const timestamp = Date.now();
@@ -2204,7 +2211,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             commentTextPreview: text.substring(0, 30)
         });
         
-        // Update posts state
+        // Update posts state using functional update
         setPosts(prev => {
             return prev.map(p => {
                 if (p.id === itemId) {
@@ -2271,6 +2278,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
         
         console.log('[DEBUG] Comment added successfully to post:', itemId);
+        return { success: true, commentId: newComment.id };
     };
 
     // FIXED: Prevent self-notifications for reel reactions
@@ -3424,6 +3432,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     // Handle like for music/podcast posts with self-notification prevention
     const handleLikeTrack = (trackId: string, isLiked: boolean) => {
+        if (!currentUser) {
+            handleNavigate('login');
+            return;
+        }
+        
         setLikedTracks(prev => 
             isLiked 
                 ? prev.filter(id => id !== trackId)
@@ -4294,7 +4307,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     }
                 }} 
                 onReact={handleReact} 
-                onShare={(id) => setActiveSharePostId(id)} 
+                onShare={(id) => {
+                    if (!currentUser) {
+                        handleNavigate('login');
+                        return;
+                    }
+                    setActiveSharePostId(id);
+                }} 
                 onViewImage={(url) => setFullScreenImage(url)} 
                 onOpenComments={(postId) => {
                     if (!currentUser) {
