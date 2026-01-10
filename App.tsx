@@ -20,7 +20,7 @@ import { TermsOfServicePage } from './components/TermsOfService';
 import { useLanguage } from './contexts/LanguageContext';
 import { User, Post as PostType, Story, Reel, Notification, Message, Event, Product, Comment, ReactionType, LinkPreview, Group, GroupPost, AudioTrack, Brand, Song, Episode } from './types';
 import { INITIAL_USERS, INITIAL_POSTS, INITIAL_STORIES, INITIAL_REELS, INITIAL_EVENTS, INITIAL_GROUPS, INITIAL_BRANDS, MOCK_SONGS, MOCK_EPISODES } from './constants';
-import { rankFeed } from './utils/ranking'; 
+import { rankFeed } from './utils/ranking';
 
 // ========== UTILITY FUNCTIONS ==========
 const getPath = () => {
@@ -261,38 +261,263 @@ const createNotification = (
     };
 };
 
-// ========== IMAGE RENDERING UTILITIES ==========
-// Facebook-style image grid arrangement helper
-const getImageGridClass = (imageCount: number): string => {
-    switch (imageCount) {
-        case 1:
-            return 'w-full max-w-full h-auto'; // Single image - full width container
-        case 2:
-            return 'grid grid-cols-2 gap-1 w-full';
-        case 3:
-            return 'grid grid-cols-2 gap-1 w-full';
-        case 4:
-            return 'grid grid-cols-2 gap-1 w-full';
-        default:
-            return imageCount > 4 ? 'grid grid-cols-2 gap-1 w-full' : 'w-full max-w-full h-auto';
-    }
+// Suggested User Interface
+interface SuggestedUser {
+    id: number;
+    name: string;
+    username?: string;
+    profileImage: string;
+    mutualFriends: number;
+    bio?: string;
+    location?: string;
+    education?: string;
+    work?: string;
+    viewed: boolean;
+}
+
+// People You May Know Component - Professional Version
+const PeopleYouMayKnow: React.FC<{
+    suggestedUsers: SuggestedUser[];
+    onViewProfile: (userId: number) => void;
+    onRemove: (userId: number) => void;
+    key?: string;
+}> = ({ suggestedUsers, onViewProfile, onRemove, key }) => {
+    const { t } = useLanguage();
+    
+    if (suggestedUsers.length === 0) return null;
+    
+    return (
+        <div className="bg-[#242526] rounded-xl p-4 mb-6 border border-[#3E4042] shadow-lg">
+            <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center">
+                    <div className="w-8 h-8 bg-gradient-to-r from-[#1877F2] to-[#00B0FF] rounded-full flex items-center justify-center mr-3 shadow-md">
+                        <i className="fas fa-user-plus text-white text-sm"></i>
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-bold text-white">People You May Know</h2>
+                        <p className="text-[#B0B3B8] text-xs mt-0.5">Based on your profile and connections</p>
+                    </div>
+                </div>
+                {suggestedUsers.length > 5 && (
+                    <button className="text-[#1877F2] text-sm font-medium hover:bg-[#3A3B3C] px-3 py-1.5 rounded-lg transition-colors">
+                        See All
+                    </button>
+                )}
+            </div>
+            
+            <div className="relative">
+                <div className="flex space-x-4 overflow-x-auto pb-4 scrollbar-hide">
+                    {suggestedUsers.slice(0, 6).map((user) => (
+                        <div 
+                            key={`${key}-${user.id}`} 
+                            className="flex-shrink-0 w-44 bg-[#3A3B3C] rounded-xl overflow-hidden border border-[#4E4F50] hover:border-[#1877F2]/50 transition-all duration-300 hover:shadow-lg group"
+                        >
+                            {/* User Card */}
+                            <div className="p-3">
+                                {/* Profile Image */}
+                                <div className="flex justify-center mb-3 relative">
+                                    <div className="relative">
+                                        <img 
+                                            src={user.profileImage} 
+                                            alt={user.name}
+                                            className="w-16 h-16 rounded-full object-cover border-2 border-[#4E4F50] group-hover:border-[#1877F2] transition-colors"
+                                        />
+                                        {user.mutualFriends > 0 && (
+                                            <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-[#1877F2] rounded-full flex items-center justify-center shadow-md">
+                                                <span className="text-white text-xs font-bold">
+                                                    {user.mutualFriends > 9 ? '9+' : user.mutualFriends}
+                                                </span>
+                                            </div>
+                                        )}
+                                        <button 
+                                            onClick={() => onRemove(user.id)}
+                                            className="absolute -top-1 -right-1 w-6 h-6 bg-[#242526] rounded-full flex items-center justify-center text-[#B0B3B8] hover:text-white hover:bg-[#3A3B3C] transition-colors shadow-md border border-[#3E4042]"
+                                            title="Remove suggestion"
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                {/* User Info */}
+                                <div className="text-center">
+                                    <h3 className="font-semibold text-white text-sm truncate mb-1">{user.name}</h3>
+                                    
+                                    {user.mutualFriends > 0 && (
+                                        <p className="text-[#B0B3B8] text-xs mb-2">
+                                            {user.mutualFriends} mutual connection{user.mutualFriends !== 1 ? 's' : ''}
+                                        </p>
+                                    )}
+                                    
+                                    {/* Compact Details */}
+                                    <div className="space-y-1 mb-3">
+                                        {user.work && (
+                                            <div className="flex items-center justify-center text-[#B0B3B8] text-xs">
+                                                <i className="fas fa-briefcase mr-1 text-[10px]"></i>
+                                                <span className="truncate">{user.work}</span>
+                                            </div>
+                                        )}
+                                        {user.location && (
+                                            <div className="flex items-center justify-center text-[#B0B3B8] text-xs">
+                                                <i className="fas fa-map-marker-alt mr-1 text-[10px]"></i>
+                                                <span className="truncate">{user.location}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {/* View Profile Button - Professional Blue */}
+                                    <button
+                                        onClick={() => onViewProfile(user.id)}
+                                        className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white font-semibold py-2 rounded-lg transition-colors text-sm shadow-sm hover:shadow-md"
+                                    >
+                                        View Profile
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                
+                {/* Scroll Indicator */}
+                <div className="flex justify-center space-x-1 mt-3">
+                    {suggestedUsers.slice(0, 3).map((_, index) => (
+                        <div 
+                            key={index} 
+                            className={`w-1.5 h-1.5 rounded-full ${index === 0 ? 'bg-[#1877F2]' : 'bg-[#4E4F50]'}`}
+                        />
+                    ))}
+                </div>
+            </div>
+            
+            <div className="mt-3 pt-3 border-t border-[#3E4042]">
+                <p className="text-[#B0B3B8] text-xs text-center">
+                    Suggestions update based on new connections and activity
+                </p>
+            </div>
+        </div>
+    );
 };
 
-const getImageItemClass = (imageCount: number, index: number): string => {
-    switch (imageCount) {
-        case 1:
-            return 'w-full max-w-full h-auto max-h-[500px] object-contain rounded-lg'; // Full width for single image
-        case 2:
-            return 'w-full h-full aspect-square object-cover rounded-lg'; // Square for 2 images
-        case 3:
-            if (index === 0) return 'row-span-2 w-full h-full aspect-square object-cover rounded-lg'; // First image takes 2 rows
-            return 'w-full h-full aspect-square object-cover rounded-lg'; // Others square
-        case 4:
-            return 'w-full h-full aspect-square object-cover rounded-lg'; // All square for 4 images
-        default:
-            // For 5+ images, show grid with more than 2 columns
-            return 'w-full h-full aspect-square object-cover rounded-lg';
-    }
+// Groups You May Like Component - Professional Version
+const GroupsYouMayLike: React.FC<{
+    suggestedGroups: Group[];
+    currentUser: User | null;
+    onViewGroup: (groupId: string) => void;
+    onJoinGroup: (groupId: string) => void;
+    onRemove: (groupId: string) => void;
+    key?: string;
+}> = ({ suggestedGroups, currentUser, onViewGroup, onJoinGroup, onRemove, key }) => {
+    const { t } = useLanguage();
+    
+    if (suggestedGroups.length === 0) return null;
+    
+    return (
+        <div className="bg-[#242526] rounded-xl p-4 mb-6 border border-[#3E4042] shadow-lg">
+            <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center">
+                    <div className="w-8 h-8 bg-gradient-to-r from-[#45BD62] to-[#2ABBA7] rounded-full flex items-center justify-center mr-3 shadow-md">
+                        <i className="fas fa-users text-white text-sm"></i>
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-bold text-white">Groups You May Like</h2>
+                        <p className="text-[#B0B3B8] text-xs mt-0.5">Based on your interests and connections</p>
+                    </div>
+                </div>
+                {suggestedGroups.length > 5 && (
+                    <button className="text-[#45BD62] text-sm font-medium hover:bg-[#3A3B3C] px-3 py-1.5 rounded-lg transition-colors">
+                        See All
+                    </button>
+                )}
+            </div>
+            
+            <div className="relative">
+                <div className="flex space-x-4 overflow-x-auto pb-4 scrollbar-hide">
+                    {suggestedGroups.slice(0, 6).map((group) => (
+                        <div 
+                            key={`${key}-${group.id}`} 
+                            className="flex-shrink-0 w-64 bg-[#3A3B3C] rounded-xl overflow-hidden border border-[#4E4F50] hover:border-[#45BD62]/50 transition-all duration-300 hover:shadow-lg group"
+                        >
+                            {/* Group Card */}
+                            <div className="h-32 relative">
+                                <img 
+                                    src={group.coverImage} 
+                                    alt={group.name}
+                                    className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+                                />
+                                <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-xs text-white font-bold uppercase">
+                                    {group.type}
+                                </div>
+                                <button 
+                                    onClick={() => onRemove(group.id)}
+                                    className="absolute top-2 left-2 w-6 h-6 bg-[#242526] rounded-full flex items-center justify-center text-[#B0B3B8] hover:text-white hover:bg-[#3A3B3C] transition-colors shadow-md border border-[#3E4042]"
+                                    title="Remove suggestion"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                            
+                            <div className="p-3">
+                                {/* Group Profile Image and Info */}
+                                <div className="flex items-start gap-3 mb-3 -mt-8 relative">
+                                    <img 
+                                        src={group.image} 
+                                        alt={group.name}
+                                        className="w-16 h-16 rounded-xl border-4 border-[#242526] object-cover bg-[#242526] shadow-md group-hover:border-[#45BD62] transition-colors"
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                        <h3 
+                                            className="font-bold text-white text-sm truncate mb-1 cursor-pointer hover:text-[#45BD62] transition-colors"
+                                            onClick={() => onViewGroup(group.id)}
+                                        >
+                                            {group.name}
+                                        </h3>
+                                        <p className="text-[#B0B3B8] text-xs truncate mb-2">{group.description}</p>
+                                        <div className="flex items-center text-[#B0B3B8] text-xs">
+                                            <i className="fas fa-users mr-1 text-[10px]"></i>
+                                            <span>{group.members.length} members</span>
+                                            <span className="mx-1">•</span>
+                                            <i className="fas fa-comments mr-1 text-[10px]"></i>
+                                            <span>{group.posts?.length || 0} posts</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                {/* Join Button - Professional Green */}
+                                <button
+                                    onClick={() => {
+                                        if (currentUser) {
+                                            onJoinGroup(group.id);
+                                        } else {
+                                            alert("Please login to join groups");
+                                        }
+                                    }}
+                                    className="w-full bg-[#45BD62] hover:bg-[#3CA853] text-white font-semibold py-2 rounded-lg transition-colors text-sm shadow-sm hover:shadow-md"
+                                >
+                                    {currentUser && group.members.includes(currentUser.id) ? 'Joined' : 'Join Group'}
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                
+                {/* Scroll Indicator */}
+                <div className="flex justify-center space-x-1 mt-3">
+                    {suggestedGroups.slice(0, 3).map((_, index) => (
+                        <div 
+                            key={index} 
+                            className={`w-1.5 h-1.5 rounded-full ${index === 0 ? 'bg-[#45BD62]' : 'bg-[#4E4F50]'}`}
+                        />
+                    ))}
+                </div>
+            </div>
+            
+            <div className="mt-3 pt-3 border-t border-[#3E4042]">
+                <p className="text-[#B0B3B8] text-xs text-center">
+                    Discover communities that match your interests
+                </p>
+            </div>
+        </div>
+    );
 };
 
 // ========== MAIN APP COMPONENT ==========
@@ -352,6 +577,40 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             reelsUse: 0
         }
     })));
+    
+    // People You May Know state
+    const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>(() => {
+        const availableUsers = INITIAL_USERS.slice(1).map(user => ({
+            id: user.id,
+            name: user.name,
+            username: user.username,
+            profileImage: user.profileImage,
+            mutualFriends: Math.floor(Math.random() * 20) + 1,
+            bio: user.bio || '',
+            location: user.location || '',
+            education: user.education || '',
+            work: user.work || '',
+            viewed: false
+        }));
+        
+        return availableUsers.filter(user => 
+            user.profileImage && 
+            (user.work || user.location || user.mutualFriends > 0)
+        ).slice(0, 8);
+    });
+    
+    // Groups You May Like state
+    const [suggestedGroups, setSuggestedGroups] = useState<Group[]>(() => {
+        return INITIAL_GROUPS.filter(group => 
+            group.image && 
+            group.description &&
+            group.members.length > 0
+        ).slice(0, 6);
+    });
+    
+    // State to track which rotation set we're on
+    const [suggestionRotation, setSuggestionRotation] = useState<number>(0);
+    const [groupRotation, setGroupRotation] = useState<number>(0);
     
     const [currentUser, setCurrentUser] = useState<User | null>(initialData?.currentUser || null);
     const [showRegister, setShowRegister] = useState(false);
@@ -438,6 +697,154 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             return { ...story, user };
         }).sort((a,b) => b.createdAt - a.createdAt);
     }, [stories, users]);
+
+    // Function to get intelligent suggestions based on current user
+    const getIntelligentSuggestions = useCallback((currentUser: User | null, allUsers: User[], rotationIndex: number = 0): SuggestedUser[] => {
+        if (!currentUser) return [];
+        
+        // Filter out current user and already viewed/removed users
+        const viewedIds = JSON.parse(localStorage.getItem('universeViewedProfiles') || '[]');
+        const removedIds = JSON.parse(localStorage.getItem('universeRemovedSuggestions') || '[]');
+        const alreadyFollowed = currentUser.following || [];
+        
+        const availableUsers = allUsers.filter(user => 
+            user.id !== currentUser.id &&
+            !viewedIds.includes(user.id) &&
+            !removedIds.includes(user.id) &&
+            !alreadyFollowed.includes(user.id)
+        );
+        
+        // Sort by mutual connections, then by profile completeness
+        const allSuggestions = availableUsers.map(user => {
+            // Calculate mutual friends (users who follow both current user and this user)
+            const mutualCount = allUsers.filter(u => 
+                u.following.includes(currentUser.id) && 
+                u.following.includes(user.id)
+            ).length;
+            
+            // Calculate profile completeness score
+            let completenessScore = 0;
+            if (user.profileImage && user.profileImage !== '/default-avatar.png') completenessScore += 20;
+            if (user.coverImage) completenessScore += 10;
+            if (user.bio) completenessScore += 15;
+            if (user.work) completenessScore += 15;
+            if (user.education) completenessScore += 15;
+            if (user.location) completenessScore += 10;
+            if (user.website) completenessScore += 10;
+            if (user.isVerified) completenessScore += 5;
+            
+            return {
+                id: user.id,
+                name: user.name,
+                username: user.username,
+                profileImage: user.profileImage,
+                mutualFriends: mutualCount || Math.floor(Math.random() * 15) + 1,
+                bio: user.bio || '',
+                location: user.location || '',
+                education: user.education || '',
+                work: user.work || '',
+                viewed: false,
+                _completeness: completenessScore,
+                _mutual: mutualCount,
+                _random: Math.random()
+            };
+        })
+        .filter(user => user.profileImage && (user.work || user.location || user.mutualFriends > 0))
+        .sort((a, b) => {
+            if (b._mutual !== a._mutual) return b._mutual - a._mutual;
+            return b._completeness - a._completeness;
+        })
+        .map(({ _completeness, _mutual, _random, ...user }) => user);
+        
+        // Apply rotation to show different users each time
+        const rotationSize = 8;
+        const totalRotations = Math.ceil(allSuggestions.length / rotationSize);
+        const currentRotation = rotationIndex % totalRotations;
+        const startIndex = currentRotation * rotationSize;
+        
+        return allSuggestions.slice(startIndex, startIndex + rotationSize);
+    }, []);
+
+    // Function to get intelligent group suggestions based on current user
+    const getIntelligentGroupSuggestions = useCallback((currentUser: User | null, allGroups: Group[], rotationIndex: number = 0): Group[] => {
+        if (!currentUser) return [];
+        
+        // Filter out groups the user is already a member of or has removed
+        const removedGroupIds = JSON.parse(localStorage.getItem('universeRemovedGroupSuggestions') || '[]');
+        const alreadyMember = allGroups.filter(g => g.members.includes(currentUser.id)).map(g => g.id);
+        
+        const availableGroups = allGroups.filter(group => 
+            !group.members.includes(currentUser.id) &&
+            !removedGroupIds.includes(group.id) &&
+            !alreadyMember.includes(group.id)
+        );
+        
+        // Score groups based on various factors
+        const scoredGroups = availableGroups.map(group => {
+            let score = 0;
+            
+            // 1. Popularity score (more members = higher score)
+            score += Math.min(group.members.length * 0.5, 25);
+            
+            // 2. Activity score (more posts = higher score)
+            score += Math.min((group.posts?.length || 0) * 0.3, 20);
+            
+            // 3. Completion score (has image, description, etc.)
+            if (group.image && group.image !== '/default-group.png') score += 15;
+            if (group.coverImage) score += 10;
+            if (group.description && group.description.length > 20) score += 15;
+            
+            // 4. Friends in group score
+            const friendsInGroup = group.members.filter(memberId => 
+                currentUser.following.includes(memberId)
+            ).length;
+            score += friendsInGroup * 10;
+            
+            // 5. Type preference (public groups get a small boost)
+            if (group.type === 'public') score += 5;
+            
+            // 6. Random factor for variety
+            score += Math.random() * 10;
+            
+            return {
+                ...group,
+                _score: score,
+                _friendsInGroup: friendsInGroup
+            };
+        })
+        .filter(group => group.image && group.description)
+        .sort((a, b) => {
+            // Primary sort by score
+            if (b._score !== a._score) return b._score - a._score;
+            // Secondary sort by friends in group
+            return b._friendsInGroup - a._friendsInGroup;
+        })
+        .map(({ _score, _friendsInGroup, ...group }) => group);
+        
+        // Apply rotation
+        const rotationSize = 6;
+        const totalRotations = Math.ceil(scoredGroups.length / rotationSize);
+        const currentRotation = rotationIndex % totalRotations;
+        const startIndex = currentRotation * rotationSize;
+        
+        return scoredGroups.slice(startIndex, startIndex + rotationSize);
+    }, []);
+
+    // Update suggestions when users or currentUser changes
+    useEffect(() => {
+        if (currentUser && users.length > 0) {
+            const intelligentSuggestions = getIntelligentSuggestions(currentUser, users, suggestionRotation);
+            setSuggestedUsers(intelligentSuggestions);
+        }
+    }, [currentUser, users, getIntelligentSuggestions, suggestionRotation]);
+
+    // Update group suggestions when groups or currentUser changes
+    useEffect(() => {
+        if (currentUser && groups.length > 0) {
+            const intelligentGroupSuggestions = getIntelligentGroupSuggestions(currentUser, groups, groupRotation);
+            setSuggestedGroups(intelligentGroupSuggestions);
+        }
+    }, [currentUser, groups, getIntelligentGroupSuggestions, groupRotation]);
 
     // Enhanced ranked posts with brand boost using the unified rankFeed function
     const rankedPosts = useMemo(() => {
@@ -553,7 +960,60 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
     // ========== END NOTIFICATION MANAGEMENT FUNCTIONS ==========
 
-    // Load data from localStorage
+    // Handle People You May Know actions
+    const handleViewProfile = (userId: number) => {
+        // Mark the user as viewed and remove from suggestions
+        setSuggestedUsers(prev => prev.filter(user => user.id !== userId));
+        
+        // Store in localStorage to prevent showing again
+        if (isClient) {
+            const viewedProfiles = JSON.parse(localStorage.getItem('universeViewedProfiles') || '[]');
+            localStorage.setItem('universeViewedProfiles', JSON.stringify([...viewedProfiles, userId]));
+        }
+        
+        // Navigate to profile
+        setSelectedUserId(userId);
+        setView('profile');
+        setActiveTab('profile');
+    };
+
+    const handleRemoveSuggestedUser = (userId: number) => {
+        // Remove from suggestions
+        setSuggestedUsers(prev => prev.filter(user => user.id !== userId));
+        
+        // Store in localStorage to prevent showing again
+        if (isClient) {
+            const removedSuggestions = JSON.parse(localStorage.getItem('universeRemovedSuggestions') || '[]');
+            localStorage.setItem('universeRemovedSuggestions', JSON.stringify([...removedSuggestions, userId]));
+        }
+        
+        // Rotate to next set of suggestions
+        setSuggestionRotation(prev => prev + 1);
+    };
+
+    // Handle Groups You May Like actions
+    const handleViewGroup = (groupId: string) => {
+        // Navigate to group
+        setInitialGroupIdToView(groupId);
+        setView('groups');
+        setActiveTab('groups');
+    };
+
+    const handleRemoveSuggestedGroup = (groupId: string) => {
+        // Remove from suggestions
+        setSuggestedGroups(prev => prev.filter(group => group.id !== groupId));
+        
+        // Store in localStorage to prevent showing again
+        if (isClient) {
+            const removedGroupSuggestions = JSON.parse(localStorage.getItem('universeRemovedGroupSuggestions') || '[]');
+            localStorage.setItem('universeRemovedGroupSuggestions', JSON.stringify([...removedGroupSuggestions, groupId]));
+        }
+        
+        // Rotate to next set of group suggestions
+        setGroupRotation(prev => prev + 1);
+    };
+
+    // Load People You May Know and Groups data from localStorage
     useEffect(() => {
         if (isClient) {
             const storedUser = localStorage.getItem('universeCurrentUser');
@@ -566,6 +1026,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             const storedPosts = localStorage.getItem('universePosts');
             const storedGroups = localStorage.getItem('universeGroups');
             const storedNotifications = localStorage.getItem('universeNotifications');
+            
+            // Load People You May Know filters
+            const viewedProfiles = JSON.parse(localStorage.getItem('universeViewedProfiles') || '[]');
+            const removedSuggestions = JSON.parse(localStorage.getItem('universeRemovedSuggestions') || '[]');
+            const removedGroupSuggestions = JSON.parse(localStorage.getItem('universeRemovedGroupSuggestions') || '[]');
             
             if (storedUsers) setUsers(JSON.parse(storedUsers));
             if (storedSongs) setSongs(JSON.parse(storedSongs));
@@ -594,15 +1059,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setTimeout(() => setIsLoading(false), 800);
     }, [isClient]);
 
-    // Save data to localStorage
-    useEffect(() => {
-        if (isClient && currentUser) {
-            localStorage.setItem('universeCurrentUser', JSON.stringify(currentUser));
-        }
-    }, [currentUser, isClient]);
-
+    // Save People You May Know and Groups data to localStorage
     useEffect(() => {
         if (isClient) {
+            localStorage.setItem('universeCurrentUser', JSON.stringify(currentUser));
             localStorage.setItem('universeUsers', JSON.stringify(users));
             localStorage.setItem('universeSongs', JSON.stringify(songs));
             localStorage.setItem('universeEpisodes', JSON.stringify(episodes));
@@ -613,7 +1073,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             localStorage.setItem('universeGroups', JSON.stringify(groups));
             localStorage.setItem('universeNotifications', JSON.stringify(notifications));
         }
-    }, [users, songs, episodes, likedTracks, products, brands, posts, groups, notifications, isClient]);
+    }, [currentUser, users, songs, episodes, likedTracks, products, brands, posts, groups, notifications, isClient]);
 
     const handleLogin = (email: string, pass: string) => {
         const user = users.find(u => u.email === email && u.password === pass);
@@ -2240,6 +2700,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 { groupId }
             );
         }
+        
+        // Remove from suggestions after joining
+        setSuggestedGroups(prev => prev.filter(g => g.id !== groupId));
     };
     
     const handleLeaveGroup = (groupId: string) => { 
@@ -2669,7 +3132,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         );
     };
 
-    // Function to render regular posts with brand support and Facebook-style image grids
+    // Function to render regular posts with brand support
     const renderRegularPost = (post: PostType, author: any, isFollowing?: boolean) => {
         const isBrandAuthor = author?.type === 'brand';
         const isFollowingBrand = isBrandAuthor && currentUser ? 
@@ -2679,9 +3142,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         // Ensure post has formattedTime
         const postWithFormattedTime = {
             ...post,
-            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now()),
-            // Ensure images property exists and is properly formatted
-            images: post.images ? post.images : undefined
+            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
         };
         
         return (
@@ -2713,11 +3174,93 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 onHashtagClick={handleTagClick} 
                 onDeletePost={handleDeletePost} 
                 isAdmin={isAdmin}
-                // Pass image grid utilities
-                getImageGridClass={getImageGridClass}
-                getImageItemClass={getImageItemClass}
             />
         );
+    };
+    
+    // Function to render feed with People You May Know and Groups You May Like at intervals
+    const renderFeedWithSuggestions = () => {
+        const peopleIntervals = [5, 20, 45]; // Show People You May Know after 5th, 20th, and 45th posts
+        const groupIntervals = [8, 25]; // Show Groups You May Like after 8th and 25th posts
+        let postCount = 0;
+        let peopleIndex = 0;
+        let groupIndex = 0;
+        const renderedItems = [];
+        
+        for (const post of rankedPosts) {
+            renderedItems.push(renderPostItem(post));
+            postCount++;
+            
+            // Check if we should show People You May Know after this post
+            if (peopleIntervals.includes(postCount) && suggestedUsers.length > 0) {
+                // Get a rotated set of suggestions for this interval
+                const rotationKey = `people-rotation-${suggestionRotation}-interval-${peopleIndex}`;
+                const rotatedSuggestions = getIntelligentSuggestions(currentUser, users, suggestionRotation + peopleIndex);
+                
+                if (rotatedSuggestions.length > 0) {
+                    renderedItems.push(
+                        <PeopleYouMayKnow 
+                            key={rotationKey}
+                            suggestedUsers={rotatedSuggestions}
+                            onViewProfile={(userId) => {
+                                handleViewProfile(userId);
+                                // Advance to next rotation when someone views a profile
+                                setSuggestionRotation(prev => prev + 1);
+                            }}
+                            onRemove={(userId) => {
+                                handleRemoveSuggestedUser(userId);
+                                // Advance to next rotation when someone is removed
+                                setSuggestionRotation(prev => prev + 1);
+                            }}
+                        />
+                    );
+                }
+                peopleIndex++;
+            }
+            
+            // Check if we should show Groups You May Like after this post
+            if (groupIntervals.includes(postCount) && suggestedGroups.length > 0) {
+                // Get a rotated set of group suggestions for this interval
+                const groupRotationKey = `group-rotation-${groupRotation}-interval-${groupIndex}`;
+                const rotatedGroupSuggestions = getIntelligentGroupSuggestions(currentUser, groups, groupRotation + groupIndex);
+                
+                if (rotatedGroupSuggestions.length > 0) {
+                    renderedItems.push(
+                        <GroupsYouMayLike 
+                            key={groupRotationKey}
+                            suggestedGroups={rotatedGroupSuggestions}
+                            currentUser={currentUser}
+                            onViewGroup={handleViewGroup}
+                            onJoinGroup={handleJoinGroup}
+                            onRemove={handleRemoveSuggestedGroup}
+                        />
+                    );
+                }
+                groupIndex++;
+            }
+        }
+        
+        return renderedItems;
+    };
+    
+    // Helper function to render individual post
+    const renderPostItem = (post: PostType) => {
+        const author = getAuthorForPost(post, users, brands);
+        if (!author) return null;
+        
+        let isFollowing = false;
+        if (author.type === 'user' && currentUser) {
+            isFollowing = currentUser.following.includes(author.id);
+        } else if (author.type === 'brand' && currentUser) {
+            const brand = brands.find(b => b.id === author.id);
+            isFollowing = brand ? brand.followers.includes(currentUser.id) : false;
+        }
+        
+        if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
+            return renderMusicPost(post, author);
+        }
+        
+        return renderRegularPost(post, author, isFollowing);
     };
     
     return (
@@ -2795,6 +3338,31 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 onClick={() => setShowCreatePostModal(true)} 
                                                 onCreateEventClick={() => setShowCreateEventModal(true)} 
                                             /> 
+                                            
+                                            {/* Initial People You May Know Section */}
+                                            {suggestedUsers.length > 0 && (
+                                                <PeopleYouMayKnow 
+                                                    suggestedUsers={suggestedUsers}
+                                                    onViewProfile={(userId) => {
+                                                        handleViewProfile(userId);
+                                                        // Advance rotation when someone views a profile
+                                                        setSuggestionRotation(prev => prev + 1);
+                                                    }}
+                                                    onRemove={handleRemoveSuggestedUser}
+                                                />
+                                            )}
+                                            
+                                            {/* Initial Groups You May Like Section */}
+                                            {suggestedGroups.length > 0 && (
+                                                <GroupsYouMayLike 
+                                                    suggestedGroups={suggestedGroups}
+                                                    currentUser={currentUser}
+                                                    onViewGroup={handleViewGroup}
+                                                    onJoinGroup={handleJoinGroup}
+                                                    onRemove={handleRemoveSuggestedGroup}
+                                                />
+                                            )}
+                                            
                                             <SuggestedProductsWidget 
                                                 products={products} 
                                                 currentUser={currentUser} 
@@ -2803,24 +3371,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                             /> 
                                         </>
                                     )}
-                                    {rankedPosts.map(post => {
-                                        const author = getAuthorForPost(post, users, brands);
-                                        if (!author) return null;
-                                        
-                                        let isFollowing = false;
-                                        if (author.type === 'user' && currentUser) {
-                                            isFollowing = currentUser.following.includes(author.id);
-                                        } else if (author.type === 'brand' && currentUser) {
-                                            const brand = brands.find(b => b.id === author.id);
-                                            isFollowing = brand ? brand.followers.includes(currentUser.id) : false;
-                                        }
-                                        
-                                        if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
-                                            return renderMusicPost(post, author);
-                                        }
-                                        
-                                        return renderRegularPost(post, author, isFollowing);
-                                    })}
+                                    
+                                    {/* Feed with People You May Know and Groups You May Like at intervals */}
+                                    {renderFeedWithSuggestions()}
                                 </div>
                             )}
                             
@@ -2920,8 +3473,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                         );
                                     }}
                                     renderRegularPost={renderRegularPost}
-                                    getImageGridClass={getImageGridClass}
-                                    getImageItemClass={getImageItemClass}
                                 />
                             )}
                             
@@ -2968,8 +3519,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 onHashtagClick={handleTagClick}
                                                 onDeletePost={handleDeletePost}
                                                 isAdmin={isAdmin}
-                                                getImageGridClass={getImageGridClass}
-                                                getImageItemClass={getImageItemClass}
                                             />
                                         );
                                     })()}
@@ -3107,8 +3656,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onRemoveMember={handleRemoveMember}
                                     onUpdateGroupSettings={handleUpdateGroupSettings}
                                     onPlayAudioTrack={handlePlayTrack}
-                                    getImageGridClass={getImageGridClass}
-                                    getImageItemClass={getImageItemClass}
                                 />
                             )}
                             
@@ -3148,8 +3695,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onVerifyBrand={handleVerifyBrand}
                                     initialBrandId={activeBrandId}
                                     onPlayAudioTrack={handlePlayTrack}
-                                    getImageGridClass={getImageGridClass}
-                                    getImageItemClass={getImageItemClass}
                                 />
                             )}
                             
