@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Login, Register, ForgotPassword } from './components/Auth';
 import { Header, Sidebar, RightSidebar, MenuOverlay } from './components/Layout';
@@ -25,7 +26,7 @@ import { rankFeed } from './utils/ranking';
 // ========== API CONFIGURATION ==========
 const API_BASE_URL = 'https://unera.social';
 
-// Professional API client with proper error handling
+// FIXED API CLIENT - Handles your API's array response format
 const apiFetch = async (endpoint: string, options: RequestInit = {}, withAuth = true) => {
     const url = `${API_BASE_URL}${endpoint}`;
     const headers: HeadersInit = {
@@ -59,7 +60,8 @@ const apiFetch = async (endpoint: string, options: RequestInit = {}, withAuth = 
             throw new Error(data.message || `API Error: ${response.status}`);
         }
 
-        // Handle API response format
+        // CRITICAL FIX: Your API returns arrays directly, not {data: array}
+        // Always return {data: array, success: true} format for consistency
         if (Array.isArray(data)) {
             return { data: data, success: true };
         }
@@ -353,7 +355,7 @@ const transformPostFromAPI = (apiPost: any): PostType => {
     
     return {
         id: apiPost.id,
-        authorId: apiPost.user_id || apiPost.authorId || 1,
+        authorId: apiPost.user_id || apiPost.authorId || 1, // Default to user 1 if missing
         content: apiPost.content || '',
         images: apiPost.media_url && apiPost.media_type === 'image' ? [apiPost.media_url] : undefined,
         video: apiPost.media_url && apiPost.media_type === 'video' ? apiPost.media_url : undefined,
@@ -394,7 +396,7 @@ const transformUserFromAPI = (apiUser: any): User => {
         location: apiUser.location || '',
         followers: apiUser.followers || [],
         following: apiUser.following || [],
-        posts: apiPost.posts || [],
+        posts: apiUser.posts || [],
         isVerified: apiUser.is_verified || false,
         isRestricted: apiUser.is_restricted || false,
         role: apiUser.role || 'user',
@@ -412,9 +414,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setIsClient(true);
     }, []);
 
-    // ========== STATE MANAGEMENT ==========
-    const [users, setUsers] = useState<User[]>([]);
-    const [posts, setPosts] = useState<PostType[]>([]);
+    const [users, setUsers] = useState<User[]>(INITIAL_USERS);
+    const [posts, setPosts] = useState<PostType[]>(() => {
+        return INITIAL_POSTS.map(post => ({
+            ...post,
+            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+        }));
+    });
     const [stories, setStories] = useState<Story[]>(INITIAL_STORIES);
     const [reels, setReels] = useState<Reel[]>(INITIAL_REELS);
     const [events, setEvents] = useState<Event[]>(INITIAL_EVENTS);
@@ -422,41 +428,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const [groups, setGroups] = useState<Group[]>(INITIAL_GROUPS);
     const [brands, setBrands] = useState<Brand[]>(INITIAL_BRANDS);
     
-    // Initialize songs and episodes with proper stats (FIXED for MusicSystem)
-    const [songs, setSongs] = useState<Song[]>(MOCK_SONGS.map(song => ({
-        ...song,
-        plays: song.plays || 0,
-        likes: song.likes || 0,
-        shares: song.shares || 0,
-        comments: song.comments || 0,
-        stats: song.stats || {
-            plays: song.plays || 0,
-            likes: song.likes || 0,
-            shares: song.shares || 0,
-            comments: song.comments || 0,
-            downloads: 0,
-            reelsUse: 0
-        }
-    })));
+    const [songs, setSongs] = useState<Song[]>(MOCK_SONGS);
+    const [episodes, setEpisodes] = useState<Episode[]>(MOCK_EPISODES);
     
-    const [episodes, setEpisodes] = useState<Episode[]>(MOCK_EPISODES.map(episode => ({
-        ...episode,
-        plays: episode.plays || 0,
-        likes: episode.likes || 0,
-        shares: episode.shares || 0,
-        comments: episode.comments || 0,
-        stats: episode.stats || {
-            plays: episode.plays || 0,
-            likes: episode.likes || 0,
-            shares: episode.shares || 0,
-            comments: episode.comments || 0,
-            downloads: 0,
-            reelsUse: 0
-        }
-    })));
-    
-    // FIXED: Start with null currentUser (not auto-login to UNERA)
-    const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const [currentUser, setCurrentUser] = useState<User | null>(INITIAL_USERS[0]);
     const [showRegister, setShowRegister] = useState(false);
     const [showForgotPassword, setShowForgotPassword] = useState(false);
     const [loginError, setLoginError] = useState('');
@@ -470,7 +445,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const parsedPath = useMemo(() => parsePath(path, users), [path, users]);
     
     const [activeTab, setActiveTab] = useState(parsedPath.view === 'home' ? 'home' : parsedPath.view);
-    const [view, setView] = useState('login'); // Start with login view
+    const [view, setView] = useState(parsedPath.view);
     const [selectedUserId, setSelectedUserId] = useState<number | null>(parsedPath.userId || null);
     const [activeReelId, setActiveReelId] = useState<number | null>(null);
     const [activeBrandId, setActiveBrandId] = useState<number | null>(null);
@@ -495,7 +470,27 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const [activeCommentsPostId, setActiveCommentsPostId] = useState<number | null>(null);
     const [activeSharePostId, setActiveSharePostId] = useState<number | null>(null);
     const [activeChatUser, setActiveChatUser] = useState<User | null>(null);
-    const [notifications, setNotifications] = useState<Notification[]>([]);
+    const [notifications, setNotifications] = useState<Notification[]>([
+        {
+            id: 1,
+            userId: 1,
+            senderId: 2,
+            type: 'follow',
+            content: 'started following you.',
+            timestamp: Date.now() - 3600000,
+            read: false
+        },
+        {
+            id: 2,
+            userId: 1,
+            senderId: 3,
+            type: 'like',
+            content: 'liked your post.',
+            postId: 1,
+            timestamp: Date.now() - 1800000,
+            read: false
+        }
+    ]);
     const [activeProduct, setActiveProduct] = useState<Product | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
     const [activeSinglePostId, setActiveSinglePostId] = useState<number | null>(parsedPath.postId || null);
@@ -542,6 +537,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 console.log('Users fetched successfully:', response.data.length);
                 const transformedUsers = response.data.map(transformUserFromAPI);
                 setUsers(transformedUsers);
+                
+                // Set current user if not set
+                if (!currentUser && transformedUsers.length > 0) {
+                    setCurrentUser(transformedUsers[0]);
+                }
             } else {
                 console.log('Using initial users as fallback');
                 setUsers(INITIAL_USERS);
@@ -552,57 +552,34 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    // Fetch brands from API (FIXED for Brands.tsx)
-    const fetchBrands = async () => {
+    // Fetch feed from API (ranked posts)
+    const fetchFeed = async () => {
         try {
-            console.log('Fetching brands from API...');
-            const response = await apiFetch('/api/brands', { method: 'GET' });
+            const response = await apiFetch('/api/feed', { method: 'GET' });
             
             if (response.success && Array.isArray(response.data)) {
-                console.log('Brands fetched successfully:', response.data.length);
-                setBrands(response.data);
-            } else {
-                console.log('Using initial brands as fallback');
-                setBrands(INITIAL_BRANDS);
+                const feedPosts = response.data.map(transformPostFromAPI);
+                setPosts(feedPosts);
             }
         } catch (error) {
-            console.error('Failed to fetch brands:', error);
-            setBrands(INITIAL_BRANDS);
+            console.error('Failed to fetch feed:', error);
         }
     };
 
-    // Initial data loading - FIXED to not auto-login
+    // Initial data loading
     useEffect(() => {
         const loadInitialData = async () => {
             setIsLoading(true);
             console.log('Loading initial data...');
             
             try {
-                // Check for existing session first
-                if (isClient) {
-                    const storedUser = localStorage.getItem('universeCurrentUser');
-                    const token = localStorage.getItem('authToken');
-                    
-                    if (storedUser && token) {
-                        // User is already logged in
-                        const user = JSON.parse(storedUser);
-                        setCurrentUser(user);
-                        setView('home');
-                        console.log('User auto-logged in from localStorage');
-                    } else {
-                        // No session found, stay on login page
-                        setCurrentUser(null);
-                        setView('login');
-                        console.log('No session found, showing login');
-                    }
-                }
-                
-                // Load public data regardless of login status
+                // Load essential data in sequence
                 await fetchUsers();
                 await fetchPosts();
-                await fetchBrands();
                 
                 console.log('Initial data loaded successfully');
+                console.log('Users count:', users.length);
+                console.log('Posts count:', posts.length);
                 
             } catch (error) {
                 console.error('Failed to load initial data:', error);
@@ -615,6 +592,36 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         };
 
         loadInitialData();
+    }, []);
+
+    // Load data from localStorage as fallback
+    useEffect(() => {
+        if (isClient) {
+            const storedUser = localStorage.getItem('universeCurrentUser');
+            const storedUsers = localStorage.getItem('universeUsers');
+            const storedPosts = localStorage.getItem('universePosts');
+            
+            // Only use localStorage if API failed
+            if (users.length === 0 && storedUsers) {
+                console.log('Using localStorage users as fallback');
+                setUsers(JSON.parse(storedUsers));
+            }
+            
+            if (posts.length === 0 && storedPosts) {
+                console.log('Using localStorage posts as fallback');
+                const parsedPosts = JSON.parse(storedPosts);
+                const postsWithFormattedTime = parsedPosts.map((post: PostType) => ({
+                    ...post,
+                    formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || Date.now())
+                }));
+                setPosts(postsWithFormattedTime);
+            }
+            
+            if (!currentUser && storedUser) {
+                console.log('Using localStorage current user');
+                setCurrentUser(JSON.parse(storedUser));
+            }
+        }
     }, [isClient]);
 
     // Save data to localStorage
@@ -623,9 +630,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             localStorage.setItem('universeCurrentUser', JSON.stringify(currentUser));
             localStorage.setItem('universeUsers', JSON.stringify(users));
             localStorage.setItem('universePosts', JSON.stringify(posts));
-            localStorage.setItem('universeBrands', JSON.stringify(brands));
         }
-    }, [currentUser, users, posts, brands, isClient]);
+    }, [currentUser, users, posts, isClient]);
 
     const storiesWithUsers = useMemo(() => {
         return stories.map(story => {
@@ -636,8 +642,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     // Enhanced ranked posts
     const rankedPosts = useMemo(() => {
-        if (posts.length === 0) return [];
-        
         // Ensure all posts have formattedTime
         const processedPosts = posts.map(post => ({
             ...post,
@@ -732,176 +736,35 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     // ========== AUTHENTICATION FUNCTIONS ==========
-    const handleLogin = async (email: string, pass: string) => {
-        try {
-            // First try API login
-            const response = await apiFetch('/api/auth/login', {
-                method: 'POST',
-                body: JSON.stringify({ email, password: pass }),
-                withAuth: false
-            });
-
-            if (response.success && response.data.token) {
-                // API login successful
-                localStorage.setItem('authToken', response.data.token);
-                
-                // Find user in local users array or create from response
-                const user = users.find(u => u.email === email) || {
-                    id: response.data.userId || Date.now(),
-                    name: response.data.name || email.split('@')[0],
-                    email: email,
-                    username: response.data.username || email.split('@')[0],
-                    password: pass,
-                    profileImage: response.data.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(email.split('@')[0])}`,
-                    coverImage: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f',
-                    bio: '',
-                    location: '',
-                    followers: [],
-                    following: [],
-                    posts: [],
-                    isVerified: false,
-                    isRestricted: false,
-                    role: 'user',
-                    joinedDate: new Date().toISOString()
-                };
-
-                setCurrentUser(user);
-                setView('home');
-                setActiveTab('home');
-                setLoginError('');
-                setShowRegister(false);
-                setShowForgotPassword(false);
-                
-                if (isClient) {
-                    localStorage.setItem('universeCurrentUser', JSON.stringify(user));
-                    window.history.pushState({}, '', '/');
-                }
-            } else {
-                // Fallback to local authentication
-                const user = users.find(u => u.email === email && u.password === pass);
-                if (user) {
-                    setCurrentUser(user);
-                    setView('home');
-                    setActiveTab('home');
-                    setLoginError('');
-                    setShowRegister(false);
-                    setShowForgotPassword(false);
-                    if (isClient) {
-                        localStorage.setItem('authToken', 'local-token-' + Date.now());
-                        localStorage.setItem('universeCurrentUser', JSON.stringify(user));
-                        window.history.pushState({}, '', '/');
-                    }
-                } else {
-                    setLoginError('Invalid email or password');
-                }
-            }
-        } catch (error) {
-            console.error('Login error:', error);
-            // Fallback to local authentication
-            const user = users.find(u => u.email === email && u.password === pass);
-            if (user) {
-                setCurrentUser(user);
-                setView('home');
-                setActiveTab('home');
-                setLoginError('');
-                setShowRegister(false);
-                setShowForgotPassword(false);
-                if (isClient) {
-                    localStorage.setItem('authToken', 'local-token-' + Date.now());
-                    localStorage.setItem('universeCurrentUser', JSON.stringify(user));
-                    window.history.pushState({}, '', '/');
-                }
-            } else {
-                setLoginError('Invalid email or password');
-            }
+    const handleLogin = (email: string, pass: string) => {
+        const user = users.find(u => u.email === email && u.password === pass);
+        if (user) {
+            setCurrentUser(user);
+            setView('home');
+            setActiveTab('home');
+            setLoginError('');
+            setShowRegister(false);
+            setShowForgotPassword(false);
+            if (isClient) window.history.pushState({}, '', '/');
+        } else {
+            setLoginError('Invalid email or password');
         }
     };
 
-    const handleRegister = async (newUser: Partial<User>) => {
-        try {
-            // Try API registration
-            const response = await apiFetch('/api/auth/register', {
-                method: 'POST',
-                body: JSON.stringify({
-                    name: newUser.name,
-                    email: newUser.email,
-                    password: newUser.password,
-                    username: newUser.username
-                }),
-                withAuth: false
-            });
-
-            if (response.success) {
-                // API registration successful
-                const id = response.data.userId || Math.max(...users.map(u => u.id)) + 1;
-                const user: User = { 
-                    ...newUser, 
-                    id, 
-                    role: 'user', 
-                    followers: [], 
-                    following: [], 
-                    joinedDate: new Date().toISOString(),
-                    profileImage: `https://ui-avatars.com/api/?name=${encodeURIComponent(newUser.name || 'User')}&background=random`,
-                    coverImage: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f',
-                    bio: '',
-                    location: '',
-                    posts: [],
-                    isVerified: false,
-                    isRestricted: false
-                } as User;
-                
-                setUsers([...users, user]);
-                setCurrentUser(user);
-                setShowRegister(false);
-                setShowForgotPassword(false);
-                setView('home');
-                
-                if (isClient) {
-                    localStorage.setItem('authToken', response.data.token || 'local-token-' + Date.now());
-                    localStorage.setItem('universeCurrentUser', JSON.stringify(user));
-                    window.history.pushState({}, '', '/');
-                }
-            } else {
-                throw new Error('API registration failed');
-            }
-        } catch (error) {
-            console.error('Registration error:', error);
-            // Fallback to local registration
-            const id = Math.max(...users.map(u => u.id)) + 1;
-            const user: User = { 
-                ...newUser, 
-                id, 
-                role: 'user', 
-                followers: [], 
-                following: [], 
-                joinedDate: new Date().toISOString(),
-                profileImage: `https://ui-avatars.com/api/?name=${encodeURIComponent(newUser.name || 'User')}&background=random`,
-                coverImage: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f',
-                bio: '',
-                location: '',
-                posts: [],
-                isVerified: false,
-                isRestricted: false
-            } as User;
-            
-            setUsers([...users, user]);
-            setCurrentUser(user);
-            setShowRegister(false);
-            setShowForgotPassword(false);
-            setView('home');
-            
-            if (isClient) {
-                localStorage.setItem('authToken', 'local-token-' + Date.now());
-                localStorage.setItem('universeCurrentUser', JSON.stringify(user));
-                window.history.pushState({}, '', '/');
-            }
-        }
+    const handleRegister = (newUser: Partial<User>) => {
+        const id = Math.max(...users.map(u => u.id)) + 1;
+        const user: User = { ...newUser, id, role: 'user', followers: [], following: [], joinedDate: new Date().toISOString() } as User;
+        setUsers([...users, user]);
+        setCurrentUser(user);
+        setShowRegister(false);
+        setShowForgotPassword(false);
+        setView('home');
+        if (isClient) window.history.pushState({}, '', '/');
     };
 
     const handleLogout = () => {
         setCurrentUser(null);
         if (isClient) {
-            localStorage.removeItem('authToken');
             localStorage.removeItem('universeCurrentUser');
             window.history.pushState({}, '', '/');
         }
@@ -916,11 +779,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleNavigate = (targetView: string) => {
-        if (!currentUser && targetView !== 'login' && targetView !== 'register') {
-            setView('login');
-            return;
-        }
-
         if (isClient) {
             const pathMap: { [key: string]: string } = {
                 home: '/',
@@ -1441,7 +1299,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setPosts([newPost, ...posts]);
     };
 
-    // ========== MUSIC FUNCTIONS (FIXED for MusicSystem) ==========
     const handleAddSong = (song: Song) => {
         console.log("Adding new song to library:", song);
         const newSong = {
@@ -1467,35 +1324,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 return prev.map(s => s.id === song.id ? newSong : s);
             }
             return [newSong, ...prev];
-        });
-    };
-
-    // FIXED: Add missing handleAddEpisode function
-    const handleAddEpisode = (episode: Episode) => {
-        console.log("Adding new episode to library:", episode);
-        const newEpisode = {
-            ...episode,
-            plays: episode.plays || 0,
-            likes: episode.likes || 0,
-            shares: episode.shares || 0,
-            comments: episode.comments || 0,
-            uploadDate: episode.uploadDate || new Date().toISOString(),
-            stats: episode.stats || {
-                plays: episode.plays || 0,
-                likes: episode.likes || 0,
-                shares: episode.shares || 0,
-                comments: episode.comments || 0,
-                downloads: 0,
-                reelsUse: 0
-            }
-        };
-        
-        setEpisodes(prev => {
-            const exists = prev.find(e => e.id === episode.id);
-            if (exists) {
-                return prev.map(e => e.id === episode.id ? newEpisode : e);
-            }
-            return [newEpisode, ...prev];
         });
     };
 
@@ -1531,7 +1359,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         // Track share logic
     };
 
-    // ========== ADMIN FUNCTIONS ==========
+    // ========== MISSING FUNCTIONS ==========
     const handleDeleteSong = (songId: string) => {
         if (!currentUser || !isAdmin) {
             alert("Only admins can delete songs");
@@ -1587,261 +1415,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             setUsers(users.map(u => u.id === userId ? { ...u, role: u.role === 'moderator' ? 'user' : 'moderator' } : u));
             const user = users.find(u => u.id === userId);
             alert(`${user?.name} is now ${user?.role === 'moderator' ? 'a user' : 'a moderator'}!`);
-        }
-    };
-
-    // ========== BRAND FUNCTIONS (FIXED for Brands.tsx) ==========
-    const handleCreateBrand = (brandData: Partial<Brand>) => {
-        if (!currentUser) {
-            alert("Please login to create a brand page.");
-            return;
-        }
-        
-        const newBrand: Brand = {
-            id: Date.now(),
-            name: brandData.name || 'New Brand',
-            category: brandData.category || 'Business',
-            description: brandData.description || '',
-            location: brandData.location || '',
-            website: brandData.website || '',
-            contactEmail: brandData.contactEmail || '',
-            contactPhone: brandData.contactPhone || '',
-            adminId: currentUser.id,
-            followers: [currentUser.id],
-            isVerified: false,
-            posts: [],
-            createdAt: Date.now(),
-            profileImage: brandData.profileImage || `https://ui-avatars.com/api/?name=${brandData.name || 'Brand'}&background=random&size=150`,
-            coverImage: brandData.coverImage || 'https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-1.2.1&auto=format&fit=crop&w=1500&q=80'
-        };
-        
-        setBrands(prev => [newBrand, ...prev]);
-        
-        // Also add the brand to user's following list
-        if (currentUser) {
-            setCurrentUser(prev => prev ? {
-                ...prev,
-                following: [...prev.following, newBrand.id]
-            } : prev);
-            
-            setUsers(prev => prev.map(user => 
-                user.id === currentUser.id 
-                    ? { ...user, following: [...user.following, newBrand.id] }
-                    : user
-            ));
-        }
-        
-        alert("Brand page created successfully! You are now following this page.");
-    };
-
-    const handleFollowBrand = (brandId: number) => {
-        if (!currentUser) return alert("Login to follow brands.");
-        
-        setBrands(prev => prev.map(b => {
-            if (b.id === brandId) {
-                const isFollowing = b.followers.includes(currentUser!.id);
-                const updatedFollowers = isFollowing 
-                    ? b.followers.filter(id => id !== currentUser!.id) 
-                    : [...b.followers, currentUser!.id];
-                
-                // Update user's following list as well
-                if (currentUser) {
-                    const updatedFollowing = isFollowing
-                        ? currentUser.following.filter(id => id !== brandId)
-                        : [...currentUser.following, brandId];
-                    
-                    setCurrentUser(prev => prev ? { ...prev, following: updatedFollowing } : prev);
-                    
-                    setUsers(prev => prev.map(user => 
-                        user.id === currentUser.id 
-                            ? { ...user, following: updatedFollowing }
-                            : user
-                    ));
-                }
-                
-                return { 
-                    ...b, 
-                    followers: updatedFollowers
-                };
-            }
-            return b;
-        }));
-    };
-
-    const handlePostAsBrand = (brandId: number, content: any) => {
-        if (!currentUser) {
-            alert("Please login to post as a brand.");
-            return;
-        }
-        
-        const { text, files, type, visibility, location, feeling, taggedUsers, background, linkPreview } = content;
-        
-        // Verify the current user is admin of this brand
-        const brand = brands.find(b => b.id === brandId);
-        if (!brand) {
-            alert("Brand not found.");
-            return;
-        }
-        
-        if (brand.adminId !== currentUser.id && !isAdmin) {
-            alert("You don't have permission to post as this brand.");
-            return;
-        }
-        
-        // Handle multiple images
-        let images: string[] = [];
-        let video: string | undefined = undefined;
-        
-        if (files && files.length > 0) {
-            if (type === 'video' && files.length === 1) {
-                video = URL.createObjectURL(files[0]);
-            } else if (type === 'image' || type === 'multimage') {
-                images = files.map(file => URL.createObjectURL(file));
-            }
-        }
-        
-        const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp);
-        const newPost: PostType = { 
-            id: timestamp,
-            authorId: brandId,
-            content: text,
-            images: images.length > 0 ? images : undefined,
-            video: video,
-            timestamp: timestamp,
-            formattedTime: formattedTime,
-            createdAt: timestamp,
-            reactions: [], 
-            comments: [], 
-            shares: 0,
-            views: 0,
-            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')),
-            visibility: visibility as any,
-            location, 
-            feeling, 
-            taggedUsers, 
-            background, 
-            linkPreview,
-            brandId: brandId
-        };
-        
-        console.log("Creating brand post with multiple images:", newPost);
-        
-        // Add to main posts array
-        setPosts(prev => [newPost, ...prev]);
-        
-        // Update brand's posts array
-        setBrands(prev => prev.map(b => 
-            b.id === brandId 
-                ? { ...b, posts: [...(b.posts || []), timestamp] }
-                : b
-        ));
-        
-        alert("Brand post published successfully!");
-        return newPost;
-    };
-
-    const handleUpdateBrand = (brandId: number, updates: Partial<Brand>) => {
-        if (!currentUser) {
-            alert("Please login to update brand.");
-            return;
-        }
-        
-        const brand = brands.find(b => b.id === brandId);
-        if (!brand) {
-            alert("Brand not found.");
-            return;
-        }
-        
-        if (brand.adminId !== currentUser.id && !isAdmin) {
-            alert("You don't have permission to update this brand.");
-            return;
-        }
-        
-        setBrands(prev => prev.map(b => 
-            b.id === brandId ? { ...b, ...updates } : b
-        ));
-        
-        alert("Brand updated successfully!");
-    };
-
-    const handleDeleteBrand = (brandId: number) => {
-        if (!currentUser) {
-            alert("Please login to delete brand.");
-            return;
-        }
-        
-        const brand = brands.find(b => b.id === brandId);
-        if (!brand) {
-            alert("Brand not found.");
-            return;
-        }
-        
-        if (brand.adminId !== currentUser.id && !isAdmin) {
-            alert("You don't have permission to delete this brand.");
-            return;
-        }
-        
-        if (window.confirm(`Are you sure you want to delete "${brand.name}"? This will also delete all brand posts.`)) {
-            // Remove brand
-            setBrands(prev => prev.filter(b => b.id !== brandId));
-            
-            // Remove brand posts
-            setPosts(prev => prev.filter(p => p.brandId !== brandId && p.authorId !== brandId));
-            
-            // Remove brand from users' following lists
-            setUsers(prev => prev.map(user => ({
-                ...user,
-                following: user.following.filter(id => id !== brandId)
-            })));
-            
-            alert("Brand deleted successfully!");
-        }
-    };
-
-    const handleUpdateBrandImage = (brandId: number, type: 'cover' | 'profile', file: File) => {
-        if (!currentUser) {
-            alert("Please login to update brand image.");
-            return;
-        }
-        
-        const brand = brands.find(b => b.id === brandId);
-        if (!brand) {
-            alert("Brand not found.");
-            return;
-        }
-        
-        if (brand.adminId !== currentUser.id && !isAdmin) {
-            alert("You don't have permission to update this brand's image.");
-            return;
-        }
-        
-        const url = URL.createObjectURL(file);
-        setBrands(prev => prev.map(b => 
-            b.id === brandId 
-                ? (type === 'cover' 
-                    ? { ...b, coverImage: url } 
-                    : { ...b, profileImage: url })
-                : b
-        ));
-        
-        alert("Brand image updated successfully!");
-    };
-
-    const handleVerifyBrand = (brandId: number) => {
-        if (!isAdmin) {
-            alert("Only admins can verify brands.");
-            return;
-        }
-        
-        setBrands(prev => prev.map(b => 
-            b.id === brandId ? { ...b, isVerified: !b.isVerified } : b
-        ));
-        
-        const brand = brands.find(b => b.id === brandId);
-        if (brand) {
-            const action = brand.isVerified ? "unverified" : "verified";
-            alert(`Brand ${action} successfully!`);
         }
     };
 
@@ -2705,7 +2278,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     }}
                                     onUpdateBrandImage={handleUpdateBrandImage}
                                     onDeletePost={handleDeletePost}
-                                    onVerifyBrand={handleVerifyBrand}  // FIXED: Added this prop
+                                    onVerifyBrand={handleVerifyBrand}
                                     initialBrandId={activeBrandId}
                                     onPlayAudioTrack={handlePlayTrack}
                                     getImageGridClass={getImageGridClass}
@@ -2764,7 +2337,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onToggleLike={handleLikeTrack} 
                                     onUploadToFeed={handleUploadToFeed} 
                                     onAddSong={handleAddSong} 
-                                    onAddEpisode={handleAddEpisode}  // FIXED: Added this prop
+                                    onAddEpisode={handleAddEpisode} 
                                     playHistory={playHistory}
                                 />
                             )}
