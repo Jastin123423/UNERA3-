@@ -266,31 +266,32 @@ const createNotification = (
 const getImageGridClass = (imageCount: number): string => {
     switch (imageCount) {
         case 1:
-            return 'w-full h-auto max-h-[500px] object-contain'; // Single image - full width
+            return 'w-full max-w-full h-auto'; // Single image - full width container
         case 2:
-            return 'grid grid-cols-2 gap-1';
+            return 'grid grid-cols-2 gap-1 w-full';
         case 3:
-            return 'grid grid-cols-2 gap-1';
+            return 'grid grid-cols-2 gap-1 w-full';
         case 4:
-            return 'grid grid-cols-2 gap-1';
+            return 'grid grid-cols-2 gap-1 w-full';
         default:
-            return 'grid grid-cols-2 gap-1';
+            return imageCount > 4 ? 'grid grid-cols-2 gap-1 w-full' : 'w-full max-w-full h-auto';
     }
 };
 
 const getImageItemClass = (imageCount: number, index: number): string => {
     switch (imageCount) {
         case 1:
-            return 'w-full'; // Full width for single image
+            return 'w-full max-w-full h-auto max-h-[500px] object-contain rounded-lg'; // Full width for single image
         case 2:
-            return 'aspect-square'; // Square for 2 images
+            return 'w-full h-full aspect-square object-cover rounded-lg'; // Square for 2 images
         case 3:
-            if (index === 0) return 'row-span-2 aspect-square'; // First image takes 2 rows
-            return 'aspect-square'; // Others square
+            if (index === 0) return 'row-span-2 w-full h-full aspect-square object-cover rounded-lg'; // First image takes 2 rows
+            return 'w-full h-full aspect-square object-cover rounded-lg'; // Others square
         case 4:
-            return 'aspect-square'; // All square for 4 images
+            return 'w-full h-full aspect-square object-cover rounded-lg'; // All square for 4 images
         default:
-            return 'aspect-square'; // Default square
+            // For 5+ images, show grid with more than 2 columns
+            return 'w-full h-full aspect-square object-cover rounded-lg';
     }
 };
 
