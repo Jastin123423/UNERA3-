@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Login, Register, ForgotPassword } from './components/Auth';
 import { Header, Sidebar, RightSidebar, MenuOverlay } from './components/Layout';
@@ -25,8 +26,8 @@ import { rankFeed } from './utils/ranking';
 // ========== API CONFIGURATION ==========
 const API_BASE_URL = 'https://unera.social';
 
-// API client with fallback to local data
-const apiFetch = async (endpoint: string, options: RequestInit = {}, withAuth = false) => {
+// FIXED API CLIENT - Handles your API's array response format
+const apiFetch = async (endpoint: string, options: RequestInit = {}, withAuth = true) => {
     const url = `${API_BASE_URL}${endpoint}`;
     const headers: HeadersInit = {
         'Content-Type': 'application/json',
@@ -45,32 +46,32 @@ const apiFetch = async (endpoint: string, options: RequestInit = {}, withAuth = 
             ...options,
             headers,
             mode: 'cors',
-            credentials: 'include'
         });
 
-        // Handle non-JSON responses
+        // Check if response is JSON
         const contentType = response.headers.get('content-type');
         if (!contentType || !contentType.includes('application/json')) {
-            console.warn(`API returned non-JSON for ${endpoint}`);
-            return { success: false, data: null, error: 'Invalid response format' };
+            throw new Error('API did not return JSON');
         }
 
         const data = await response.json();
 
         if (!response.ok) {
-            console.warn(`API Error ${response.status} for ${endpoint}:`, data.message);
-            return { success: false, data: null, error: data.message || `HTTP ${response.status}` };
+            throw new Error(data.message || `API Error: ${response.status}`);
         }
 
-        // Handle both array and object responses
-        return { 
-            success: true, 
-            data: Array.isArray(data) ? data : (data.data || data),
-            isArray: Array.isArray(data)
-        };
+        // CRITICAL FIX: Your API returns arrays directly, not {data: array}
+        // Always return {data: array, success: true} format for consistency
+        if (Array.isArray(data)) {
+            return { data: data, success: true };
+        }
+        
+        // If it's already an object with data property, return as-is
+        return data;
     } catch (error) {
-        console.error('Network error for', endpoint, ':', error);
-        return { success: false, data: null, error: 'Network error' };
+        console.error('API Error for', endpoint, ':', error);
+        // Return empty data structure to prevent crashes
+        return { data: [], success: false, error: error.message };
     }
 };
 
@@ -114,11 +115,12 @@ const parsePath = (path: string, users: User[]) => {
     return { view: 'home' };
 };
 
-// Enhanced Facebook-style relative time formatter
+// Enhanced Facebook-style relative time formatter with precise calculations
 const formatRelativeTime = (timestamp: number): string => {
     const now = Date.now();
     const diff = now - timestamp;
     
+    // If timestamp is in the future or invalid, return fallback
     if (diff < 0 || !timestamp) return 'Just now';
     
     const diffInSeconds = Math.floor(diff / 1000);
@@ -150,6 +152,7 @@ const formatRelativeTime = (timestamp: number): string => {
 const getSongForPost = (post: PostType, songs: Song[], episodes: Episode[]) => {
     if (!post.audioTrack) return null;
     
+    // Check songs array first
     const song = songs.find(s => s.id === post.audioTrack?.id);
     if (song) {
         return {
@@ -170,6 +173,7 @@ const getSongForPost = (post: PostType, songs: Song[], episodes: Episode[]) => {
         };
     }
     
+    // Check episodes array
     const episode = episodes.find(e => e.id === post.audioTrack?.id);
     if (episode) {
         return {
@@ -197,6 +201,7 @@ const getSongForPost = (post: PostType, songs: Song[], episodes: Episode[]) => {
         };
     }
     
+    // Create song object from audioTrack if not found in arrays
     return {
         id: post.audioTrack.id,
         title: post.audioTrack.title,
@@ -223,6 +228,7 @@ const getSongForPost = (post: PostType, songs: Song[], episodes: Episode[]) => {
 
 // Helper function to get author (user or brand) for a post
 const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
+    // First check if it's a brand post
     if (post.brandId) {
         const brand = brands.find(b => b.id === post.brandId);
         if (brand) {
@@ -238,6 +244,7 @@ const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
         }
     }
     
+    // Check if authorId matches a brand
     const brandByAuthorId = brands.find(b => b.id === post.authorId);
     if (brandByAuthorId) {
         return {
@@ -251,6 +258,7 @@ const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
         };
     }
     
+    // Otherwise it's a user post
     const user = users.find(u => u.id === post.authorId);
     if (user) {
         return {
@@ -264,7 +272,7 @@ const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
 
 // Notification utility functions
 const notificationExists = (notifications: Notification[], userId: number, senderId: number, type: string, postId?: number): boolean => {
-    const recentTime = Date.now() - 300000;
+    const recentTime = Date.now() - 300000; // 5 minutes
     return notifications.some(notif => 
         notif.userId === userId &&
         notif.senderId === senderId &&
@@ -307,10 +315,11 @@ const createNotification = (
 };
 
 // ========== IMAGE RENDERING UTILITIES ==========
+// Facebook-style image grid arrangement helper
 const getImageGridClass = (imageCount: number): string => {
     switch (imageCount) {
         case 1:
-            return 'w-full max-w-full h-auto';
+            return 'w-full max-w-full h-auto'; // Single image - full width container
         case 2:
             return 'grid grid-cols-2 gap-1 w-full';
         case 3:
@@ -325,26 +334,28 @@ const getImageGridClass = (imageCount: number): string => {
 const getImageItemClass = (imageCount: number, index: number): string => {
     switch (imageCount) {
         case 1:
-            return 'w-full max-w-full h-auto max-h-[500px] object-contain rounded-lg';
+            return 'w-full max-w-full h-auto max-h-[500px] object-contain rounded-lg'; // Full width for single image
         case 2:
-            return 'w-full h-full aspect-square object-cover rounded-lg';
+            return 'w-full h-full aspect-square object-cover rounded-lg'; // Square for 2 images
         case 3:
-            if (index === 0) return 'row-span-2 w-full h-full aspect-square object-cover rounded-lg';
-            return 'w-full h-full aspect-square object-cover rounded-lg';
+            if (index === 0) return 'row-span-2 w-full h-full aspect-square object-cover rounded-lg'; // First image takes 2 rows
+            return 'w-full h-full aspect-square object-cover rounded-lg'; // Others square
         case 4:
-            return 'w-full h-full aspect-square object-cover rounded-lg';
+            return 'w-full h-full aspect-square object-cover rounded-lg'; // All square for 4 images
         default:
+            // For 5+ images, show grid with more than 2 columns
             return 'w-full h-full aspect-square object-cover rounded-lg';
     }
 };
 
 // ========== DATA TRANSFORMATION FUNCTIONS ==========
+// Transform API post data to frontend format
 const transformPostFromAPI = (apiPost: any): PostType => {
-    const timestamp = new Date(apiPost.created_at || apiPost.timestamp || Date.now()).getTime();
+    const timestamp = new Date(apiPost.created_at).getTime() || Date.now();
     
     return {
-        id: apiPost.id || Date.now(),
-        authorId: apiPost.user_id || apiPost.authorId || 1,
+        id: apiPost.id,
+        authorId: apiPost.user_id || apiPost.authorId || 1, // Default to user 1 if missing
         content: apiPost.content || '',
         images: apiPost.media_url && apiPost.media_type === 'image' ? [apiPost.media_url] : undefined,
         video: apiPost.media_url && apiPost.media_type === 'video' ? apiPost.media_url : undefined,
@@ -357,6 +368,7 @@ const transformPostFromAPI = (apiPost: any): PostType => {
         views: apiPost.views || 0,
         type: apiPost.media_type || apiPost.type || 'text',
         visibility: apiPost.visibility || 'Public',
+        // Optional fields
         location: apiPost.location,
         feeling: apiPost.feeling,
         taggedUsers: apiPost.tagged_users,
@@ -370,6 +382,7 @@ const transformPostFromAPI = (apiPost: any): PostType => {
     };
 };
 
+// Transform API user data to frontend format
 const transformUserFromAPI = (apiUser: any): User => {
     return {
         id: apiUser.id,
@@ -401,8 +414,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setIsClient(true);
     }, []);
 
-    // ========== STATE MANAGEMENT ==========
-    // Start with initial data for guest mode
     const [users, setUsers] = useState<User[]>(INITIAL_USERS);
     const [posts, setPosts] = useState<PostType[]>(() => {
         return INITIAL_POSTS.map(post => ({
@@ -410,53 +421,22 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
         }));
     });
-    const [stories, setStories] = useState<Story[]>(INITIAL_STORIES.map(s => ({...s, createdAt: Date.now(), user: INITIAL_USERS.find(u => u.id === s.userId)})));
+    const [stories, setStories] = useState<Story[]>(INITIAL_STORIES);
     const [reels, setReels] = useState<Reel[]>(INITIAL_REELS);
     const [events, setEvents] = useState<Event[]>(INITIAL_EVENTS);
     const [products, setProducts] = useState<Product[]>([]);
     const [groups, setGroups] = useState<Group[]>(INITIAL_GROUPS);
     const [brands, setBrands] = useState<Brand[]>(INITIAL_BRANDS);
     
-    // Initialize songs and episodes properly (FIX for MusicSystem)
-    const [songs, setSongs] = useState<Song[]>(MOCK_SONGS.map(song => ({
-        ...song,
-        plays: song.plays || 0,
-        likes: song.likes || 0,
-        shares: song.shares || 0,
-        comments: song.comments || 0,
-        stats: song.stats || {
-            plays: song.plays || 0,
-            likes: song.likes || 0,
-            shares: song.shares || 0,
-            comments: song.comments || 0,
-            downloads: 0,
-            reelsUse: 0
-        }
-    })));
+    const [songs, setSongs] = useState<Song[]>(MOCK_SONGS);
+    const [episodes, setEpisodes] = useState<Episode[]>(MOCK_EPISODES);
     
-    const [episodes, setEpisodes] = useState<Episode[]>(MOCK_EPISODES.map(episode => ({
-        ...episode,
-        plays: episode.plays || 0,
-        likes: episode.likes || 0,
-        shares: episode.shares || 0,
-        comments: episode.comments || 0,
-        stats: episode.stats || {
-            plays: episode.plays || 0,
-            likes: episode.likes || 0,
-            shares: episode.shares || 0,
-            comments: episode.comments || 0,
-            downloads: 0,
-            reelsUse: 0
-        }
-    })));
-    
-    // FIXED: Start with null for guest mode (Facebook-like)
-    const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const [currentUser, setCurrentUser] = useState<User | null>(INITIAL_USERS[0]);
     const [showRegister, setShowRegister] = useState(false);
     const [showForgotPassword, setShowForgotPassword] = useState(false);
     const [loginError, setLoginError] = useState('');
     
-    const [isLoading, setIsLoading] = useState(false); // Start with false for instant load
+    const [isLoading, setIsLoading] = useState(true);
     
     const serverPath = initialPath || '/';
     const clientPath = isClient ? getPath() : serverPath;
@@ -465,7 +445,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const parsedPath = useMemo(() => parsePath(path, users), [path, users]);
     
     const [activeTab, setActiveTab] = useState(parsedPath.view === 'home' ? 'home' : parsedPath.view);
-    const [view, setView] = useState(parsedPath.view); // Start with parsed view (home for guests)
+    const [view, setView] = useState(parsedPath.view);
     const [selectedUserId, setSelectedUserId] = useState<number | null>(parsedPath.userId || null);
     const [activeReelId, setActiveReelId] = useState<number | null>(null);
     const [activeBrandId, setActiveBrandId] = useState<number | null>(null);
@@ -491,7 +471,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const [activeSharePostId, setActiveSharePostId] = useState<number | null>(null);
     const [activeChatUser, setActiveChatUser] = useState<User | null>(null);
     const [notifications, setNotifications] = useState<Notification[]>([
-        // Initial notifications for testing
         {
             id: 1,
             userId: 1,
@@ -510,16 +489,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             postId: 1,
             timestamp: Date.now() - 1800000,
             read: false
-        },
-        {
-            id: 3,
-            userId: 1,
-            senderId: 4,
-            type: 'comment',
-            content: 'commented on your post.',
-            postId: 1,
-            timestamp: Date.now() - 900000,
-            read: true
         }
     ]);
     const [activeProduct, setActiveProduct] = useState<Product | null>(null);
@@ -529,112 +498,140 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const isAdmin = currentUser?.role === 'admin';
 
     // ========== API DATA FETCHING ==========
-    // Load data from API but fallback to local data immediately for guest mode
+
+    // Fetch posts from API
+    const fetchPosts = async () => {
+        try {
+            console.log('Fetching posts from API...');
+            const response = await apiFetch('/api/posts', { method: 'GET' });
+            
+            if (response.success && Array.isArray(response.data)) {
+                console.log('Posts fetched successfully:', response.data.length);
+                const transformedPosts = response.data.map(transformPostFromAPI);
+                setPosts(transformedPosts);
+            } else {
+                console.log('Using initial posts as fallback');
+                // Fallback to initial posts
+                setPosts(INITIAL_POSTS.map(post => ({
+                    ...post,
+                    formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || Date.now())
+                })));
+            }
+        } catch (error) {
+            console.error('Failed to fetch posts:', error);
+            // Fallback to initial posts
+            setPosts(INITIAL_POSTS.map(post => ({
+                ...post,
+                formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || Date.now())
+            })));
+        }
+    };
+
+    // Fetch users from API
+    const fetchUsers = async () => {
+        try {
+            console.log('Fetching users from API...');
+            const response = await apiFetch('/api/users', { method: 'GET' });
+            
+            if (response.success && Array.isArray(response.data)) {
+                console.log('Users fetched successfully:', response.data.length);
+                const transformedUsers = response.data.map(transformUserFromAPI);
+                setUsers(transformedUsers);
+                
+                // Set current user if not set
+                if (!currentUser && transformedUsers.length > 0) {
+                    setCurrentUser(transformedUsers[0]);
+                }
+            } else {
+                console.log('Using initial users as fallback');
+                setUsers(INITIAL_USERS);
+            }
+        } catch (error) {
+            console.error('Failed to fetch users:', error);
+            setUsers(INITIAL_USERS);
+        }
+    };
+
+    // Fetch feed from API (ranked posts)
+    const fetchFeed = async () => {
+        try {
+            const response = await apiFetch('/api/feed', { method: 'GET' });
+            
+            if (response.success && Array.isArray(response.data)) {
+                const feedPosts = response.data.map(transformPostFromAPI);
+                setPosts(feedPosts);
+            }
+        } catch (error) {
+            console.error('Failed to fetch feed:', error);
+        }
+    };
+
+    // Initial data loading
     useEffect(() => {
-        const loadData = async () => {
-            if (isClient) {
-                // First load from localStorage for instant UI
-                const storedUser = localStorage.getItem('universeCurrentUser');
-                const storedUsers = localStorage.getItem('universeUsers');
-                const storedPosts = localStorage.getItem('universePosts');
-                const storedBrands = localStorage.getItem('universeBrands');
-                const storedSongs = localStorage.getItem('universeSongs');
-                const storedEpisodes = localStorage.getItem('universeEpisodes');
+        const loadInitialData = async () => {
+            setIsLoading(true);
+            console.log('Loading initial data...');
+            
+            try {
+                // Load essential data in sequence
+                await fetchUsers();
+                await fetchPosts();
                 
-                // Load stored data immediately
-                if (storedUsers) setUsers(JSON.parse(storedUsers));
-                if (storedPosts) {
-                    const parsedPosts = JSON.parse(storedPosts);
-                    const postsWithFormattedTime = parsedPosts.map((post: PostType) => ({
-                        ...post,
-                        formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || Date.now())
-                    }));
-                    setPosts(postsWithFormattedTime);
-                }
-                if (storedBrands) setBrands(JSON.parse(storedBrands));
-                if (storedSongs) setSongs(JSON.parse(storedSongs));
-                if (storedEpisodes) setEpisodes(JSON.parse(storedEpisodes));
+                console.log('Initial data loaded successfully');
+                console.log('Users count:', users.length);
+                console.log('Posts count:', posts.length);
                 
-                if (storedUser) {
-                    try {
-                        const user = JSON.parse(storedUser);
-                        const freshUser = (storedUsers ? JSON.parse(storedUsers) : INITIAL_USERS).find((u: User) => u.id === user.id);
-                        if (freshUser) {
-                            setCurrentUser(freshUser);
-                        }
-                    } catch (e) {
-                        console.error('Error parsing stored user:', e);
-                    }
-                }
-                
-                // Then try to fetch from API in background
-                try {
-                    // Fetch public data (no auth needed)
-                    const [postsResponse, usersResponse, brandsResponse] = await Promise.allSettled([
-                        apiFetch('/api/posts'),
-                        apiFetch('/api/users'),
-                        apiFetch('/api/brands')
-                    ]);
-                    
-                    // Update with API data if successful
-                    if (postsResponse.status === 'fulfilled' && postsResponse.value.success) {
-                        const apiPosts = Array.isArray(postsResponse.value.data) 
-                            ? postsResponse.value.data.map(transformPostFromAPI)
-                            : [];
-                        if (apiPosts.length > 0) {
-                            setPosts(apiPosts);
-                        }
-                    }
-                    
-                    if (usersResponse.status === 'fulfilled' && usersResponse.value.success) {
-                        const apiUsers = Array.isArray(usersResponse.value.data)
-                            ? usersResponse.value.data.map(transformUserFromAPI)
-                            : [];
-                        if (apiUsers.length > 0) {
-                            setUsers(apiUsers);
-                            
-                            // Update current user if exists in new data
-                            if (currentUser) {
-                                const updatedCurrentUser = apiUsers.find((u: User) => u.id === currentUser.id);
-                                if (updatedCurrentUser) {
-                                    setCurrentUser(updatedCurrentUser);
-                                }
-                            }
-                        }
-                    }
-                    
-                    if (brandsResponse.status === 'fulfilled' && brandsResponse.value.success) {
-                        const apiBrands = Array.isArray(brandsResponse.value.data)
-                            ? brandsResponse.value.data
-                            : [];
-                        if (apiBrands.length > 0) {
-                            setBrands(apiBrands);
-                        }
-                    }
-                } catch (error) {
-                    console.log('API fetch failed, using local data:', error);
-                    // Continue with local data
-                }
+            } catch (error) {
+                console.error('Failed to load initial data:', error);
+            } finally {
+                setTimeout(() => {
+                    setIsLoading(false);
+                    console.log('Loading complete');
+                }, 500);
             }
         };
-        
-        loadData();
+
+        loadInitialData();
+    }, []);
+
+    // Load data from localStorage as fallback
+    useEffect(() => {
+        if (isClient) {
+            const storedUser = localStorage.getItem('universeCurrentUser');
+            const storedUsers = localStorage.getItem('universeUsers');
+            const storedPosts = localStorage.getItem('universePosts');
+            
+            // Only use localStorage if API failed
+            if (users.length === 0 && storedUsers) {
+                console.log('Using localStorage users as fallback');
+                setUsers(JSON.parse(storedUsers));
+            }
+            
+            if (posts.length === 0 && storedPosts) {
+                console.log('Using localStorage posts as fallback');
+                const parsedPosts = JSON.parse(storedPosts);
+                const postsWithFormattedTime = parsedPosts.map((post: PostType) => ({
+                    ...post,
+                    formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || Date.now())
+                }));
+                setPosts(postsWithFormattedTime);
+            }
+            
+            if (!currentUser && storedUser) {
+                console.log('Using localStorage current user');
+                setCurrentUser(JSON.parse(storedUser));
+            }
+        }
     }, [isClient]);
 
     // Save data to localStorage
     useEffect(() => {
-        if (isClient) {
-            if (currentUser) {
-                localStorage.setItem('universeCurrentUser', JSON.stringify(currentUser));
-            }
+        if (isClient && currentUser) {
+            localStorage.setItem('universeCurrentUser', JSON.stringify(currentUser));
             localStorage.setItem('universeUsers', JSON.stringify(users));
             localStorage.setItem('universePosts', JSON.stringify(posts));
-            localStorage.setItem('universeBrands', JSON.stringify(brands));
-            localStorage.setItem('universeSongs', JSON.stringify(songs));
-            localStorage.setItem('universeEpisodes', JSON.stringify(episodes));
-            localStorage.setItem('universeLikedTracks', JSON.stringify(likedTracks));
         }
-    }, [currentUser, users, posts, brands, songs, episodes, likedTracks, isClient]);
+    }, [currentUser, users, posts, isClient]);
 
     const storiesWithUsers = useMemo(() => {
         return stories.map(story => {
@@ -643,8 +640,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }).sort((a,b) => b.createdAt - a.createdAt);
     }, [stories, users]);
 
-    // Enhanced ranked posts (works for guests too)
+    // Enhanced ranked posts
     const rankedPosts = useMemo(() => {
+        // Ensure all posts have formattedTime
         const processedPosts = posts.map(post => ({
             ...post,
             formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
@@ -682,7 +680,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             visibility: 'Public' 
         }));
         
+        // Combine all posts including brand posts
         const allContent = [...processedPosts, ...productPosts, ...reelPosts];
+        
+        // Use the unified rankFeed function that now accepts brands
         return rankFeed(allContent, currentUser, users, brands);
     }, [posts, reels, products, currentUser, users, brands]);
 
@@ -694,7 +695,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         content: string,
         extraData?: any
     ) => {
-        if (userId === senderId) return;
+        // Prevent self-notifications
+        if (userId === senderId) {
+            return;
+        }
         
         if (notificationExists(notifications, userId, senderId, type, extraData?.postId)) {
             return;
@@ -732,120 +736,39 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     // ========== AUTHENTICATION FUNCTIONS ==========
-    const handleLogin = async (email: string, pass: string) => {
-        // First try local authentication for immediate response
-        const localUser = users.find(u => u.email === email && u.password === pass);
-        if (localUser) {
-            setCurrentUser(localUser);
+    const handleLogin = (email: string, pass: string) => {
+        const user = users.find(u => u.email === email && u.password === pass);
+        if (user) {
+            setCurrentUser(user);
             setView('home');
             setActiveTab('home');
             setLoginError('');
             setShowRegister(false);
             setShowForgotPassword(false);
-            if (isClient) {
-                localStorage.setItem('universeCurrentUser', JSON.stringify(localUser));
-                window.history.pushState({}, '', '/');
-            }
-            return;
-        }
-        
-        // Then try API authentication
-        try {
-            const response = await apiFetch('/api/auth/login', {
-                method: 'POST',
-                body: JSON.stringify({ email, password: pass }),
-                withAuth: false
-            });
-
-            if (response.success) {
-                const userData = response.data;
-                // Create user object from API response
-                const apiUser: User = {
-                    id: userData.id || Date.now(),
-                    name: userData.name || email.split('@')[0],
-                    email: email,
-                    username: userData.username || email.split('@')[0],
-                    password: pass, // Store locally for offline use
-                    profileImage: userData.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name || email.split('@')[0])}`,
-                    coverImage: userData.coverImage || 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f',
-                    bio: userData.bio || '',
-                    location: userData.location || '',
-                    followers: userData.followers || [],
-                    following: userData.following || [],
-                    posts: userData.posts || [],
-                    isVerified: userData.isVerified || false,
-                    isRestricted: userData.isRestricted || false,
-                    role: userData.role || 'user',
-                    birthDate: userData.birthDate,
-                    joinedDate: userData.joinedDate || new Date().toISOString()
-                };
-                
-                // Add to users list if not already there
-                if (!users.find(u => u.id === apiUser.id)) {
-                    setUsers(prev => [...prev, apiUser]);
-                }
-                
-                setCurrentUser(apiUser);
-                setView('home');
-                setActiveTab('home');
-                setLoginError('');
-                setShowRegister(false);
-                setShowForgotPassword(false);
-                
-                if (isClient) {
-                    if (userData.token) {
-                        localStorage.setItem('authToken', userData.token);
-                    }
-                    localStorage.setItem('universeCurrentUser', JSON.stringify(apiUser));
-                    window.history.pushState({}, '', '/');
-                }
-            } else {
-                setLoginError('Invalid email or password');
-            }
-        } catch (error) {
-            console.error('Login error:', error);
-            setLoginError('Network error. Please try again.');
+            if (isClient) window.history.pushState({}, '', '/');
+        } else {
+            setLoginError('Invalid email or password');
         }
     };
 
     const handleRegister = (newUser: Partial<User>) => {
         const id = Math.max(...users.map(u => u.id)) + 1;
-        const user: User = { 
-            ...newUser, 
-            id, 
-            role: 'user', 
-            followers: [], 
-            following: [], 
-            joinedDate: new Date().toISOString(),
-            profileImage: newUser.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(newUser.name || 'User')}&background=random`,
-            coverImage: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f',
-            bio: '',
-            location: '',
-            posts: [],
-            isVerified: false,
-            isRestricted: false
-        } as User;
-        
+        const user: User = { ...newUser, id, role: 'user', followers: [], following: [], joinedDate: new Date().toISOString() } as User;
         setUsers([...users, user]);
         setCurrentUser(user);
         setShowRegister(false);
         setShowForgotPassword(false);
         setView('home');
-        
-        if (isClient) {
-            localStorage.setItem('universeCurrentUser', JSON.stringify(user));
-            window.history.pushState({}, '', '/');
-        }
+        if (isClient) window.history.pushState({}, '', '/');
     };
 
     const handleLogout = () => {
         setCurrentUser(null);
         if (isClient) {
             localStorage.removeItem('universeCurrentUser');
-            localStorage.removeItem('authToken');
             window.history.pushState({}, '', '/');
         }
-        // Stay on current view but as guest
+        setView('login');
         setCurrentAudioTrack(null);
         setIsAudioPlaying(false);
     };
@@ -895,7 +818,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setActiveGroupComments(null);
         setActiveGroupShare(null);
 
-        // Handle all menu views - same as non-API version
+        // Handle all menu views
         switch(targetView) {
             case 'home':
                 setView('home');
@@ -996,11 +919,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         background?: string, 
         linkPreview?: LinkPreview
     ) => {
-        if (!currentUser) {
-            alert("Please login to create a post.");
-            setView('login');
-            return;
-        }
+        if (!currentUser) return;
         
         const timestamp = Date.now();
         const formattedTime = formatRelativeTime(timestamp);
@@ -1025,10 +944,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             linkPreview 
         };
         
-        // Update local state immediately
+        // First update local state for immediate UI response
         setPosts([newPost, ...posts]);
         
-        // Try to save to API in background
+        // Then try to save to API
         try {
             const formData = new FormData();
             formData.append('user_id', currentUser.id.toString());
@@ -1041,25 +960,23 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 });
             }
             
-            await apiFetch('/api/posts', {
+            const response = await apiFetch('/api/posts', {
                 method: 'POST',
                 body: formData,
-                headers: {}
-            }, true);
+                headers: {} // Remove Content-Type for FormData
+            });
             
+            if (response.success) {
+                console.log('Post saved to API successfully');
+            }
         } catch (error) {
             console.error('Failed to save post to API:', error);
-            // Post remains in local state
+            // Post will remain in local state
         }
     };
 
     const handleReact = (itemId: number, type: ReactionType) => {
-        if (!currentUser) {
-            alert("Please login to react.");
-            setView('login');
-            return;
-        }
-        
+        if (!currentUser) return alert("Please login to react.");
         setPosts(prev => prev.map(post => {
             if (post.id === itemId) {
                 const existing = post.reactions.find(r => r.userId === currentUser!.id);
@@ -1069,17 +986,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     else newReactions = newReactions.map(r => r.userId === currentUser!.id ? { ...r, type } : r);
                 } else {
                     newReactions.push({ userId: currentUser!.id, type });
-                    
-                    // Send notification
-                    if (post.authorId !== currentUser.id) {
-                        handleCreateNotification(
-                            post.authorId,
-                            currentUser.id,
-                            'like',
-                            `reacted with ${type} to your post.`,
-                            { postId: itemId, reactionType: type }
-                        );
-                    }
                 }
                 return { ...post, reactions: newReactions };
             }
@@ -1088,12 +994,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleComment = (itemId: number, text: string, attachment?: any, parentId?: number) => {
-        if (!currentUser) {
-            alert("Please login to comment.");
-            setView('login');
-            return;
-        }
-        
+        if (!currentUser) return;
         const timestamp = Date.now();
         const formattedTime = formatRelativeTime(timestamp);
         const newComment: Comment = { 
@@ -1110,20 +1011,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         
         setPosts(prev => prev.map(p => {
             if (p.id === itemId) {
-                const updatedComments = [...p.comments, newComment];
-                
-                // Send notification
-                if (p.authorId !== currentUser.id) {
-                    handleCreateNotification(
-                        p.authorId,
-                        currentUser.id,
-                        'comment',
-                        'commented on your post.',
-                        { postId: itemId, commentId: newComment.id }
-                    );
-                }
-                
-                return { ...p, comments: updatedComments };
+                return { ...p, comments: [...p.comments, newComment] };
             }
             return p;
         }));
@@ -1147,13 +1035,18 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
         
         if (window.confirm("Are you sure you want to delete this post?")) {
+            // Remove from local state
             setPosts(prev => prev.filter(p => p.id !== postId));
             
             // Try to delete from API
             try {
                 apiFetch(`/api/posts/${postId}`, {
                     method: 'DELETE'
-                }, true);
+                }).then(response => {
+                    if (response.success) {
+                        console.log('Post deleted from API');
+                    }
+                });
             } catch (error) {
                 console.error('Failed to delete post from API:', error);
             }
@@ -1166,14 +1059,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const handleFollowUser = (userIdToToggle: number) => {
         if (!currentUser) {
             alert("Please login to follow users.");
-            setView('login');
             return;
         }
-        
         const currentUserId = currentUser.id;
+
         const isCurrentlyFollowing = currentUser.following.includes(userIdToToggle);
 
-        // Send notification if not already following AND not following yourself
+        // Send follow notification if not already following AND not following yourself
         if (!isCurrentlyFollowing && userIdToToggle !== currentUserId) {
             handleCreateNotification(
                 userIdToToggle,
@@ -1231,9 +1123,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     // ========== PRODUCT FUNCTIONS ==========
     const handleCreateProduct = (productData: Partial<Product>) => {
+        console.log("Creating product with data:", productData);
+        
         if (!currentUser) {
             alert("Please login to create a product listing.");
-            setView('login');
             return;
         }
 
@@ -1260,18 +1153,17 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             shareId: 'prod_' + Math.random().toString(36).substring(2, 15),
         };
 
+        console.log("New product created:", newProduct);
+        
         setProducts(prev => [...prev, newProduct]);
+        
         alert("Product listed successfully!");
+        
         return newProduct;
     };
 
     const handleCreateStory = (storyData: Partial<Story>) => {
-        if (!currentUser) {
-            alert("Please login to create a story.");
-            setView('login');
-            return;
-        }
-        
+        if (!currentUser) return;
         const timestamp = Date.now();
         const newStory: Story = { 
             id: timestamp, 
@@ -1285,12 +1177,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleCreateReel = (videoFile: File, caption: string, song?: Song | { name: string, url: string }, effectName?: string) => {
-        if (!currentUser) {
-            alert("Please login to create a reel.");
-            setView('login');
-            return;
-        }
-        
+        if (!currentUser) return;
         const timestamp = Date.now();
         const newReel: Reel = { 
             id: timestamp, 
@@ -1309,12 +1196,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleCreateEvent = (eventData: Partial<Event>) => {
-        if (!currentUser) {
-            alert("Please login to create an event.");
-            setView('login');
-            return;
-        }
-        
+        if (!currentUser) return;
         const timestamp = Date.now();
         const formattedTime = formatRelativeTime(timestamp);
         const newEvent: Event = { 
@@ -1343,12 +1225,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleJoinEvent = (eventId: number) => {
-        if (!currentUser) {
-            alert("Please login to join events.");
-            setView('login');
-            return;
-        }
-        
+        if (!currentUser) return alert("Please login to join events.");
         setEvents(prev => prev.map(ev => {
             if (ev.id === eventId) {
                 const isAttending = ev.attendees.includes(currentUser!.id);
@@ -1357,18 +1234,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 if (isInterested) {
                     return { ...ev, interestedIds: ev.interestedIds!.filter(id => id !== currentUser!.id), attendees: [...ev.attendees, currentUser!.id] };
                 }
-                
-                // Send notification to event organizer
-                if (ev.organizerId !== currentUser.id) {
-                    handleCreateNotification(
-                        ev.organizerId,
-                        currentUser.id,
-                        'event_interest',
-                        'is interested in your event.',
-                        { eventId }
-                    );
-                }
-                
                 return { ...ev, interestedIds: [...(ev.interestedIds || []), currentUser!.id] };
             }
             return ev;
@@ -1376,25 +1241,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleShare = (postId: number, targetType: 'profile' | 'group' | 'brand', targetId?: string | number, extraCaption?: string) => {
-        if (!currentUser) {
-            alert("Please login to share posts.");
-            setView('login');
-            return;
-        }
-        
+        if (!currentUser) return;
         const sourcePost = posts.find(p => p.id === postId);
         if (!sourcePost) return;
-        
-        // Send notification to original author
-        if (sourcePost.authorId !== currentUser.id) {
-            handleCreateNotification(
-                sourcePost.authorId,
-                currentUser.id,
-                'share',
-                'shared your post.',
-                { postId: postId }
-            );
-        }
         
         const timestamp = Date.now();
         const formattedTime = formatRelativeTime(timestamp);
@@ -1429,12 +1278,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleFeedPost = (data: any) => {
-        if (!currentUser) {
-            alert("Please login to post.");
-            setView('login');
-            return;
-        }
-        
+        if (!currentUser) return;
         const timestamp = Date.now();
         const formattedTime = formatRelativeTime(timestamp);
         const newPost: PostType = { 
@@ -1455,14 +1299,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         setPosts([newPost, ...posts]);
     };
 
-    // ========== MUSIC FUNCTIONS (FIXED for MusicSystem) ==========
     const handleAddSong = (song: Song) => {
-        if (!currentUser) {
-            alert("Please login to add songs.");
-            setView('login');
-            return;
-        }
-        
+        console.log("Adding new song to library:", song);
         const newSong = {
             ...song,
             plays: song.plays || 0,
@@ -1489,47 +1327,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         });
     };
 
-    // FIXED: Add missing handleAddEpisode function
-    const handleAddEpisode = (episode: Episode) => {
-        if (!currentUser) {
-            alert("Please login to add episodes.");
-            setView('login');
-            return;
-        }
-        
-        const newEpisode = {
-            ...episode,
-            plays: episode.plays || 0,
-            likes: episode.likes || 0,
-            shares: episode.shares || 0,
-            comments: episode.comments || 0,
-            uploadDate: episode.uploadDate || new Date().toISOString(),
-            stats: episode.stats || {
-                plays: episode.plays || 0,
-                likes: episode.likes || 0,
-                shares: episode.shares || 0,
-                comments: episode.comments || 0,
-                downloads: 0,
-                reelsUse: 0
-            }
-        };
-        
-        setEpisodes(prev => {
-            const exists = prev.find(e => e.id === episode.id);
-            if (exists) {
-                return prev.map(e => e.id === episode.id ? newEpisode : e);
-            }
-            return [newEpisode, ...prev];
-        });
-    };
-
     const handleUploadToFeed = (song: Song) => {
-        if (!currentUser) {
-            alert("Please login to upload to feed.");
-            setView('login');
-            return;
-        }
-        
+        console.log("Uploading to feed:", song);
         handleAddSong(song);
     };
 
@@ -1545,12 +1344,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleLikeTrack = (trackId: string, isLiked: boolean) => {
-        if (!currentUser) {
-            alert("Please login to like tracks.");
-            setView('login');
-            return;
-        }
-        
         setLikedTracks(prev => 
             isLiked 
                 ? prev.filter(id => id !== trackId)
@@ -1566,7 +1359,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         // Track share logic
     };
 
-    // ========== ADMIN FUNCTIONS ==========
+    // ========== MISSING FUNCTIONS ==========
     const handleDeleteSong = (songId: string) => {
         if (!currentUser || !isAdmin) {
             alert("Only admins can delete songs");
@@ -1625,275 +1418,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    // ========== BRAND FUNCTIONS (FIXED for Brands.tsx) ==========
-    const handleCreateBrand = (brandData: Partial<Brand>) => {
-        if (!currentUser) {
-            alert("Please login to create a brand page.");
-            setView('login');
-            return;
-        }
-        
-        const newBrand: Brand = {
-            id: Date.now(),
-            name: brandData.name || 'New Brand',
-            category: brandData.category || 'Business',
-            description: brandData.description || '',
-            location: brandData.location || '',
-            website: brandData.website || '',
-            contactEmail: brandData.contactEmail || '',
-            contactPhone: brandData.contactPhone || '',
-            adminId: currentUser.id,
-            followers: [currentUser.id],
-            isVerified: false,
-            posts: [],
-            createdAt: Date.now(),
-            profileImage: brandData.profileImage || `https://ui-avatars.com/api/?name=${brandData.name || 'Brand'}&background=random&size=150`,
-            coverImage: brandData.coverImage || 'https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-1.2.1&auto=format&fit=crop&w=1500&q=80'
-        };
-        
-        setBrands(prev => [newBrand, ...prev]);
-        
-        // Also add the brand to user's following list
-        if (currentUser) {
-            setCurrentUser(prev => prev ? {
-                ...prev,
-                following: [...prev.following, newBrand.id]
-            } : prev);
-            
-            setUsers(prev => prev.map(user => 
-                user.id === currentUser.id 
-                    ? { ...user, following: [...user.following, newBrand.id] }
-                    : user
-            ));
-        }
-        
-        alert("Brand page created successfully! You are now following this page.");
-    };
-
-    const handleFollowBrand = (brandId: number) => {
-        if (!currentUser) {
-            alert("Please login to follow brands.");
-            setView('login');
-            return;
-        }
-        
-        setBrands(prev => prev.map(b => {
-            if (b.id === brandId) {
-                const isFollowing = b.followers.includes(currentUser!.id);
-                const updatedFollowers = isFollowing 
-                    ? b.followers.filter(id => id !== currentUser!.id) 
-                    : [...b.followers, currentUser!.id];
-                
-                // Update user's following list as well
-                if (currentUser) {
-                    const updatedFollowing = isFollowing
-                        ? currentUser.following.filter(id => id !== brandId)
-                        : [...currentUser.following, brandId];
-                    
-                    setCurrentUser(prev => prev ? { ...prev, following: updatedFollowing } : prev);
-                    
-                    setUsers(prev => prev.map(user => 
-                        user.id === currentUser.id 
-                            ? { ...user, following: updatedFollowing }
-                            : user
-                    ));
-                }
-                
-                return { 
-                    ...b, 
-                    followers: updatedFollowers
-                };
-            }
-            return b;
-        }));
-    };
-
-    const handlePostAsBrand = (brandId: number, content: any) => {
-        if (!currentUser) {
-            alert("Please login to post as a brand.");
-            setView('login');
-            return;
-        }
-        
-        const { text, files, type, visibility, location, feeling, taggedUsers, background, linkPreview } = content;
-        
-        // Verify the current user is admin of this brand
-        const brand = brands.find(b => b.id === brandId);
-        if (!brand) {
-            alert("Brand not found.");
-            return;
-        }
-        
-        if (brand.adminId !== currentUser.id && !isAdmin) {
-            alert("You don't have permission to post as this brand.");
-            return;
-        }
-        
-        // Handle multiple images
-        let images: string[] = [];
-        let video: string | undefined = undefined;
-        
-        if (files && files.length > 0) {
-            if (type === 'video' && files.length === 1) {
-                video = URL.createObjectURL(files[0]);
-            } else if (type === 'image' || type === 'multimage') {
-                images = files.map(file => URL.createObjectURL(file));
-            }
-        }
-        
-        const timestamp = Date.now();
-        const formattedTime = formatRelativeTime(timestamp);
-        const newPost: PostType = { 
-            id: timestamp,
-            authorId: brandId,
-            content: text,
-            images: images.length > 0 ? images : undefined,
-            video: video,
-            timestamp: timestamp,
-            formattedTime: formattedTime,
-            createdAt: timestamp,
-            reactions: [], 
-            comments: [], 
-            shares: 0,
-            views: 0,
-            type: type === 'multimage' ? 'image' : (type === 'video' ? 'video' : (images.length > 0 ? 'image' : 'text')),
-            visibility: visibility as any,
-            location, 
-            feeling, 
-            taggedUsers, 
-            background, 
-            linkPreview,
-            brandId: brandId
-        };
-        
-        // Add to main posts array
-        setPosts(prev => [newPost, ...prev]);
-        
-        // Update brand's posts array
-        setBrands(prev => prev.map(b => 
-            b.id === brandId 
-                ? { ...b, posts: [...(b.posts || []), timestamp] }
-                : b
-        ));
-        
-        alert("Brand post published successfully!");
-        return newPost;
-    };
-
-    const handleUpdateBrand = (brandId: number, updates: Partial<Brand>) => {
-        if (!currentUser) {
-            alert("Please login to update brand.");
-            setView('login');
-            return;
-        }
-        
-        const brand = brands.find(b => b.id === brandId);
-        if (!brand) {
-            alert("Brand not found.");
-            return;
-        }
-        
-        if (brand.adminId !== currentUser.id && !isAdmin) {
-            alert("You don't have permission to update this brand.");
-            return;
-        }
-        
-        setBrands(prev => prev.map(b => 
-            b.id === brandId ? { ...b, ...updates } : b
-        ));
-        
-        alert("Brand updated successfully!");
-    };
-
-    const handleDeleteBrand = (brandId: number) => {
-        if (!currentUser) {
-            alert("Please login to delete brand.");
-            setView('login');
-            return;
-        }
-        
-        const brand = brands.find(b => b.id === brandId);
-        if (!brand) {
-            alert("Brand not found.");
-            return;
-        }
-        
-        if (brand.adminId !== currentUser.id && !isAdmin) {
-            alert("You don't have permission to delete this brand.");
-            return;
-        }
-        
-        if (window.confirm(`Are you sure you want to delete "${brand.name}"? This will also delete all brand posts.`)) {
-            // Remove brand
-            setBrands(prev => prev.filter(b => b.id !== brandId));
-            
-            // Remove brand posts
-            setPosts(prev => prev.filter(p => p.brandId !== brandId && p.authorId !== brandId));
-            
-            // Remove brand from users' following lists
-            setUsers(prev => prev.map(user => ({
-                ...user,
-                following: user.following.filter(id => id !== brandId)
-            })));
-            
-            alert("Brand deleted successfully!");
-        }
-    };
-
-    const handleUpdateBrandImage = (brandId: number, type: 'cover' | 'profile', file: File) => {
-        if (!currentUser) {
-            alert("Please login to update brand image.");
-            setView('login');
-            return;
-        }
-        
-        const brand = brands.find(b => b.id === brandId);
-        if (!brand) {
-            alert("Brand not found.");
-            return;
-        }
-        
-        if (brand.adminId !== currentUser.id && !isAdmin) {
-            alert("You don't have permission to update this brand's image.");
-            return;
-        }
-        
-        const url = URL.createObjectURL(file);
-        setBrands(prev => prev.map(b => 
-            b.id === brandId 
-                ? (type === 'cover' 
-                    ? { ...b, coverImage: url } 
-                    : { ...b, profileImage: url })
-                : b
-        ));
-        
-        alert("Brand image updated successfully!");
-    };
-
-    const handleVerifyBrand = (brandId: number) => {
-        if (!isAdmin) {
-            alert("Only admins can verify brands.");
-            return;
-        }
-        
-        setBrands(prev => prev.map(b => 
-            b.id === brandId ? { ...b, isVerified: !b.isVerified } : b
-        ));
-        
-        const brand = brands.find(b => b.id === brandId);
-        if (brand) {
-            const action = brand.isVerified ? "unverified" : "verified";
-            alert(`Brand ${action} successfully!`);
-        }
-    };
-
-    // ========== GROUP FUNCTIONS (from non-API version) ==========
+    // ========== GROUP FUNCTIONS ==========
     const handleGroupComment = (groupId: string, postId: number, text: string, attachment?: any, parentId?: number) => {
-        if (!currentUser) {
-            alert("Please login to comment.");
-            setView('login');
-            return;
-        }
+        if (!currentUser) return;
         
         const timestamp = Date.now();
         const formattedTime = formatRelativeTime(timestamp);
@@ -1925,11 +1452,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleInviteToGroup = (groupId: string, userIds: number[]) => {
-        if (!currentUser) {
-            alert("Please login to invite users.");
-            setView('login');
-            return;
-        }
+        if (!currentUser) return;
         
         setGroups(prev => prev.map(g => 
             g.id === groupId 
@@ -1944,12 +1467,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleJoinGroup = (groupId: string) => { 
-        if (!currentUser) {
-            alert("Please login to join groups.");
-            setView('login');
-            return;
-        }
-        
+        if (!currentUser) return; 
         setGroups(prev => prev.map(g => 
             (g.id === groupId && !g.members.includes(currentUser.id)) 
                 ? { 
@@ -1961,12 +1479,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
     
     const handleLeaveGroup = (groupId: string) => { 
-        if (!currentUser) {
-            alert("Please login to leave groups.");
-            setView('login');
-            return;
-        }
-        
+        if (!currentUser) return; 
         setGroups(prev => prev.map(g => 
             (g.id === groupId) 
                 ? { ...g, members: g.members.filter(id => id !== currentUser!.id) } 
@@ -1988,12 +1501,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
     
     const handleUpdateGroupImage = (groupId: string, type: 'cover' | 'profile', file: File) => { 
-        if (!currentUser) {
-            alert("Please login to update group image.");
-            setView('login');
-            return;
-        }
-        
         const url = URL.createObjectURL(file); 
         setGroups(prev => prev.map(g => 
             g.id === groupId 
@@ -2005,11 +1512,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
     
     const handlePostToGroup = (groupId: string, content: string, files: File[] | null, type: any, background?: string) => { 
-        if (!currentUser) {
-            alert("Please login to post to groups.");
-            setView('login');
-            return;
-        }
+        if (!currentUser) return;
         
         let images: string[] = [];
         let video: string | undefined = undefined;
@@ -2071,12 +1574,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
     
     const handleCreateGroupEvent = (groupId: string, eventData: Partial<Event>) => {
-        if (!currentUser) {
-            alert("Please login to create group events.");
-            setView('login');
-            return;
-        }
-        
+        if (!currentUser) return;
         const timestamp = Date.now();
         const formattedTime = formatRelativeTime(timestamp);
         const newEvent: Event = { 
@@ -2117,11 +1615,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
     
     const handleGroupShare = (groupId: string, postId: number, targetType: 'profile' | 'group' | 'brand', targetId?: string | number, extraCaption?: string) => {
-        if (!currentUser) {
-            alert("Please login to share posts.");
-            setView('login');
-            return;
-        }
+        if (!currentUser) return;
         
         const group = groups.find(g => g.id === groupId);
         if (!group) return;
@@ -2171,12 +1665,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
     
     const handleCreateGroup = (groupData: Partial<Group>) => {
-        if (!currentUser) {
-            alert("Please login to create groups.");
-            setView('login');
-            return;
-        }
-        
+        if (!currentUser) return;
         const timestamp = Date.now();
         const newGroup: Group = { 
             ...groupData, 
@@ -2196,12 +1685,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
     
     const handleReactGroupPost = (groupId: string, postId: number, type: ReactionType) => { 
-        if (!currentUser) {
-            alert("Please login to react.");
-            setView('login');
-            return;
-        }
-        
+        if (!currentUser) return; 
         setGroups(prev => prev.map(g => {
             if (g.id === groupId) {
                 const updatedPosts = g.posts.map(p => {
@@ -2239,12 +1723,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
     
     const handleUpdateGroupSettings = (groupId: string, settings: Partial<Group>) => { 
-        if (!currentUser) {
-            alert("Please login to update group settings.");
-            setView('login');
-            return;
-        }
-        
         setGroups(prev => prev.map(g => 
             g.id === groupId ? { ...g, ...settings } : g
         )); 
@@ -2282,12 +1760,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleLikeStory = (storyId: number) => {
-        if (!currentUser) { 
-            alert("Please login to like stories."); 
-            setView('login');
-            return; 
-        }
-        
+        if (!currentUser) { alert("Please login to like stories."); return; }
         setStories(prev => prev.map(s => {
             if (s.id === storyId) {
                 const reactions = s.reactions || [];
@@ -2295,16 +1768,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 if (existingLike) {
                     return { ...s, reactions: reactions.filter(r => r.userId !== currentUser!.id) };
                 } else {
-                    // Send notification
-                    if (s.userId !== currentUser.id) {
-                        handleCreateNotification(
-                            s.userId,
-                            currentUser.id,
-                            'story_like',
-                            'liked your story.',
-                            { storyId }
-                        );
-                    }
                     return { ...s, reactions: [...reactions, { userId: currentUser!.id }] };
                 }
             }
@@ -2313,28 +1776,11 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
     
     const handleReplyStory = (storyId: number, text: string) => {
-        if (!currentUser) { 
-            alert("Please login to reply."); 
-            setView('login');
-            return; 
-        }
-        
+        if (!currentUser) { alert("Please login to reply."); return; }
         setStories(prev => prev.map(s => {
             if (s.id === storyId) {
                 const replies = s.replies || [];
                 const newReply = { userId: currentUser!.id, text, timestamp: Date.now() };
-                
-                // Send notification
-                if (s.userId !== currentUser.id) {
-                    handleCreateNotification(
-                        s.userId,
-                        currentUser.id,
-                        'story_reply',
-                        'replied to your story.',
-                        { storyId }
-                    );
-                }
-                
                 return { ...s, replies: [...replies, newReply] };
             }
             return s;
@@ -2342,12 +1788,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     const handleReelReact = (reelId: number, type: ReactionType | undefined) => {
-        if (!currentUser) {
-            alert("Please login to react.");
-            setView('login');
-            return;
-        }
-        
+        if (!currentUser) return alert("Please login to react.");
         setReels(prev => prev.map(reel => {
             if (reel.id === reelId) {
                 const existing = reel.reactions.find(r => r.userId === currentUser!.id);
@@ -2358,17 +1799,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     newReactions = newReactions.map(r => r.userId === currentUser!.id ? { ...r, type: type! } : r);
                 } else {
                     newReactions.push({ userId: currentUser!.id, type: type! });
-                    
-                    // Send notification
-                    if (reel.userId !== currentUser.id) {
-                        handleCreateNotification(
-                            reel.userId,
-                            currentUser.id,
-                            'reel_like',
-                            `reacted to your reel.`,
-                            { reelId, reactionType: type }
-                        );
-                    }
                 }
                 return { ...reel, reactions: newReactions };
             }
@@ -2399,7 +1829,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         );
     };
 
-    // Function to render regular posts with brand support
+    // Function to render regular posts with brand support and Facebook-style image grids
     const renderRegularPost = (post: PostType, author: any, isFollowing?: boolean) => {
         const isBrandAuthor = author?.type === 'brand';
         const isFollowingBrand = isBrandAuthor && currentUser ? 
@@ -2447,19 +1877,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         );
     };
     
-    // Render loading only briefly
-    if (isLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-[#18191A] flex-col">
-                <div className="w-20 h-20 border-4 border-[#1877F2] border-t-transparent rounded-full animate-spin mb-4"></div>
-                <div className="text-[#1877F2] font-bold text-xl animate-pulse">Loading UNERA...</div>
-            </div>
-        );
-    }
-    
     return (
         <div className="bg-[#18191A] min-h-screen flex flex-col font-sans">
-            {effectiveView === 'login' ? (
+            {isLoading ? (
+                <div className="flex items-center justify-center min-h-screen bg-[#18191A] flex-col">
+                    <div className="w-20 h-20 border-4 border-[#1877F2] border-t-transparent rounded-full animate-spin mb-4"></div>
+                    <div className="text-[#1877F2] font-bold text-xl animate-pulse">Loading UNERA...</div>
+                </div>
+            ) : effectiveView === 'login' ? (
                  showRegister 
                     ? <Register onRegister={handleRegister} onBackToLogin={() => { setShowRegister(false); setShowForgotPassword(false); }} /> 
                     : showForgotPassword
@@ -2501,7 +1926,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     <div className="flex justify-center w-full max-w-[1920px] mx-auto relative flex-1">
                         <div className="sticky top-14 h-[calc(100vh-56px)] z-20 hidden lg:block">
                             <Sidebar 
-                                currentUser={currentUser || users[0]} 
+                                currentUser={currentUser || INITIAL_USERS[0]} 
                                 onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
                                 onReelsClick={() => handleNavigate('reels')} 
                                 onMarketplaceClick={() => handleNavigate('marketplace')} 
@@ -3000,7 +2425,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     {activeCommentsPostId && (
                         <CommentsSheet 
                             post={posts.find(p => p.id === activeCommentsPostId)!} 
-                            currentUser={currentUser || users[0]} 
+                            currentUser={currentUser || INITIAL_USERS[0]} 
                             users={users} 
                             onClose={() => setActiveCommentsPostId(null)} 
                             onComment={handleComment} 
@@ -3040,7 +2465,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                 return (
                                     <CommentsSheet 
                                         post={postForComments}
-                                        currentUser={currentUser || users[0]}
+                                        currentUser={currentUser || INITIAL_USERS[0]}
                                         users={users}
                                         onClose={() => setActiveGroupComments(null)}
                                         onComment={(postId, text, attachment) => handleGroupComment(groupId, postId, text, attachment)}
