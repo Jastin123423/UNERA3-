@@ -1,10 +1,10 @@
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { User, Brand, Post as PostType, Event, LinkPreview, AudioTrack } from '../types';
 import { Post, CreatePostModal } from './Feed';
 import { BRAND_CATEGORIES, LOCATIONS_DATA } from '../constants';
 import { CreateEventModal } from './Events';
 
-// ========== API CLIENT ==========
+// ========== API CLIENT (same as App.tsx) ==========
 const API_BASE_URL = 'https://unera.social';
 
 const apiFetch = async (endpoint: string, options: RequestInit = {}, withAuth = true) => {
@@ -50,37 +50,185 @@ const apiFetch = async (endpoint: string, options: RequestInit = {}, withAuth = 
     }
 };
 
-// Transform API data
-const transformBrandFromAPI = (apiBrand: any): Brand => {
-    return {
-        id: apiBrand.id,
-        name: apiBrand.name || `Brand ${apiBrand.id}`,
-        description: apiBrand.description || '',
-        category: apiBrand.category || 'Business',
-        location: apiBrand.location || '',
-        website: apiBrand.website || '',
-        contactEmail: apiBrand.contact_email || apiBrand.contactEmail || '',
-        contactPhone: apiBrand.contact_phone || apiBrand.contactPhone || '',
-        profileImage: apiBrand.profile_image || apiBrand.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(apiBrand.name || 'Brand')}&background=random`,
-        coverImage: apiBrand.cover_image || apiBrand.coverImage || 'https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-1.2.1&auto=format&fit=crop&w=1500&q=80',
-        adminId: apiBrand.admin_id || apiBrand.adminId || 1,
-        followers: apiBrand.followers || [],
-        posts: apiBrand.posts || [],
-        isVerified: apiBrand.is_verified || apiBrand.isVerified || false,
-        isRestricted: apiBrand.is_restricted || false,
-        rating: apiBrand.rating || 0,
-        totalReviews: apiBrand.total_reviews || 0,
-        businessHours: apiBrand.business_hours || apiBrand.businessHours || {},
-        socialLinks: apiBrand.social_links || apiBrand.socialLinks || {},
-        createdAt: apiBrand.created_at || Date.now()
-    };
+// ========== UTILITY FUNCTIONS ==========
+const formatRelativeTime = (timestamp: number): string => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    
+    if (diff < 0 || !timestamp) return 'Just now';
+    
+    const diffInSeconds = Math.floor(diff / 1000);
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    const diffInDays = Math.floor(diffInHours / 24);
+    const diffInWeeks = Math.floor(diffInDays / 7);
+    const diffInMonths = Math.floor(diffInDays / 30);
+    const diffInYears = Math.floor(diffInDays / 365);
+    
+    if (diffInSeconds < 60) {
+        return diffInSeconds < 10 ? 'Just now' : `${diffInSeconds}s`;
+    } else if (diffInMinutes < 60) {
+        return `${diffInMinutes}m`;
+    } else if (diffInHours < 24) {
+        return `${diffInHours}h`;
+    } else if (diffInDays < 7) {
+        return `${diffInDays}d`;
+    } else if (diffInDays < 30) {
+        return `${diffInWeeks}w`;
+    } else if (diffInDays < 365) {
+        return `${diffInMonths}mo`;
+    } else {
+        return `${diffInYears}y`;
+    }
 };
 
-// --- CREATE BRAND MODAL ---
+// ========== BRAND API FUNCTIONS ==========
+// Fetch all brands from API
+const fetchBrands = async () => {
+    try {
+        const response = await apiFetch('/api/brands', { method: 'GET' });
+        if (response.success && Array.isArray(response.data)) {
+            return response.data.map((apiBrand: any) => ({
+                id: apiBrand.id,
+                name: apiBrand.name,
+                category: apiBrand.category,
+                description: apiBrand.description,
+                location: apiBrand.location,
+                website: apiBrand.website,
+                contactEmail: apiBrand.contact_email || apiBrand.contactEmail,
+                contactPhone: apiBrand.contact_phone || apiBrand.contactPhone,
+                adminId: apiBrand.admin_id || apiBrand.adminId,
+                profileImage: apiBrand.profile_image || apiBrand.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(apiBrand.name || 'Brand')}&background=random`,
+                coverImage: apiBrand.cover_image || apiBrand.coverImage || 'https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-1.2.1&auto=format&fit=crop&w=1500&q=80',
+                followers: apiBrand.followers || [],
+                isVerified: apiBrand.is_verified || apiBrand.isVerified || false,
+                createdAt: apiBrand.created_at ? new Date(apiBrand.created_at).getTime() : Date.now()
+            }));
+        }
+        return [];
+    } catch (error) {
+        console.error('Failed to fetch brands:', error);
+        return [];
+    }
+};
+
+// Create a new brand via API
+const createBrandAPI = async (brandData: Partial<Brand>) => {
+    try {
+        const response = await apiFetch('/api/brands', {
+            method: 'POST',
+            body: JSON.stringify({
+                name: brandData.name,
+                category: brandData.category,
+                description: brandData.description,
+                location: brandData.location,
+                website: brandData.website,
+                contact_email: brandData.contactEmail,
+                contact_phone: brandData.contactPhone,
+                admin_id: brandData.adminId,
+                profile_image: brandData.profileImage,
+                cover_image: brandData.coverImage
+            })
+        });
+        
+        if (response.success) {
+            return { success: true, brand: response.data };
+        }
+        return { success: false, error: response.error };
+    } catch (error) {
+        console.error('Failed to create brand:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+// Update brand via API
+const updateBrandAPI = async (brandId: number, brandData: Partial<Brand>) => {
+    try {
+        const response = await apiFetch(`/api/brands/${brandId}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+                description: brandData.description,
+                location: brandData.location,
+                website: brandData.website,
+                contact_email: brandData.contactEmail,
+                contact_phone: brandData.contactPhone,
+                profile_image: brandData.profileImage,
+                cover_image: brandData.coverImage
+            })
+        });
+        
+        if (response.success) {
+            return { success: true, brand: response.data };
+        }
+        return { success: false, error: response.error };
+    } catch (error) {
+        console.error('Failed to update brand:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+// Follow/Unfollow brand via API
+const followBrandAPI = async (brandId: number, userId: number, action: 'follow' | 'unfollow') => {
+    try {
+        const response = await apiFetch('/api/brand-followers', {
+            method: action === 'follow' ? 'POST' : 'DELETE',
+            body: JSON.stringify({
+                brand_id: brandId,
+                user_id: userId
+            })
+        });
+        
+        if (response.success) {
+            return { success: true };
+        }
+        return { success: false, error: response.error };
+    } catch (error) {
+        console.error('Failed to follow brand:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+// Create brand post via API
+const createBrandPostAPI = async (brandId: number, postData: any) => {
+    try {
+        const formData = new FormData();
+        formData.append('user_id', postData.authorId || '');
+        formData.append('brand_id', brandId.toString());
+        formData.append('content', postData.text || '');
+        formData.append('visibility', postData.visibility || 'Public');
+        
+        if (postData.files && postData.files.length > 0) {
+            postData.files.forEach((file: File) => {
+                formData.append('media', file);
+            });
+        }
+        
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE_URL}/api/brand-posts`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            return { success: true, post: data };
+        }
+        return { success: false, error: data.message };
+    } catch (error) {
+        console.error('Failed to create brand post:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+// ========== CREATE BRAND MODAL ==========
 interface CreateBrandModalProps {
     currentUser: User;
     onClose: () => void;
-    onCreate: (brand: Partial<Brand>) => Promise<void>;
+    onCreate: (brand: Partial<Brand>) => Promise<{ success: boolean; error?: string }>;
 }
 
 const CreateBrandModal: React.FC<CreateBrandModalProps> = ({ currentUser, onClose, onCreate }) => {
@@ -104,25 +252,28 @@ const CreateBrandModal: React.FC<CreateBrandModalProps> = ({ currentUser, onClos
         setIsLoading(true);
         setError('');
         
-        try {
-            await onCreate({
-                name,
-                category,
-                description,
-                website,
-                location,
-                contactEmail,
-                contactPhone,
-                adminId: currentUser.id,
-                profileImage: `https://ui-avatars.com/api/?name=${name}&background=random`,
-                coverImage: 'https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-1.2.1&auto=format&fit=crop&w=1500&q=80',
-            });
+        const brandData = {
+            name,
+            category,
+            description,
+            website,
+            location,
+            contactEmail,
+            contactPhone,
+            adminId: currentUser.id,
+            profileImage: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`,
+            coverImage: 'https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-1.2.1&auto=format&fit=crop&w=1500&q=80',
+        };
+        
+        const result = await onCreate(brandData);
+        
+        if (result.success) {
             onClose();
-        } catch (err: any) {
-            setError(err.message || 'Failed to create brand');
-        } finally {
-            setIsLoading(false);
+        } else {
+            setError(result.error || 'Failed to create brand');
         }
+        
+        setIsLoading(false);
     };
 
     return (
@@ -137,7 +288,7 @@ const CreateBrandModal: React.FC<CreateBrandModalProps> = ({ currentUser, onClos
                 
                 <div className="p-4 overflow-y-auto space-y-4">
                     {error && (
-                        <div className="bg-red-900/30 border border-red-700 text-red-200 px-4 py-2 rounded-lg">
+                        <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-3 py-2 rounded-lg text-sm">
                             {error}
                         </div>
                     )}
@@ -151,7 +302,7 @@ const CreateBrandModal: React.FC<CreateBrandModalProps> = ({ currentUser, onClos
                                     className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2.5 text-[#E4E6EB] outline-none focus:border-[#1877F2]" 
                                     placeholder="Business or Brand Name" 
                                     value={name} 
-                                    onChange={e => setName(e.target.value)}
+                                    onChange={e => setName(e.target.value)} 
                                     disabled={isLoading}
                                 />
                             </div>
@@ -247,14 +398,9 @@ const CreateBrandModal: React.FC<CreateBrandModalProps> = ({ currentUser, onClos
                                 <button 
                                     onClick={handleSubmit} 
                                     disabled={isLoading}
-                                    className="flex-1 bg-[#42B72A] hover:bg-[#36A420] text-white py-2.5 rounded-lg font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="flex-1 bg-[#42B72A] hover:bg-[#36A420] text-white py-2.5 rounded-lg font-bold transition-colors disabled:opacity-50"
                                 >
-                                    {isLoading ? (
-                                        <span className="flex items-center justify-center gap-2">
-                                            <i className="fas fa-spinner fa-spin"></i>
-                                            Creating...
-                                        </span>
-                                    ) : 'Create Page'}
+                                    {isLoading ? 'Creating...' : 'Create Page'}
                                 </button>
                             </div>
                         </>
@@ -265,11 +411,11 @@ const CreateBrandModal: React.FC<CreateBrandModalProps> = ({ currentUser, onClos
     );
 };
 
-// --- EDIT BRAND MODAL ---
+// ========== EDIT BRAND MODAL ==========
 interface EditBrandModalProps {
     brand: Brand;
     onClose: () => void;
-    onUpdate: (updatedData: Partial<Brand>) => Promise<void>;
+    onUpdate: (brandId: number, updatedData: Partial<Brand>) => Promise<{ success: boolean; error?: string }>;
 }
 
 const EditBrandModal: React.FC<EditBrandModalProps> = ({ brand, onClose, onUpdate }) => {
@@ -285,14 +431,21 @@ const EditBrandModal: React.FC<EditBrandModalProps> = ({ brand, onClose, onUpdat
         setIsLoading(true);
         setError('');
         
-        try {
-            await onUpdate({ description, website, location, contactEmail, contactPhone });
+        const result = await onUpdate(brand.id, { 
+            description, 
+            website, 
+            location, 
+            contactEmail, 
+            contactPhone 
+        });
+        
+        if (result.success) {
             onClose();
-        } catch (err: any) {
-            setError(err.message || 'Failed to update brand');
-        } finally {
-            setIsLoading(false);
+        } else {
+            setError(result.error || 'Failed to update brand');
         }
+        
+        setIsLoading(false);
     };
 
     return (
@@ -306,15 +459,14 @@ const EditBrandModal: React.FC<EditBrandModalProps> = ({ brand, onClose, onUpdat
                 </div>
                 <div className="p-4 overflow-y-auto space-y-4">
                     {error && (
-                        <div className="bg-red-900/30 border border-red-700 text-red-200 px-4 py-2 rounded-lg">
+                        <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-3 py-2 rounded-lg text-sm">
                             {error}
                         </div>
                     )}
-                    
                     <div>
                         <label className="block text-[#B0B3B8] text-sm font-bold mb-1">Description</label>
                         <textarea 
-                            className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2.5 text-[#E4E6EB] outline-none h-24 resize-none disabled:opacity-50" 
+                            className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2.5 text-[#E4E6EB] outline-none h-24 resize-none" 
                             value={description} 
                             onChange={e => setDescription(e.target.value)}
                             disabled={isLoading}
@@ -324,7 +476,7 @@ const EditBrandModal: React.FC<EditBrandModalProps> = ({ brand, onClose, onUpdat
                         <label className="block text-[#B0B3B8] text-sm font-bold mb-1">Location</label>
                         <input 
                             type="text" 
-                            className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2.5 text-[#E4E6EB] outline-none disabled:opacity-50" 
+                            className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2.5 text-[#E4E6EB] outline-none" 
                             value={location} 
                             onChange={e => setLocation(e.target.value)}
                             disabled={isLoading}
@@ -334,7 +486,7 @@ const EditBrandModal: React.FC<EditBrandModalProps> = ({ brand, onClose, onUpdat
                         <label className="block text-[#B0B3B8] text-sm font-bold mb-1">Website</label>
                         <input 
                             type="text" 
-                            className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2.5 text-[#E4E6EB] outline-none disabled:opacity-50" 
+                            className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2.5 text-[#E4E6EB] outline-none" 
                             value={website} 
                             onChange={e => setWebsite(e.target.value)}
                             disabled={isLoading}
@@ -344,7 +496,7 @@ const EditBrandModal: React.FC<EditBrandModalProps> = ({ brand, onClose, onUpdat
                         <label className="block text-[#B0B3B8] text-sm font-bold mb-1">Contact Email</label>
                         <input 
                             type="email" 
-                            className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2.5 text-[#E4E6EB] outline-none disabled:opacity-50" 
+                            className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2.5 text-[#E4E6EB] outline-none" 
                             value={contactEmail} 
                             onChange={e => setContactEmail(e.target.value)}
                             disabled={isLoading}
@@ -354,7 +506,7 @@ const EditBrandModal: React.FC<EditBrandModalProps> = ({ brand, onClose, onUpdat
                         <label className="block text-[#B0B3B8] text-sm font-bold mb-1">Contact Phone</label>
                         <input 
                             type="tel" 
-                            className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2.5 text-[#E4E6EB] outline-none disabled:opacity-50" 
+                            className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-lg p-2.5 text-[#E4E6EB] outline-none" 
                             value={contactPhone} 
                             onChange={e => setContactPhone(e.target.value)}
                             disabled={isLoading}
@@ -363,14 +515,9 @@ const EditBrandModal: React.FC<EditBrandModalProps> = ({ brand, onClose, onUpdat
                     <button 
                         onClick={handleSave} 
                         disabled={isLoading}
-                        className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white py-2.5 rounded-lg font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white py-2.5 rounded-lg font-bold transition-colors disabled:opacity-50"
                     >
-                        {isLoading ? (
-                            <span className="flex items-center justify-center gap-2">
-                                <i className="fas fa-spinner fa-spin"></i>
-                                Saving...
-                            </span>
-                        ) : 'Save Changes'}
+                        {isLoading ? 'Saving...' : 'Save Changes'}
                     </button>
                 </div>
             </div>
@@ -378,52 +525,37 @@ const EditBrandModal: React.FC<EditBrandModalProps> = ({ brand, onClose, onUpdat
     );
 };
 
-// --- BRANDS PAGE COMPONENT ---
+// ========== BRANDS PAGE COMPONENT ==========
 interface BrandsPageProps {
     currentUser: User | null;
     brands: Brand[];
     posts: PostType[];
     users: User[]; 
-    onCreateBrand: (brand: Partial<Brand>) => Promise<void>;
-    onFollowBrand: (brandId: number) => void;
+    onCreateBrand: (brand: Partial<Brand>) => Promise<{ success: boolean; brand?: Brand; error?: string }>;
+    onFollowBrand: (brandId: number) => Promise<{ success: boolean; error?: string }>;
     onProfileClick: (id: number) => void;
-    onPostAsBrand: (brandId: number, content: any) => Promise<void>;
+    onPostAsBrand: (brandId: number, content: any) => Promise<{ success: boolean; post?: PostType; error?: string }>;
     onReact: (postId: number, type: any) => void;
     onShare: (postId: number) => void;
     onOpenComments: (postId: number) => void;
-    onUpdateBrand?: (brandId: number, data: Partial<Brand>) => Promise<void>;
-    onDeleteBrand?: (brandId: number) => Promise<void>;
+    onUpdateBrand?: (brandId: number, data: Partial<Brand>) => Promise<{ success: boolean; brand?: Brand; error?: string }>;
+    onDeleteBrand?: (brandId: number) => Promise<{ success: boolean; error?: string }>;
     onMessage?: (brandId: number) => void;
     onCreateEvent?: (brandId: number, event: Partial<Event>) => void;
-    onUpdateBrandImage?: (brandId: number, type: 'cover' | 'profile', file: File) => void;
-    onVerifyBrand?: (brandId: number) => void;
     initialBrandId?: number | null;
     onPlayAudioTrack?: (track: AudioTrack) => void;
+    getImageGridClass?: (imageCount: number) => string;
+    getImageItemClass?: (imageCount: number, index: number) => string;
 }
 
-export const BrandsPage: React.FC<BrandsPageProps> = ({ 
-    currentUser, 
-    brands, 
-    posts, 
-    users, 
-    onCreateBrand, 
-    onFollowBrand, 
-    onProfileClick, 
-    onPostAsBrand, 
-    onReact, 
-    onShare, 
-    onOpenComments,
-    onUpdateBrand, 
-    onDeleteBrand, 
-    onMessage, 
-    onCreateEvent, 
-    onUpdateBrandImage, 
-    onVerifyBrand, 
-    initialBrandId, 
-    onPlayAudioTrack
+const BrandsPage: React.FC<BrandsPageProps> = ({ 
+    currentUser, brands: initialBrands, posts, users, onCreateBrand, onFollowBrand, 
+    onProfileClick, onPostAsBrand, onReact, onShare, onOpenComments,
+    onUpdateBrand, onDeleteBrand, onMessage, onCreateEvent, initialBrandId, onPlayAudioTrack,
+    getImageGridClass, getImageItemClass
 }) => {
     const [view, setView] = useState<'list' | 'detail'>('list');
-    const [activeBrandId, setActiveBrandId] = useState<number | null>(initialBrandId || null);
+    const [activeBrandId, setActiveBrandId] = useState<number | null>(null);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showCreatePostModal, setShowCreatePostModal] = useState(false);
     const [showEditBrandModal, setShowEditBrandModal] = useState(false);
@@ -431,11 +563,24 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
     const [activeTab, setActiveTab] = useState<'Posts' | 'About' | 'Photos'>('Posts');
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    
+    const [brands, setBrands] = useState<Brand[]>(initialBrands);
+    const [error, setError] = useState('');
+
     const profileInputRef = useRef<HTMLInputElement>(null);
     const coverInputRef = useRef<HTMLInputElement>(null);
 
-    // Initialize view based on initialBrandId
+    // Fetch brands on component mount
+    useEffect(() => {
+        const loadBrands = async () => {
+            setIsLoading(true);
+            const fetchedBrands = await fetchBrands();
+            setBrands(fetchedBrands);
+            setIsLoading(false);
+        };
+        
+        loadBrands();
+    }, []);
+
     useEffect(() => {
         if (initialBrandId) {
             const brand = brands.find(b => b.id === initialBrandId);
@@ -454,33 +599,16 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
     const isAdmin = currentUser && activeBrand && activeBrand.adminId === currentUser.id;
     const isFollowing = currentUser && activeBrand && activeBrand.followers.includes(currentUser.id);
 
-    // Filter brands based on search
-    const filteredBrands = useMemo(() => {
-        let result = brands;
-        
-        // Filter by search query
-        if (searchQuery.trim()) {
-            result = result.filter(b => 
-                b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                b.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                b.description?.toLowerCase().includes(searchQuery.toLowerCase())
-            );
-        }
-        
-        return result;
-    }, [brands, searchQuery]);
-
-    // Get user's brands
-    const myBrands = useMemo(() => {
-        return currentUser ? filteredBrands.filter(b => b.adminId === currentUser.id) : [];
-    }, [filteredBrands, currentUser]);
-
-    // Get other brands (not managed by current user)
-    const otherBrands = useMemo(() => {
-        return currentUser 
-            ? filteredBrands.filter(b => b.adminId !== currentUser.id)
-            : filteredBrands;
-    }, [filteredBrands, currentUser]);
+    const brandPosts = useMemo(() => {
+        if (!activeBrand) return [];
+        return posts
+            .filter(p => p.brandId === activeBrand.id || p.authorId === activeBrand.id)
+            .sort((a,b) => (b.timestamp || 0) - (a.timestamp || 0))
+            .map(post => ({
+                ...post,
+                formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+            }));
+    }, [posts, activeBrand]);
 
     const handleBrandClick = (brandId: number) => {
         setActiveBrandId(brandId);
@@ -489,30 +617,56 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
         window.scrollTo(0, 0);
     };
 
-    // Handle create brand with API
     const handleCreateBrand = async (brandData: Partial<Brand>) => {
-        try {
-            await onCreateBrand(brandData);
+        const result = await onCreateBrand(brandData);
+        if (result.success && result.brand) {
+            setBrands(prev => [result.brand!, ...prev]);
             setShowCreateModal(false);
-        } catch (error) {
-            throw error;
+            return { success: true };
         }
+        return { success: false, error: result.error };
     };
 
-    // Handle update brand with API
-    const handleUpdateBrand = async (brandId: number, data: Partial<Brand>) => {
-        if (!onUpdateBrand) return;
+    const handleFollowBrand = async (brandId: number) => {
+        if (!currentUser) {
+            alert("Please login to follow brands");
+            return { success: false, error: "Not logged in" };
+        }
         
-        try {
-            await onUpdateBrand(brandId, data);
-            setShowEditBrandModal(false);
-        } catch (error) {
-            throw error;
+        const brand = brands.find(b => b.id === brandId);
+        if (!brand) return { success: false, error: "Brand not found" };
+        
+        const isCurrentlyFollowing = brand.followers.includes(currentUser.id);
+        const action = isCurrentlyFollowing ? 'unfollow' : 'follow';
+        
+        const result = await onFollowBrand(brandId);
+        if (result.success) {
+            setBrands(prev => prev.map(b => {
+                if (b.id === brandId) {
+                    const updatedFollowers = isCurrentlyFollowing
+                        ? b.followers.filter(id => id !== currentUser.id)
+                        : [...b.followers, currentUser.id];
+                    return { ...b, followers: updatedFollowers };
+                }
+                return b;
+            }));
+            return { success: true };
         }
+        return result;
     };
 
-    // Handle create post as brand
-    const handleCreatePostAsBrand = async (
+    const handleUpdateBrand = async (brandId: number, data: Partial<Brand>) => {
+        if (!onUpdateBrand) return { success: false, error: "Update function not provided" };
+        
+        const result = await onUpdateBrand(brandId, data);
+        if (result.success && result.brand) {
+            setBrands(prev => prev.map(b => b.id === brandId ? result.brand! : b));
+            return { success: true };
+        }
+        return result;
+    };
+
+    const handleCreatePost = async (
         text: string, 
         files: File[] | null, 
         type: any, 
@@ -523,94 +677,76 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
         background?: string, 
         linkPreview?: LinkPreview
     ) => {
-        if (!activeBrand) return;
+        if (!activeBrand) return { success: false, error: "No active brand" };
         
-        try {
-            await onPostAsBrand(activeBrand.id, { 
-                text, 
-                files, 
-                type, 
-                visibility, 
-                location, 
-                feeling, 
-                taggedUsers, 
-                background, 
-                linkPreview 
-            });
+        const result = await onPostAsBrand(activeBrand.id, { 
+            text, 
+            files, 
+            type, 
+            visibility, 
+            location, 
+            feeling, 
+            taggedUsers, 
+            background, 
+            linkPreview 
+        });
+        
+        if (result.success) {
             setShowCreatePostModal(false);
-        } catch (error) {
-            console.error('Error creating post:', error);
-            alert('Failed to create post');
+            return { success: true };
         }
+        return result;
     };
 
-    // Handle image change
-    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'cover' | 'profile') => {
-        if (!e.target.files || !e.target.files[0] || !activeBrand || !onUpdateBrandImage) return;
+    const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>, type: 'cover' | 'profile') => {
+        if (!e.target.files || !e.target.files[0] || !activeBrand || !onUpdateBrand) return;
         
         const file = e.target.files[0];
+        const url = URL.createObjectURL(file);
         
-        try {
-            onUpdateBrandImage(activeBrand.id, type, file);
-        } catch (error) {
-            console.error('Error updating image:', error);
+        // Immediate UI update
+        setBrands(prev => prev.map(b => 
+            b.id === activeBrand.id 
+                ? (type === 'cover' ? { ...b, coverImage: url } : { ...b, profileImage: url })
+                : b
+        ));
+        
+        // API update
+        const result = await onUpdateBrand(activeBrand.id, 
+            type === 'cover' ? { coverImage: url } : { profileImage: url }
+        );
+        
+        if (!result.success) {
+            // Revert UI update on error
+            setBrands(prev => prev.map(b => 
+                b.id === activeBrand.id ? activeBrand : b
+            ));
             alert('Failed to update image');
         }
     };
 
-    // Handle follow brand
-    const handleFollowBrandWithAPI = async (brandId: number) => {
-        if (!currentUser) {
-            alert("Login to follow");
-            return;
-        }
-        
-        try {
-            onFollowBrand(brandId);
-        } catch (error) {
-            console.error('Error following brand:', error);
-            alert('Failed to follow brand');
-        }
-    };
-
-    // Handle delete brand
-    const handleDeleteBrand = async (brandId: number) => {
-        if (!onDeleteBrand || !window.confirm('Are you sure you want to delete this brand? This action cannot be undone.')) {
-            return;
-        }
-        
-        try {
-            await onDeleteBrand(brandId);
-            setView('list');
-            setActiveBrandId(null);
-        } catch (error) {
-            console.error('Error deleting brand:', error);
-            alert('Failed to delete brand');
-        }
-    };
-
-    // Handle verify brand
-    const handleVerifyBrand = async (brandId: number) => {
-        if (!onVerifyBrand) return;
-        
-        try {
-            await onVerifyBrand(brandId);
-            alert(`Brand ${activeBrand?.isVerified ? 'unverified' : 'verified'} successfully!`);
-        } catch (error) {
-            console.error('Error verifying brand:', error);
-            alert('Failed to verify brand');
-        }
-    };
-
-    // Get brand posts
-    const brandPosts = useMemo(() => {
-        if (!activeBrand) return [];
-        return posts
-            .filter(p => p.authorId === activeBrand.id)
-            .sort((a,b) => (b.timestamp || 0) - (a.timestamp || 0));
-    }, [posts, activeBrand]);
+    if (isLoading && view === 'list') {
+        return (
+            <div className="w-full max-w-[1000px] mx-auto p-4 font-sans pb-20">
+                <div className="flex items-center justify-center h-64">
+                    <div className="w-12 h-12 border-4 border-[#1877F2] border-t-transparent rounded-full animate-spin"></div>
+                </div>
+            </div>
+        );
+    }
 
     if (view === 'list' || !activeBrand) {
+        const myBrands = currentUser ? brands.filter(b => b.adminId === currentUser.id) : [];
+        let otherBrands = currentUser ? brands.filter(b => b.adminId !== currentUser.id) : brands;
+
+        if (searchQuery.trim()) {
+            otherBrands = otherBrands.filter(b => 
+                b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                b.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                b.description?.toLowerCase().includes(searchQuery.toLowerCase())
+            );
+        }
+
         return (
             <div className="w-full max-w-[1000px] mx-auto p-4 font-sans pb-20">
                 <div className="flex flex-col gap-4 mb-6 bg-[#242526] p-4 rounded-xl border border-[#3E4042]">
@@ -677,14 +813,14 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
                                         </div>
                                         <div className="mt-8">
                                             <h4 className="font-bold text-lg text-[#E4E6EB] hover:underline cursor-pointer" onClick={() => handleBrandClick(brand.id)}>
-                                                {brand.name} 
-                                                {brand.isVerified && <i className="fas fa-check-circle text-[#1877F2] text-sm ml-1"></i>}
+                                                {brand.name} {brand.isVerified && <i className="fas fa-check-circle text-[#1877F2] text-sm ml-1"></i>}
                                             </h4>
                                             <p className="text-[#B0B3B8] text-xs mb-1">{brand.category}</p>
                                             <p className="text-[#B0B3B8] text-sm line-clamp-2 mb-4">{brand.description}</p>
                                             <button 
-                                                onClick={() => handleFollowBrandWithAPI(brand.id)} 
-                                                className="w-full bg-[#263951] text-[#F3425F] hover:bg-[#2A3F5A] font-bold py-2 rounded-lg transition-colors"
+                                                onClick={() => handleFollowBrand(brand.id)} 
+                                                disabled={!currentUser}
+                                                className="w-full bg-[#263951] text-[#F3425F] hover:bg-[#2A3F5A] font-bold py-2 rounded-lg transition-colors disabled:opacity-50"
                                             >
                                                 {currentUser && brand.followers.includes(currentUser.id) ? 'Following' : 'Follow'}
                                             </button>
@@ -694,16 +830,10 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
                             ))}
                         </div>
                     ) : (
-                        <div className="text-center py-10">
-                            <p className="text-[#B0B3B8]">No brands found.</p>
-                            {searchQuery && (
-                                <button 
-                                    onClick={() => setSearchQuery('')} 
-                                    className="mt-2 text-[#1877F2] hover:underline"
-                                >
-                                    Clear search
-                                </button>
-                            )}
+                        <div className="bg-[#242526] rounded-xl p-8 text-center border border-[#3E4042]">
+                            <p className="text-[#B0B3B8]">
+                                {searchQuery ? 'No brands found matching your search.' : 'No brands available.'}
+                            </p>
                         </div>
                     )}
                 </div>
@@ -719,7 +849,6 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
         );
     }
 
-    // Brand Detail View
     return (
         <div className="w-full bg-[#18191A] min-h-screen pb-10 font-sans">
             <input type="file" ref={profileInputRef} className="hidden" accept="image/*" onChange={(e) => handleImageChange(e, 'profile')} />
@@ -753,45 +882,32 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
                                     {activeBrand.name} 
                                     {activeBrand.isVerified && <i className="fas fa-check-circle text-[#1877F2] text-[20px]"></i>}
                                 </h1>
-                                <p className="text-[#B0B3B8] font-semibold text-[15px]">
-                                    {activeBrand.category} • {activeBrand.location} • {activeBrand.followers.length} followers
-                                </p>
+                                <p className="text-[#B0B3B8] font-semibold text-[15px]">{activeBrand.category} • {activeBrand.location} • {activeBrand.followers.length} followers</p>
                             </div>
 
-                            <div className="flex gap-2 mt-4 md:mt-0 w-full md:w-auto flex-wrap">
+                            <div className="flex gap-2 mt-4 md:mt-0 w-full md:w-auto">
                                 {isAdmin ? (
                                     <>
-                                        <button onClick={() => setShowCreateEventModal(true)} className="bg-[#3A3B3C] text-[#E4E6EB] px-4 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 hover:bg-[#4E4F50] flex-1 md:flex-none min-w-[100px]">
+                                        <button onClick={() => setShowCreateEventModal(true)} className="bg-[#3A3B3C] text-[#E4E6EB] px-4 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 hover:bg-[#4E4F50] flex-1 md:flex-none">
                                             <i className="fas fa-plus"></i> Event
                                         </button>
-                                        <button onClick={() => setShowEditBrandModal(true)} className="bg-[#3A3B3C] text-[#E4E6EB] px-4 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 hover:bg-[#4E4F50] flex-1 md:flex-none min-w-[100px]">
+                                        <button onClick={() => setShowEditBrandModal(true)} className="bg-[#3A3B3C] text-[#E4E6EB] px-4 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 hover:bg-[#4E4F50] flex-1 md:flex-none">
                                             <i className="fas fa-pen"></i> Edit Page
                                         </button>
-                                        {currentUser?.role === 'admin' && (
-                                            <button onClick={() => onVerifyBrand && handleVerifyBrand(activeBrand.id)} className="bg-blue-900/50 text-blue-300 px-4 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 hover:bg-blue-800/50 flex-1 md:flex-none min-w-[100px]">
-                                                <i className="fas fa-check-circle"></i> {activeBrand.isVerified ? 'Unverify' : 'Verify'}
-                                            </button>
-                                        )}
                                     </>
                                 ) : (
                                     <>
                                         <button 
-                                            onClick={() => handleFollowBrandWithAPI(activeBrand.id)} 
-                                            className={`${isFollowing ? 'bg-[#3A3B3C] text-[#E4E6EB]' : 'bg-[#1877F2] text-white'} px-6 py-2 rounded-lg font-bold text-base hover:opacity-90 flex-1 md:flex-none min-w-[120px] transition-colors`}
+                                            onClick={() => handleFollowBrand(activeBrand.id)} 
+                                            className={`${isFollowing ? 'bg-[#3A3B3C] text-[#E4E6EB]' : 'bg-[#1877F2] text-white'} px-6 py-2 rounded-lg font-bold text-base hover:opacity-90 flex-1 md:flex-none transition-colors`}
                                         >
                                             {isFollowing ? 'Following' : 'Follow'}
                                         </button>
-                                        <button 
-                                            onClick={() => onMessage && onMessage(activeBrand.id)} 
-                                            className="bg-[#3A3B3C] text-[#E4E6EB] px-4 py-2 rounded-lg font-bold text-base hover:bg-[#4E4F50] flex-1 md:flex-none min-w-[120px]"
-                                        >
+                                        <button onClick={() => onMessage && onMessage(activeBrand.id)} className="bg-[#3A3B3C] text-[#E4E6EB] px-4 py-2 rounded-lg font-bold text-base hover:bg-[#4E4F50] flex-1 md:flex-none">
                                             <i className="fab fa-facebook-messenger mr-1"></i> Message
                                         </button>
                                         {activeBrand.contactPhone && (
-                                            <a 
-                                                href={`tel:${activeBrand.contactPhone}`} 
-                                                className="bg-[#25D366] text-white px-4 py-2 rounded-lg font-bold text-base hover:bg-[#20bd5a] flex items-center justify-center gap-2 flex-1 md:flex-none min-w-[120px] no-underline"
-                                            >
+                                            <a href={`tel:${activeBrand.contactPhone}`} className="bg-[#25D366] text-white px-4 py-2 rounded-lg font-bold text-base hover:bg-[#20bd5a] flex items-center justify-center gap-2 flex-1 md:flex-none no-underline">
                                                 <i className="fab fa-whatsapp"></i> WhatsApp
                                             </a>
                                         )}
@@ -803,11 +919,7 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
                         <div className="border-t border-[#3E4042] mt-4"></div>
                         <div className="flex items-center gap-1 pt-1 overflow-x-auto">
                             {['Posts', 'About', 'Photos'].map(tab => (
-                                <div 
-                                    key={tab} 
-                                    onClick={() => setActiveTab(tab as any)} 
-                                    className={`px-4 py-3 cursor-pointer font-semibold text-base border-b-[3px] transition-colors whitespace-nowrap ${activeTab === tab ? 'text-[#1877F2] border-[#1877F2]' : 'text-[#B0B3B8] border-transparent hover:bg-[#3A3B3C] rounded-t-lg'}`}
-                                >
+                                <div key={tab} onClick={() => setActiveTab(tab as any)} className={`px-4 py-3 cursor-pointer font-semibold text-base border-b-[3px] transition-colors whitespace-nowrap ${activeTab === tab ? 'text-[#1877F2] border-[#1877F2]' : 'text-[#B0B3B8] border-transparent hover:bg-[#3A3B3C] rounded-t-lg'}`}>
                                     {tab}
                                 </div>
                             ))}
@@ -821,7 +933,7 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
                     <div className="bg-[#242526] rounded-xl p-4 shadow-sm border border-[#3E4042]">
                         <h2 className="text-xl font-bold text-[#E4E6EB] mb-4">About</h2>
                         <div className="flex flex-col gap-3 text-[#E4E6EB] text-[15px]">
-                            <p>{activeBrand.description || 'No description provided.'}</p>
+                            <p>{activeBrand.description}</p>
                             <div className="h-[1px] bg-[#3E4042] w-full my-2"></div>
                             <div className="flex items-center gap-3 text-[#B0B3B8]">
                                 <i className="fas fa-info-circle w-5 text-center"></i>
@@ -834,12 +946,7 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
                             {activeBrand.website && (
                                 <div className="flex items-center gap-3 text-[#B0B3B8]">
                                     <i className="fas fa-globe w-5 text-center"></i>
-                                    <a 
-                                        href={activeBrand.website.startsWith('http') ? activeBrand.website : `https://${activeBrand.website}`} 
-                                        target="_blank" 
-                                        rel="noreferrer" 
-                                        className="text-[#1877F2] hover:underline truncate"
-                                    >
+                                    <a href={activeBrand.website.startsWith('http') ? activeBrand.website : `https://${activeBrand.website}`} target="_blank" rel="noreferrer" className="text-[#1877F2] hover:underline truncate">
                                         {activeBrand.website}
                                     </a>
                                 </div>
@@ -852,27 +959,12 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
                             )}
                             {isAdmin && (
                                 <button 
-                                    className="w-full bg-[#3A3B3C] hover:bg-[#4E4F50] text-[#E4E6EB] font-semibold py-2 rounded-md transition-colors text-sm mt-2"
+                                    className="w-full bg-[#3A3B3C] hover:bg-[#4E4F50] text-[#E4E6EB] font-semibold py-2 rounded-md transition-colors text-sm mt-2" 
                                     onClick={() => setShowEditBrandModal(true)}
                                 >
                                     Edit Details
                                 </button>
                             )}
-                        </div>
-                    </div>
-                    
-                    {/* Stats Widget */}
-                    <div className="bg-[#242526] rounded-xl p-4 shadow-sm border border-[#3E4042]">
-                        <h2 className="text-xl font-bold text-[#E4E6EB] mb-4">Stats</h2>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="text-center p-3 bg-[#3A3B3C] rounded-lg">
-                                <div className="text-[#E4E6EB] font-bold text-2xl">{activeBrand.followers.length}</div>
-                                <div className="text-[#B0B3B8] text-xs">Followers</div>
-                            </div>
-                            <div className="text-center p-3 bg-[#3A3B3C] rounded-lg">
-                                <div className="text-[#E4E6EB] font-bold text-2xl">{brandPosts.length}</div>
-                                <div className="text-[#B0B3B8] text-xs">Posts</div>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -885,10 +977,7 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
                                     <div className="bg-[#242526] rounded-xl p-3 md:p-4 mb-4 shadow-sm border border-[#3E4042]">
                                         <div className="flex gap-2 mb-3">
                                             <img src={activeBrand.profileImage} alt="" className="w-10 h-10 rounded-full object-cover cursor-pointer border border-[#3E4042]" />
-                                            <div 
-                                                className="flex-1 bg-[#3A3B3C] rounded-full px-3 md:px-4 py-2 hover:bg-[#4E4F50] cursor-pointer flex items-center transition-colors" 
-                                                onClick={() => setShowCreatePostModal(true)}
-                                            >
+                                            <div className="flex-1 bg-[#3A3B3C] rounded-full px-3 md:px-4 py-2 hover:bg-[#4E4F50] cursor-pointer flex items-center transition-colors" onClick={() => setShowCreatePostModal(true)}>
                                                 <span className="text-[#B0B3B8] text-[17px] truncate">What new brand idea Today?</span>
                                             </div>
                                         </div>
@@ -913,28 +1002,37 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
                                             currentUser={{...currentUser, name: activeBrand.name, profileImage: activeBrand.profileImage} as User} 
                                             users={users} 
                                             onClose={() => setShowCreatePostModal(false)}
-                                            onCreatePost={handleCreatePostAsBrand}
+                                            onCreatePost={handleCreatePost}
                                         />
                                     )}
                                 </>
                             )}
                             <div className="space-y-4">
-                                {brandPosts.length > 0 ? brandPosts.map(post => (
-                                    <Post 
-                                        key={post.id}
-                                        post={post}
-                                        author={{...activeBrand, type: 'brand'}} 
-                                        currentUser={currentUser}
-                                        users={users} 
-                                        onProfileClick={onProfileClick}
-                                        onReact={onReact}
-                                        onShare={onShare}
-                                        onOpenComments={onOpenComments}
-                                        onVideoClick={() => {}}
-                                        onViewImage={() => {}}
-                                        onPlayAudioTrack={onPlayAudioTrack}
-                                    />
-                                )) : (
+                                {brandPosts.length > 0 ? brandPosts.map(post => {
+                                    const postWithTime = {
+                                        ...post,
+                                        formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+                                    };
+                                    
+                                    return (
+                                        <Post 
+                                            key={post.id}
+                                            post={postWithTime}
+                                            author={{...activeBrand, type: 'brand'}} 
+                                            currentUser={currentUser}
+                                            users={users} 
+                                            onProfileClick={onProfileClick}
+                                            onReact={onReact}
+                                            onShare={onShare}
+                                            onOpenComments={onOpenComments}
+                                            onVideoClick={() => {}}
+                                            onViewImage={() => {}}
+                                            onPlayAudioTrack={onPlayAudioTrack}
+                                            getImageGridClass={getImageGridClass}
+                                            getImageItemClass={getImageItemClass}
+                                        />
+                                    );
+                                }) : (
                                     <div className="bg-[#242526] rounded-xl p-8 text-center border border-[#3E4042] mx-4 md:mx-0">
                                         <p className="text-[#B0B3B8]">No posts yet.</p>
                                     </div>
@@ -961,18 +1059,18 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
                                 }
                             </div>
                             {brandPosts.filter(p => (p.type === 'image' && (p.images?.length || p.image))).length === 0 && 
-                                <p className="text-[#B0B3B8] text-center py-8">No photos available.</p>
+                                <p className="text-[#B0B3B8]">No photos available.</p>
                             }
                         </div>
                     )}
                 </div>
             </div>
 
-            {showEditBrandModal && activeBrand && (
+            {showEditBrandModal && activeBrand && onUpdateBrand && (
                 <EditBrandModal 
                     brand={activeBrand} 
                     onClose={() => setShowEditBrandModal(false)} 
-                    onUpdate={(data) => handleUpdateBrand(activeBrand.id, data)} 
+                    onUpdate={(brandId, data) => handleUpdateBrand(brandId, data)} 
                 />
             )}
 
@@ -987,5 +1085,4 @@ export const BrandsPage: React.FC<BrandsPageProps> = ({
     );
 };
 
-// PROFESSIONAL EXPORT STATEMENT
 export { BrandsPage };
