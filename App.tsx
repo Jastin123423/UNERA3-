@@ -261,6 +261,39 @@ const createNotification = (
     };
 };
 
+// ========== IMAGE RENDERING UTILITIES ==========
+// Facebook-style image grid arrangement helper
+const getImageGridClass = (imageCount: number): string => {
+    switch (imageCount) {
+        case 1:
+            return 'w-full h-auto max-h-[500px] object-contain'; // Single image - full width
+        case 2:
+            return 'grid grid-cols-2 gap-1';
+        case 3:
+            return 'grid grid-cols-2 gap-1';
+        case 4:
+            return 'grid grid-cols-2 gap-1';
+        default:
+            return 'grid grid-cols-2 gap-1';
+    }
+};
+
+const getImageItemClass = (imageCount: number, index: number): string => {
+    switch (imageCount) {
+        case 1:
+            return 'w-full'; // Full width for single image
+        case 2:
+            return 'aspect-square'; // Square for 2 images
+        case 3:
+            if (index === 0) return 'row-span-2 aspect-square'; // First image takes 2 rows
+            return 'aspect-square'; // Others square
+        case 4:
+            return 'aspect-square'; // All square for 4 images
+        default:
+            return 'aspect-square'; // Default square
+    }
+};
+
 // ========== MAIN APP COMPONENT ==========
 export default function App({ initialData, initialPath }: { initialData?: any, initialPath?: string }) {
     const { t } = useLanguage();
@@ -2635,7 +2668,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         );
     };
 
-    // Function to render regular posts with brand support
+    // Function to render regular posts with brand support and Facebook-style image grids
     const renderRegularPost = (post: PostType, author: any, isFollowing?: boolean) => {
         const isBrandAuthor = author?.type === 'brand';
         const isFollowingBrand = isBrandAuthor && currentUser ? 
@@ -2645,7 +2678,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         // Ensure post has formattedTime
         const postWithFormattedTime = {
             ...post,
-            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now()),
+            // Ensure images property exists and is properly formatted
+            images: post.images ? post.images : undefined
         };
         
         return (
@@ -2677,6 +2712,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 onHashtagClick={handleTagClick} 
                 onDeletePost={handleDeletePost} 
                 isAdmin={isAdmin}
+                // Pass image grid utilities
+                getImageGridClass={getImageGridClass}
+                getImageItemClass={getImageItemClass}
             />
         );
     };
@@ -2881,6 +2919,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                         );
                                     }}
                                     renderRegularPost={renderRegularPost}
+                                    getImageGridClass={getImageGridClass}
+                                    getImageItemClass={getImageItemClass}
                                 />
                             )}
                             
@@ -2927,6 +2967,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                                 onHashtagClick={handleTagClick}
                                                 onDeletePost={handleDeletePost}
                                                 isAdmin={isAdmin}
+                                                getImageGridClass={getImageGridClass}
+                                                getImageItemClass={getImageItemClass}
                                             />
                                         );
                                     })()}
@@ -3064,6 +3106,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onRemoveMember={handleRemoveMember}
                                     onUpdateGroupSettings={handleUpdateGroupSettings}
                                     onPlayAudioTrack={handlePlayTrack}
+                                    getImageGridClass={getImageGridClass}
+                                    getImageItemClass={getImageItemClass}
                                 />
                             )}
                             
@@ -3103,6 +3147,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                     onVerifyBrand={handleVerifyBrand}
                                     initialBrandId={activeBrandId}
                                     onPlayAudioTrack={handlePlayTrack}
+                                    getImageGridClass={getImageGridClass}
+                                    getImageItemClass={getImageItemClass}
                                 />
                             )}
                             
