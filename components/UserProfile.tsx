@@ -1,13 +1,139 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { User, Post as PostType, ReactionType, Reel, AudioTrack, Song, Episode } from '../types';
-import { CreatePost, Post, CreatePostModal } from './Feed';
+
+// API client function (matching App.tsx pattern)
+const API_BASE_URL = 'https://unera.social';
+
+const apiFetch = async (endpoint: string, options: RequestInit = {}, withAuth = true) => {
+    const url = `${API_BASE_URL}${endpoint}`;
+    const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+        ...options.headers,
+    };
+
+    if (withAuth) {
+        const token = localStorage.getItem('authToken');
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+    }
+
+    try {
+        const response = await fetch(url, {
+            ...options,
+            headers,
+            mode: 'cors',
+        });
+
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('API did not return JSON');
+        }
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || `API Error: ${response.status}`);
+        }
+
+        if (Array.isArray(data)) {
+            return { data: data, success: true };
+        }
+        
+        return data;
+    } catch (error) {
+        console.error('API Error for', endpoint, ':', error);
+        return { data: [], success: false, error: error.message };
+    }
+};
+
+// Helper function to format relative time
+const formatRelativeTime = (timestamp: number): string => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    
+    if (diff < 0 || !timestamp) return 'Just now';
+    
+    const diffInSeconds = Math.floor(diff / 1000);
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    const diffInDays = Math.floor(diffInHours / 24);
+    const diffInWeeks = Math.floor(diffInDays / 7);
+    const diffInMonths = Math.floor(diffInDays / 30);
+    const diffInYears = Math.floor(diffInDays / 365);
+    
+    if (diffInSeconds < 60) {
+        return diffInSeconds < 10 ? 'Just now' : `${diffInSeconds}s`;
+    } else if (diffInMinutes < 60) {
+        return `${diffInMinutes}m`;
+    } else if (diffInHours < 24) {
+        return `${diffInHours}h`;
+    } else if (diffInDays < 7) {
+        return `${diffInDays}d`;
+    } else if (diffInDays < 30) {
+        return `${diffInWeeks}w`;
+    } else if (diffInDays < 365) {
+        return `${diffInMonths}mo`;
+    } else {
+        return `${diffInYears}y`;
+    }
+};
+
+// Transform API data
+const transformUserFromAPI = (apiUser: any): User => {
+    return {
+        id: apiUser.id,
+        name: apiUser.name || `User ${apiUser.id}`,
+        email: apiUser.email || '',
+        username: apiUser.username || `user${apiUser.id}`,
+        password: apiUser.password || '',
+        profileImage: apiUser.profile_image || apiUser.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(apiUser.name || 'User')}&background=random`,
+        coverImage: apiUser.cover_image || 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f',
+        bio: apiUser.bio || '',
+        location: apiUser.location || '',
+        followers: apiUser.followers || [],
+        following: apiUser.following || [],
+        posts: apiUser.posts || [],
+        isVerified: apiUser.is_verified || false,
+        isRestricted: apiUser.is_restricted || false,
+        role: apiUser.role || 'user',
+        birthDate: apiUser.birth_date,
+        joinedDate: apiUser.created_at || apiUser.joined_date || new Date().toISOString()
+    };
+};
+
+const transformPostFromAPI = (apiPost: any): PostType => {
+    const timestamp = new Date(apiPost.created_at).getTime() || Date.now();
+    
+    return {
+        id: apiPost.id,
+        authorId: apiPost.user_id || apiPost.authorId || 1,
+        content: apiPost.content || '',
+        images: apiPost.media_url && apiPost.media_type === 'image' ? [apiPost.media_url] : undefined,
+        video: apiPost.media_url && apiPost.media_type === 'video' ? apiPost.media_url : undefined,
+        timestamp: timestamp,
+        formattedTime: formatRelativeTime(timestamp),
+        createdAt: timestamp,
+        reactions: apiPost.reactions || [],
+        comments: apiPost.comments || [],
+        shares: apiPost.shares || 0,
+        views: apiPost.views || 0,
+        type: apiPost.media_type || apiPost.type || 'text',
+        visibility: apiPost.visibility || 'Public',
+        location: apiPost.location,
+        feeling: apiPost.feeling,
+        taggedUsers: apiPost.tagged_users,
+        background: apiPost.background,
+        linkPreview: apiPost.link_preview,
+        audioTrack: apiPost.audio_track
+    };
+};
 
 // --- EDIT PROFILE MODAL ---
 interface EditProfileModalProps {
     user: User;
     onClose: () => void;
-    onSave: (updatedData: Partial<User>) => void;
+    onSave: (updatedData: Partial<User>) => Promise<void>;
 }
 
 const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClose, onSave }) => {
@@ -16,16 +142,27 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClose, onSa
     const [education, setEducation] = useState(user.education || '');
     const [location, setLocation] = useState(user.location || '');
     const [website, setWebsite] = useState(user.website || '');
+    const [isSaving, setIsSaving] = useState(false);
+    const [error, setError] = useState('');
     
-    const handleSave = () => {
-        onSave({
-            bio,
-            work,
-            education,
-            location,
-            website
-        });
-        onClose();
+    const handleSave = async () => {
+        setIsSaving(true);
+        setError('');
+        
+        try {
+            await onSave({
+                bio,
+                work,
+                education,
+                location,
+                website
+            });
+            onClose();
+        } catch (err: any) {
+            setError(err.message || 'Failed to update profile');
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     return (
@@ -39,6 +176,12 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClose, onSa
                 </div>
                 
                 <div className="p-4 overflow-y-auto space-y-4">
+                    {error && (
+                        <div className="bg-red-900/30 border border-red-700 text-red-200 px-4 py-2 rounded-lg">
+                            {error}
+                        </div>
+                    )}
+                    
                     <div>
                         <div className="flex justify-between items-center mb-1">
                              <label className="text-[#E4E6EB] font-bold text-sm">Bio</label>
@@ -84,7 +227,18 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClose, onSa
                 </div>
 
                 <div className="p-4 border-t border-[#3E4042] bg-[#242526] rounded-b-xl">
-                    <button onClick={handleSave} className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white py-2.5 rounded-lg font-bold shadow-md transition-colors">Save Details</button>
+                    <button 
+                        onClick={handleSave} 
+                        disabled={isSaving}
+                        className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white py-2.5 rounded-lg font-bold shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isSaving ? (
+                            <span className="flex items-center justify-center gap-2">
+                                <i className="fas fa-spinner fa-spin"></i>
+                                Saving...
+                            </span>
+                        ) : 'Save Details'}
+                    </button>
                 </div>
             </div>
         </div>
@@ -93,10 +247,10 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClose, onSa
 
 interface UserProfileProps {
     user: User;
-    currentUser: User | null; // Allow null
+    currentUser: User | null;
     users: User[];
     posts: PostType[];
-    reels?: Reel[]; // Added Reels prop
+    reels?: Reel[];
     songs?: Song[];
     episodes?: Episode[];
     likedTracks?: string[];
@@ -106,7 +260,6 @@ interface UserProfileProps {
     onComment: (postId: number, text: string) => void;
     onShare: (postId: number) => void;
     onMessage: (id: number) => void;
-    // UPDATED: Changed to accept multiple files
     onCreatePost: (text: string, files: File[] | null, type: any, visibility: any, location?: string, feeling?: string, taggedUsers?: number[], background?: string, linkPreview?: any) => void;
     onUpdateProfileImage: (file: File) => void;
     onUpdateCoverImage: (file: File) => void;
@@ -135,13 +288,18 @@ interface UserProfileProps {
     // Render functions for different post types
     renderMusicPost?: (post: PostType, author: any) => React.ReactNode;
     renderRegularPost?: (post: PostType, author: any, isFollowing?: boolean) => React.ReactNode;
+    
+    // New props for API integration
+    onFetchUserPosts?: (userId: number) => Promise<PostType[]>;
+    onFetchUserReels?: (userId: number) => Promise<Reel[]>;
+    onFetchUserFollowers?: (userId: number) => Promise<User[]>;
+    onFetchUserFollowing?: (userId: number) => Promise<User[]>;
 }
 
 // Helper function to get song for post
 const getSongForPost = (post: PostType, songs?: Song[], episodes?: Episode[]) => {
     if (!post.audioTrack || !songs || !episodes) return null;
     
-    // Check songs array first
     const song = songs.find(s => s.id === post.audioTrack?.id);
     if (song) {
         return {
@@ -156,13 +314,12 @@ const getSongForPost = (post: PostType, songs?: Song[], episodes?: Episode[]) =>
                 likes: song.likes || post.audioTrack.likes || 0,
                 shares: song.shares || post.audioTrack.shares || 0,
                 comments: song.comments || 0,
-                downloads: song.stats?.downloads || 0,
-                reelsUse: song.stats?.reelsUse || 0
+                downloads: 0,
+                reelsUse: 0
             }
         };
     }
     
-    // Check episodes array
     const episode = episodes.find(e => e.id === post.audioTrack?.id);
     if (episode) {
         return {
@@ -184,8 +341,8 @@ const getSongForPost = (post: PostType, songs?: Song[], episodes?: Episode[]) =>
                 likes: episode.likes || post.audioTrack.likes || 0,
                 shares: episode.shares || post.audioTrack.shares || 0,
                 comments: episode.comments || 0,
-                downloads: episode.stats?.downloads || 0,
-                reelsUse: episode.stats?.reelsUse || 0
+                downloads: 0,
+                reelsUse: 0
             }
         };
     }
@@ -229,29 +386,196 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     onTrackComment,
     onTrackShare,
     renderMusicPost,
-    renderRegularPost
+    renderRegularPost,
+    // API functions
+    onFetchUserPosts,
+    onFetchUserReels,
+    onFetchUserFollowers,
+    onFetchUserFollowing
 }) => {
     const [activeTab, setActiveTab] = useState('Posts');
     const [showCreatePostModal, setShowCreatePostModal] = useState(false);
     const [showEditProfile, setShowEditProfile] = useState(false);
-    
-    const userPosts = posts.filter(post => post.authorId === user.id);
-    const userReels = reels.filter(reel => reel.userId === user.id);
+    const [isLoading, setIsLoading] = useState(false);
+    const [userPosts, setUserPosts] = useState<PostType[]>(() => posts.filter(post => post.authorId === user.id));
+    const [userReels, setUserReels] = useState<Reel[]>(() => reels.filter(reel => reel.userId === user.id));
+    const [followers, setFollowers] = useState<User[]>(() => users.filter(u => user.followers.includes(u.id)));
+    const [following, setFollowing] = useState<User[]>(() => users.filter(u => user.following.includes(u.id)));
     
     const isCurrentUser = currentUser && user.id === currentUser.id;
     const isFollowing = currentUser ? currentUser.following.includes(user.id) : false;
-    const followerCount = user.followers.length;
-    const followersList = users.filter(u => user.followers.includes(u.id));
+    const followerCount = followers.length;
+    
     const profileInputRef = useRef<HTMLInputElement>(null);
     const coverInputRef = useRef<HTMLInputElement>(null);
     
     const isAdmin = currentUser?.role === 'admin';
 
+    // Fetch user data when component mounts or user changes
+    useEffect(() => {
+        const fetchUserData = async () => {
+            setIsLoading(true);
+            try {
+                // Fetch user posts if function provided
+                if (onFetchUserPosts) {
+                    const postsData = await onFetchUserPosts(user.id);
+                    setUserPosts(postsData.map(post => ({
+                        ...post,
+                        formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+                    })));
+                } else {
+                    // Use local filtering as fallback
+                    setUserPosts(posts.filter(post => post.authorId === user.id).map(post => ({
+                        ...post,
+                        formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+                    })));
+                }
+                
+                // Fetch user reels if function provided
+                if (onFetchUserReels) {
+                    const reelsData = await onFetchUserReels(user.id);
+                    setUserReels(reelsData);
+                }
+                
+                // Fetch followers if function provided
+                if (onFetchUserFollowers) {
+                    const followersData = await onFetchUserFollowers(user.id);
+                    setFollowers(followersData);
+                }
+                
+                // Fetch following if function provided
+                if (onFetchUserFollowing) {
+                    const followingData = await onFetchUserFollowing(user.id);
+                    setFollowing(followingData);
+                }
+                
+            } catch (error) {
+                console.error('Error fetching user data:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchUserData();
+    }, [user.id, posts, reels, users]);
+
+    // Calculate statistics
     const totalViews = userPosts.reduce((acc, curr) => acc + (curr.views || 0), 0);
     const totalLikes = userPosts.reduce((acc, curr) => acc + curr.reactions.length, 0) + userReels.reduce((acc, curr) => acc + curr.reactions.length, 0);
     const totalShares = userPosts.reduce((acc, curr) => acc + curr.shares, 0) + userReels.reduce((acc, curr) => acc + curr.shares, 0);
     const totalComments = userPosts.reduce((acc, curr) => acc + curr.comments.length, 0) + userReels.reduce((acc, curr) => acc + curr.comments.length, 0);
     const totalEngagement = totalLikes + totalComments + totalShares;
+
+    // Function to update user details via API
+    const handleUpdateUserDetails = async (data: Partial<User>) => {
+        if (!currentUser) return;
+        
+        try {
+            const response = await apiFetch(`/api/users/${user.id}`, {
+                method: 'PUT',
+                body: JSON.stringify(data)
+            });
+            
+            if (response.success) {
+                onUpdateUserDetails(data);
+                // Update local state
+                if (isCurrentUser) {
+                    setCurrentUser?.({
+                        ...currentUser,
+                        ...data
+                    });
+                }
+            } else {
+                throw new Error(response.error || 'Failed to update profile');
+            }
+        } catch (error: any) {
+            throw new Error(error.message || 'Failed to update profile');
+        }
+    };
+
+    // Function to update profile image via API
+    const handleUpdateProfileImage = async (file: File) => {
+        if (!currentUser) return;
+        
+        const formData = new FormData();
+        formData.append('profile_image', file);
+        
+        try {
+            const response = await apiFetch(`/api/users/${user.id}/profile-image`, {
+                method: 'POST',
+                body: formData,
+                headers: {} // Remove Content-Type for FormData
+            });
+            
+            if (response.success) {
+                onUpdateProfileImage(file);
+                // Refresh user data
+                const userResponse = await apiFetch(`/api/users/${user.id}`);
+                if (userResponse.success) {
+                    onUpdateUserDetails(transformUserFromAPI(userResponse.data));
+                }
+            } else {
+                throw new Error('Failed to update profile image');
+            }
+        } catch (error) {
+            console.error('Error updating profile image:', error);
+            alert('Failed to update profile image');
+        }
+    };
+
+    // Function to update cover image via API
+    const handleUpdateCoverImage = async (file: File) => {
+        if (!currentUser) return;
+        
+        const formData = new FormData();
+        formData.append('cover_image', file);
+        
+        try {
+            const response = await apiFetch(`/api/users/${user.id}/cover-image`, {
+                method: 'POST',
+                body: formData,
+                headers: {} // Remove Content-Type for FormData
+            });
+            
+            if (response.success) {
+                onUpdateCoverImage(file);
+                // Refresh user data
+                const userResponse = await apiFetch(`/api/users/${user.id}`);
+                if (userResponse.success) {
+                    onUpdateUserDetails(transformUserFromAPI(userResponse.data));
+                }
+            } else {
+                throw new Error('Failed to update cover image');
+            }
+        } catch (error) {
+            console.error('Error updating cover image:', error);
+            alert('Failed to update cover image');
+        }
+    };
+
+    // Function to handle follow via API
+    const handleFollowWithAPI = async (userId: number) => {
+        if (!currentUser) return;
+        
+        try {
+            const response = await apiFetch(`/api/users/${userId}/follow`, {
+                method: isFollowing ? 'DELETE' : 'POST'
+            });
+            
+            if (response.success) {
+                onFollow(userId);
+                // Refresh followers list
+                const followersResponse = await apiFetch(`/api/users/${userId}/followers`);
+                if (followersResponse.success) {
+                    const followerIds = followersResponse.data.map((u: any) => u.id);
+                    setFollowers(users.filter(u => followerIds.includes(u.id)));
+                }
+            }
+        } catch (error) {
+            console.error('Error following user:', error);
+            alert('Failed to follow user');
+        }
+    };
 
     // Function to render music/podcast posts
     const renderMusicPostDefault = (post: PostType, author: any) => {
@@ -277,7 +601,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                             </span>
                             {author.isVerified && <i className="fas fa-check-circle text-[#1877F2]"></i>}
                         </div>
-                        <div className="text-[#B0B3B8] text-sm">{post.timestamp}</div>
+                        <div className="text-[#B0B3B8] text-sm">{post.formattedTime}</div>
                     </div>
                 </div>
                 
@@ -346,6 +670,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
     // Function to render regular posts
     const renderRegularPostDefault = (post: PostType, author: any, isFollowing?: boolean) => {
+        const { CreatePost, Post, CreatePostModal } = require('./Feed');
+        
         return (
             <Post 
                 key={post.id} 
@@ -370,16 +696,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         );
     };
 
-    // Helper function to get all photos from posts (including multi-image posts)
+    // Helper function to get all photos from posts
     const getAllPhotos = () => {
         const photos: string[] = [];
         userPosts.forEach(post => {
             if (post.type === 'image') {
-                // Handle single image posts
                 if (post.image) {
                     photos.push(post.image);
                 }
-                // Handle multi-image posts
                 if (post.images && post.images.length > 0) {
                     photos.push(...post.images);
                 }
@@ -389,6 +713,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     };
 
     const renderContent = () => {
+        if (isLoading) {
+            return (
+                <div className="flex justify-center items-center py-20">
+                    <div className="w-12 h-12 border-4 border-[#1877F2] border-t-transparent rounded-full animate-spin"></div>
+                </div>
+            );
+        }
+
         switch (activeTab) {
             case 'About': return (
                 <div className="bg-[#242526] p-6 text-[#E4E6EB] rounded-xl border border-[#3E4042] mx-4 md:mx-0">
@@ -434,10 +766,10 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             );
             case 'Followers': return (
                 <div className="bg-[#242526] p-4 rounded-xl border border-[#3E4042] mx-4 md:mx-0">
-                    <h2 className="text-xl font-bold text-[#E4E6EB] mb-4">Followers</h2>
-                    {followersList.length > 0 ? (
+                    <h2 className="text-xl font-bold text-[#E4E6EB] mb-4">Followers ({followers.length})</h2>
+                    {followers.length > 0 ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {followersList.map(follower => (
+                            {followers.map(follower => (
                                 <div key={follower.id} className="flex items-center gap-3 p-3 border border-[#3E4042] rounded-lg hover:bg-[#3A3B3C] cursor-pointer" onClick={() => onProfileClick(follower.id)}>
                                     <img src={follower.profileImage} alt="" className="w-16 h-16 rounded-lg object-cover" />
                                     <div>
@@ -448,6 +780,24 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                             ))}
                         </div>
                     ) : <p className="text-[#B0B3B8]">No followers yet.</p>}
+                </div>
+            );
+            case 'Following': return (
+                <div className="bg-[#242526] p-4 rounded-xl border border-[#3E4042] mx-4 md:mx-0">
+                    <h2 className="text-xl font-bold text-[#E4E6EB] mb-4">Following ({following.length})</h2>
+                    {following.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {following.map(followed => (
+                                <div key={followed.id} className="flex items-center gap-3 p-3 border border-[#3E4042] rounded-lg hover:bg-[#3A3B3C] cursor-pointer" onClick={() => onProfileClick(followed.id)}>
+                                    <img src={followed.profileImage} alt="" className="w-16 h-16 rounded-lg object-cover" />
+                                    <div>
+                                        <h4 className="font-semibold text-[#E4E6EB]">{followed.name}</h4>
+                                        <span className="text-[#B0B3B8] text-sm">{followed.location}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : <p className="text-[#B0B3B8]">Not following anyone yet.</p>}
                 </div>
             );
             case 'Photos': 
@@ -469,7 +819,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             case 'Reels': 
                 return (
                     <div className="bg-[#242526] p-4 rounded-xl border border-[#3E4042] mx-4 md:mx-0">
-                        <h2 className="text-xl font-bold text-[#E4E6EB] mb-4">Reels</h2>
+                        <h2 className="text-xl font-bold text-[#E4E6EB] mb-4">Reels ({userReels.length})</h2>
                         {userReels.length > 0 ? (
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                                 {userReels.map(reel => (
@@ -477,7 +827,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                                         <video src={reel.videoUrl} className="w-full h-full object-cover" />
                                         <div className="absolute inset-0 bg-black/20 flex items-end p-2">
                                             <div className="flex items-center gap-1 text-white text-xs font-bold">
-                                                <i className="fas fa-play"></i> {reel.reactions.length * 10 + reel.shares * 5} {/* Mock view count */}
+                                                <i className="fas fa-play"></i> {reel.reactions.length * 10 + reel.shares * 5}
                                             </div>
                                         </div>
                                     </div>
@@ -573,28 +923,36 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
                         {isCurrentUser && currentUser && (
                             <>
-                                <CreatePost 
-                                    currentUser={currentUser} 
-                                    onProfileClick={onProfileClick} 
-                                    onClick={() => setShowCreatePostModal(true)} 
-                                    onCreateEventClick={onCreateEventClick}
-                                />
-                                {showCreatePostModal && (
-                                    <CreatePostModal 
-                                        currentUser={currentUser} 
-                                        onClose={() => setShowCreatePostModal(false)} 
-                                        onCreatePost={onCreatePost} 
-                                        users={users}
-                                        onCreateEventClick={() => {
-                                            setShowCreatePostModal(false);
-                                            if (onCreateEventClick) onCreateEventClick();
-                                        }}
-                                    />
-                                )}
+                                {(() => {
+                                    const { CreatePost } = require('./Feed');
+                                    return (
+                                        <CreatePost 
+                                            currentUser={currentUser} 
+                                            onProfileClick={onProfileClick} 
+                                            onClick={() => setShowCreatePostModal(true)} 
+                                            onCreateEventClick={onCreateEventClick}
+                                        />
+                                    );
+                                })()}
+                                {showCreatePostModal && (() => {
+                                    const { CreatePostModal } = require('./Feed');
+                                    return (
+                                        <CreatePostModal 
+                                            currentUser={currentUser} 
+                                            onClose={() => setShowCreatePostModal(false)} 
+                                            onCreatePost={onCreatePost} 
+                                            users={users}
+                                            onCreateEventClick={() => {
+                                                setShowCreatePostModal(false);
+                                                if (onCreateEventClick) onCreateEventClick();
+                                            }}
+                                        />
+                                    );
+                                })()}
                             </>
                         )}
                         <div className="bg-[#242526] p-3 mb-4 rounded-xl border border-[#3E4042] flex items-center justify-between mx-4 md:mx-0">
-                            <h3 className="text-xl font-bold text-[#E4E6EB]">Posts</h3>
+                            <h3 className="text-xl font-bold text-[#E4E6EB]">Posts ({userPosts.length})</h3>
                             <div className="flex gap-2">
                                 <button className="bg-[#3A3B3C] px-3 py-1.5 rounded-md text-[#E4E6EB] font-semibold text-sm hover:bg-[#4E4F50]">
                                     <i className="fas fa-sliders-h mr-1"></i> Filters
@@ -605,7 +963,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                         {userPosts.map(post => {
                             const isFollowingPostAuthor = currentUser ? currentUser.following.includes(post.authorId) : false;
                             
-                            // Use custom render functions if provided, otherwise use default
                             if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
                                 if (renderMusicPost) {
                                     return renderMusicPost(post, user);
@@ -621,7 +978,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                         
                         {userPosts.length === 0 && (
                             <div className="text-center py-8 text-[#B0B3B8] font-medium bg-[#242526] rounded-xl mx-4 md:mx-0 border border-[#3E4042]">
-                                No posts available
+                                {isCurrentUser ? 'You haven\'t posted anything yet.' : 'No posts available'}
                             </div>
                         )}
                     </div>
@@ -632,8 +989,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
     return (
         <div className="w-full bg-[#18191A] min-h-screen">
-            <input type="file" ref={profileInputRef} className="hidden" accept="image/*" onChange={(e) => { if (e.target.files && e.target.files[0]) onUpdateProfileImage(e.target.files[0]); }} />
-            <input type="file" ref={coverInputRef} className="hidden" accept="image/*" onChange={(e) => { if (e.target.files && e.target.files[0]) onUpdateCoverImage(e.target.files[0]); }} />
+            <input type="file" ref={profileInputRef} className="hidden" accept="image/*" onChange={(e) => { if (e.target.files && e.target.files[0]) handleUpdateProfileImage(e.target.files[0]); }} />
+            <input type="file" ref={coverInputRef} className="hidden" accept="image/*" onChange={(e) => { if (e.target.files && e.target.files[0]) handleUpdateCoverImage(e.target.files[0]); }} />
             
             <div className="bg-[#242526] shadow-sm">
                 <div className="max-w-[1095px] mx-auto w-full relative">
@@ -687,7 +1044,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                                     <>
                                         {currentUser && (
                                             <>
-                                            <button onClick={() => onFollow(user.id)} className={`${isFollowing ? 'bg-[#3A3B3C] text-[#E4E6EB]' : 'bg-[#1877F2] text-white'} px-6 py-2 rounded-md font-semibold flex items-center gap-2 transition-colors`}>
+                                            <button onClick={() => handleFollowWithAPI(user.id)} className={`${isFollowing ? 'bg-[#3A3B3C] text-[#E4E6EB]' : 'bg-[#1877F2] text-white'} px-6 py-2 rounded-md font-semibold flex items-center gap-2 transition-colors`}>
                                                 {isFollowing ? (
                                                     <><i className="fas fa-user-check"></i><span>Following</span></>
                                                 ) : (
@@ -711,7 +1068,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                         
                         {/* Tabs */}
                         <div className="flex items-center gap-1 pt-1 overflow-x-auto">
-                            {['Posts', 'About', 'Followers', 'Photos', 'Reels'].map((tab) => (
+                            {['Posts', 'About', 'Followers', 'Following', 'Photos', 'Reels'].map((tab) => (
                                 <div key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-3 cursor-pointer whitespace-nowrap text-[15px] font-semibold border-b-[3px] transition-colors ${activeTab === tab ? 'text-[#1877F2] border-[#1877F2]' : 'text-[#B0B3B8] border-transparent hover:bg-[#3A3B3C] rounded-t-md'}`}>
                                     {tab}
                                 </div>
@@ -727,9 +1084,64 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 <EditProfileModal 
                     user={user}
                     onClose={() => setShowEditProfile(false)}
-                    onSave={onUpdateUserDetails}
+                    onSave={handleUpdateUserDetails}
                 />
             )}
         </div>
     );
+};
+
+// Default export API functions for App.tsx to use
+export const userProfileApiFunctions = {
+    fetchUserPosts: async (userId: number): Promise<PostType[]> => {
+        try {
+            const response = await apiFetch(`/api/users/${userId}/posts`);
+            if (response.success && Array.isArray(response.data)) {
+                return response.data.map(transformPostFromAPI);
+            }
+            return [];
+        } catch (error) {
+            console.error('Error fetching user posts:', error);
+            return [];
+        }
+    },
+    
+    fetchUserReels: async (userId: number): Promise<Reel[]> => {
+        try {
+            const response = await apiFetch(`/api/users/${userId}/reels`);
+            if (response.success && Array.isArray(response.data)) {
+                return response.data;
+            }
+            return [];
+        } catch (error) {
+            console.error('Error fetching user reels:', error);
+            return [];
+        }
+    },
+    
+    fetchUserFollowers: async (userId: number): Promise<User[]> => {
+        try {
+            const response = await apiFetch(`/api/users/${userId}/followers`);
+            if (response.success && Array.isArray(response.data)) {
+                return response.data.map(transformUserFromAPI);
+            }
+            return [];
+        } catch (error) {
+            console.error('Error fetching user followers:', error);
+            return [];
+        }
+    },
+    
+    fetchUserFollowing: async (userId: number): Promise<User[]> => {
+        try {
+            const response = await apiFetch(`/api/users/${userId}/following`);
+            if (response.success && Array.isArray(response.data)) {
+                return response.data.map(transformUserFromAPI);
+            }
+            return [];
+        } catch (error) {
+            console.error('Error fetching user following:', error);
+            return [];
+        }
+    }
 };
