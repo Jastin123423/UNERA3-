@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+
+import React, { useState, useRef, useEffect } from 'react';
 import { User, Post as PostType, ReactionType, Reel, AudioTrack, Song, Episode } from '../types';
 import { CreatePost, Post, CreatePostModal } from './Feed';
 
@@ -90,16 +91,6 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClose, onSa
     );
 };
 
-// Add this interface for message notifications
-interface MessageNotification {
-    count: number;
-    lastMessage?: {
-        content: string;
-        timestamp: number;
-        senderId: number;
-    };
-}
-
 interface UserProfileProps {
     user: User;
     currentUser: User | null; // Allow null
@@ -144,18 +135,6 @@ interface UserProfileProps {
     // Render functions for different post types
     renderMusicPost?: (post: PostType, author: any) => React.ReactNode;
     renderRegularPost?: (post: PostType, author: any, isFollowing?: boolean) => React.ReactNode;
-    
-    // Message-related props
-    unreadMessageCount?: number;
-    onOpenMessages?: () => void; // New prop to open messages
-    recentMessages?: Array<{
-        userId: number;
-        userName: string;
-        userImage: string;
-        lastMessage: string;
-        timestamp: number;
-        unread: boolean;
-    }>;
 }
 
 // Helper function to get song for post
@@ -250,29 +229,13 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     onTrackComment,
     onTrackShare,
     renderMusicPost,
-    renderRegularPost,
-    
-    // Message-related props
-    unreadMessageCount = 0,
-    onOpenMessages,
-    recentMessages = []
+    renderRegularPost
 }) => {
     const [activeTab, setActiveTab] = useState('Posts');
     const [showCreatePostModal, setShowCreatePostModal] = useState(false);
     const [showEditProfile, setShowEditProfile] = useState(false);
-    const [showMessagesPreview, setShowMessagesPreview] = useState(false);
-    const [refreshCounter, setRefreshCounter] = useState(0);
     
-    // FIX: Use useMemo to ensure posts are recalculated when posts prop changes
-    const userPosts = useMemo(() => {
-        console.log('🔄 Recalculating user posts:', {
-            totalPosts: posts.length,
-            userId: user.id,
-            filteredCount: posts.filter(p => p.authorId === user.id).length
-        });
-        return posts.filter(post => post.authorId === user.id);
-    }, [posts, user.id]);
-    
+    const userPosts = posts.filter(post => post.authorId === user.id);
     const userReels = reels.filter(reel => reel.userId === user.id);
     
     const isCurrentUser = currentUser && user.id === currentUser.id;
@@ -290,28 +253,13 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     const totalComments = userPosts.reduce((acc, curr) => acc + curr.comments.length, 0) + userReels.reduce((acc, curr) => acc + curr.comments.length, 0);
     const totalEngagement = totalLikes + totalComments + totalShares;
 
-    // Format time for messages
-    const formatMessageTime = (timestamp: number) => {
-        const date = new Date(timestamp);
-        const now = new Date();
-        const diffMs = now.getTime() - date.getTime();
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMs / 3600000);
-        const diffDays = Math.floor(diffMs / 86400000);
-        
-        if (diffMins < 60) return `${diffMins}m`;
-        if (diffHours < 24) return `${diffHours}h`;
-        if (diffDays < 7) return `${diffDays}d`;
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    };
-
     // Function to render music/podcast posts
     const renderMusicPostDefault = (post: PostType, author: any) => {
         const song = getSongForPost(post, songs, episodes);
         if (!song) return null;
         
         return (
-            <div key={`music-${post.id}-${post.reactions.length}-${post.comments.length}-${refreshCounter}`} className="bg-[#242526] rounded-xl border border-[#3E4042] p-4 mb-4">
+            <div key={post.id} className="bg-[#242526] rounded-xl border border-[#3E4042] p-4 mb-4">
                 <div className="flex items-center gap-3 mb-4">
                     <img 
                         src={author.profileImage} 
@@ -396,31 +344,22 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         );
     };
 
-    // Function to render regular posts - FIXED VERSION
+    // Function to render regular posts
     const renderRegularPostDefault = (post: PostType, author: any, isFollowing?: boolean) => {
-        // FIX: Create fresh object references to force Post component to re-render
-        const freshPost = {
-            ...post,
-            // Force new array references
-            reactions: [...post.reactions],
-            comments: [...post.comments],
-            formattedTime: post.formattedTime || 'Recently'
-        };
-        
         return (
             <Post 
-                key={`post-${post.id}-${post.reactions.length}-${post.comments.length}-${refreshCounter}`}
-                post={freshPost}
-                author={author}
-                currentUser={currentUser}
-                users={users}
-                onProfileClick={onProfileClick}
-                onReact={onReact}
-                onShare={onShare}
-                onDelete={onDeletePost}
-                onEdit={onEditPost}
-                onHashtagClick={onHashtagClick}
-                onViewImage={onViewImage}
+                key={post.id} 
+                post={post} 
+                author={author} 
+                currentUser={currentUser} 
+                users={users} 
+                onProfileClick={onProfileClick} 
+                onReact={onReact} 
+                onShare={onShare} 
+                onDelete={onDeletePost} 
+                onEdit={onEditPost} 
+                onHashtagClick={onHashtagClick} 
+                onViewImage={onViewImage} 
                 onOpenComments={onOpenComments}
                 onVideoClick={onVideoClick}
                 onViewProduct={() => {}} 
@@ -448,19 +387,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         });
         return photos;
     };
-
-    // FIX: Add useEffect to refresh when posts change
-    useEffect(() => {
-        console.log('📊 UserProfile posts updated:', {
-            totalPosts: posts.length,
-            userPostsCount: userPosts.length,
-            samplePost: userPosts[0]?.id,
-            sampleReactions: userPosts[0]?.reactions?.length
-        });
-        
-        // Increment refresh counter to force Post components to re-render
-        setRefreshCounter(prev => prev + 1);
-    }, [posts, userPosts]);
 
     const renderContent = () => {
         switch (activeTab) {
@@ -616,74 +542,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                                     <h2 className="text-[#E4E6EB] font-bold text-lg">Professional Dashboard</h2>
                                     <span className="text-[#B0B3B8] text-xs bg-[#3A3B3C] px-2 py-1 rounded border border-[#3E4042]">Private to you</span>
                                 </div>
-                                
-                                {/* Message Icon with Notification Badge - PRIVATE AREA */}
-                                <div className="mb-4">
-                                    <div 
-                                        className="flex items-center justify-between p-3 bg-[#3A3B3C] rounded-lg border border-[#3E4042] hover:bg-[#4E4F50] cursor-pointer transition-colors"
-                                        onClick={() => {
-                                            if (onOpenMessages) {
-                                                onOpenMessages();
-                                            }
-                                        }}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className="relative">
-                                                <i className="fas fa-envelope text-xl text-[#1877F2]"></i>
-                                                {unreadMessageCount > 0 && (
-                                                    <span className="absolute -top-2 -right-2 bg-[#F02849] text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                                                        {unreadMessageCount > 99 ? '99+' : unreadMessageCount}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <h3 className="text-[#E4E6EB] font-semibold">Messages</h3>
-                                                <p className="text-[#B0B3B8] text-sm">
-                                                    {unreadMessageCount 
-                                                        ? `${unreadMessageCount} unread message${unreadMessageCount > 1 ? 's' : ''}`
-                                                        : 'No new messages'}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <i className="fas fa-chevron-right text-[#B0B3B8]"></i>
-                                    </div>
-                                    
-                                    {/* Recent Messages Preview */}
-                                    {recentMessages.length > 0 && (
-                                        <div className="mt-2 ml-3 pl-3 border-l border-[#3E4042]">
-                                            {recentMessages.slice(0, 3).map((msg, index) => (
-                                                <div 
-                                                    key={index} 
-                                                    className="flex items-center gap-2 p-2 rounded hover:bg-[#3A3B3C] cursor-pointer"
-                                                    onClick={() => onMessage(msg.userId)}
-                                                >
-                                                    <img 
-                                                        src={msg.userImage} 
-                                                        alt={msg.userName}
-                                                        className="w-8 h-8 rounded-full"
-                                                    />
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex justify-between items-center">
-                                                            <span className="text-[#E4E6EB] text-sm font-medium truncate">
-                                                                {msg.userName}
-                                                            </span>
-                                                            <span className="text-[#B0B3B8] text-xs">
-                                                                {formatMessageTime(msg.timestamp)}
-                                                            </span>
-                                                        </div>
-                                                        <p className="text-[#B0B3B8] text-xs truncate">
-                                                            {msg.lastMessage}
-                                                        </p>
-                                                    </div>
-                                                    {msg.unread && (
-                                                        <div className="w-2 h-2 bg-[#1877F2] rounded-full"></div>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                                
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="bg-[#3A3B3C] p-3 rounded-lg border border-[#3E4042]">
                                         <div className="text-[#B0B3B8] text-xs font-medium mb-1">Total Views</div>
@@ -741,53 +599,23 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                                 <button className="bg-[#3A3B3C] px-3 py-1.5 rounded-md text-[#E4E6EB] font-semibold text-sm hover:bg-[#4E4F50]">
                                     <i className="fas fa-sliders-h mr-1"></i> Filters
                                 </button>
-                                {/* DEBUG BUTTON */}
-                                {process.env.NODE_ENV === 'development' && (
-                                    <button 
-                                        onClick={() => {
-                                            console.log('🔍 DEBUG: Current posts data', {
-                                                totalPosts: userPosts.length,
-                                                posts: userPosts.map(p => ({
-                                                    id: p.id,
-                                                    reactions: p.reactions.length,
-                                                    comments: p.comments.length,
-                                                    hasCurrentUserReaction: currentUser ? 
-                                                        p.reactions.some(r => r.userId === currentUser.id) : false
-                                                }))
-                                            });
-                                            setRefreshCounter(prev => prev + 1);
-                                        }}
-                                        className="bg-blue-500 px-3 py-1.5 rounded-md text-white text-sm"
-                                    >
-                                        Debug
-                                    </button>
-                                )}
                             </div>
                         </div>
                         
-                        {/* FIXED: Posts rendering with proper keys and fresh data */}
                         {userPosts.map(post => {
                             const isFollowingPostAuthor = currentUser ? currentUser.following.includes(post.authorId) : false;
-                            
-                            // FIX: Create fresh object to force Post component to re-render
-                            const freshPost = {
-                                ...post,
-                                reactions: [...post.reactions],
-                                comments: [...post.comments],
-                                formattedTime: post.formattedTime || 'Recently'
-                            };
                             
                             // Use custom render functions if provided, otherwise use default
                             if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
                                 if (renderMusicPost) {
-                                    return renderMusicPost(freshPost, user);
+                                    return renderMusicPost(post, user);
                                 }
-                                return renderMusicPostDefault(freshPost, user);
+                                return renderMusicPostDefault(post, user);
                             } else {
                                 if (renderRegularPost) {
-                                    return renderRegularPost(freshPost, user, isFollowingPostAuthor);
+                                    return renderRegularPost(post, user, isFollowingPostAuthor);
                                 }
-                                return renderRegularPostDefault(freshPost, user, isFollowingPostAuthor);
+                                return renderRegularPostDefault(post, user, isFollowingPostAuthor);
                             }
                         })}
                         
@@ -848,7 +676,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                             <div className="flex flex-col sm:flex-row items-center gap-2 mt-4 md:mt-0 md:mb-6">
                                 {isCurrentUser ? (
                                     <>
-                                        {/* REMOVED "Add to story" button */}
+                                        <button className="bg-[#1877F2] text-white px-4 py-2 rounded-md font-semibold flex items-center gap-2 hover:bg-[#166FE5] transition-colors">
+                                            <i className="fas fa-plus"></i><span>Add to story</span>
+                                        </button>
                                         <button className="bg-[#3A3B3C] text-[#E4E6EB] px-4 py-2 rounded-md font-semibold flex items-center gap-2 hover:bg-[#4E4F50] transition-colors" onClick={() => setShowEditProfile(true)}>
                                             <i className="fas fa-pen"></i><span>Edit profile</span>
                                         </button>
