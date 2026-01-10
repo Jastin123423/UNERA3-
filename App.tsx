@@ -447,7 +447,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const [activeSharePostId, setActiveSharePostId] = useState<number | null>(null);
     const [activeChatUser, setActiveChatUser] = useState<User | null>(null);
     const [notifications, setNotifications] = useState<Notification[]>([
-        // Initial notifications for testing
         {
             id: 1,
             userId: 1,
@@ -880,7 +879,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             setActiveTab('profile');
         }
     };
-    // ========== END NOTIFICATION MANAGEMENT FUNCTIONS ==========
 
     // ========== AUTHENTICATION FUNCTIONS WITH API ==========
     const handleLogin = async (email: string, password: string) => {
@@ -1728,8 +1726,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             formData.append('phoneNumber', productData.phoneNumber || '');
             
             if (productData.images && productData.images.length > 0) {
-                // Note: For file uploads, you'll need to handle File objects
-                // This is a simplified version
                 formData.append('images', JSON.stringify(productData.images));
             }
 
@@ -1787,7 +1783,6 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             
             // For file uploads
             if (storyData.mediaUrl) {
-                // This would need proper file handling
                 formData.append('media', storyData.mediaUrl);
             }
 
@@ -2515,9 +2510,1678 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    // Continue with the rest of the component...
-    // [The rest of the component remains the same as your original code]
-    // Only the API integration functions have been added/modified above
+    const handleDeleteEpisode = async (episodeId: string) => {
+        if (!currentUser || !isAdmin) {
+            alert("Only admins can delete episodes");
+            return;
+        }
+        
+        if (window.confirm("Are you sure you want to delete this episode?")) {
+            try {
+                const response = await apiFetch(`/api/podcasts/${episodeId}`, {
+                    method: 'DELETE'
+                });
 
-    // The rendering part of the component stays the same...
-    // ... [Rest of your component code continues here]
+                if (response.success) {
+                    setEpisodes(prev => prev.filter(e => e.id !== episodeId));
+                    setPosts(prev => prev.filter(p => !p.audioTrack || p.audioTrack.id !== episodeId));
+                    alert("Episode deleted successfully");
+                }
+            } catch (error) {
+                console.error('Failed to delete episode:', error);
+                alert('Failed to delete episode. Please try again.');
+            }
+        }
+    };
+
+    const handleVerifyUser = async (userId: number) => { 
+        if (isAdmin) {
+            try {
+                const response = await apiFetch(`/api/users/${userId}/verify`, {
+                    method: 'POST',
+                    body: JSON.stringify({ verified: !users.find(u => u.id === userId)?.isVerified })
+                });
+
+                if (response.success) {
+                    setUsers(users.map(u => u.id === userId ? { ...u, isVerified: !u.isVerified } : u));
+                    alert(`User ${users.find(u => u.id === userId)?.isVerified ? 'unverified' : 'verified'} successfully!`);
+                }
+            } catch (error) {
+                console.error('Failed to verify user:', error);
+                alert('Failed to verify user. Please try again.');
+            }
+        }
+    };
+    
+    const handleRestrictUser = async (userId: number) => { 
+        if (isAdmin) {
+            try {
+                const response = await apiFetch(`/api/users/${userId}/restrict`, {
+                    method: 'POST',
+                    body: JSON.stringify({ 
+                        restricted: true,
+                        restrictedUntil: Date.now() + 24 * 60 * 60 * 1000 
+                    })
+                });
+
+                if (response.success) {
+                    setUsers(users.map(u => u.id === userId ? { ...u, isRestricted: true, restrictedUntil: Date.now() + 24 * 60 * 60 * 1000 } : u));
+                    alert("User restricted for 24 hours");
+                }
+            } catch (error) {
+                console.error('Failed to restrict user:', error);
+                alert('Failed to restrict user. Please try again.');
+            }
+        }
+    };
+    
+    const handleDeleteUser = async (userId: number) => { 
+        if (isAdmin && window.confirm("Delete this user and all their content? This is irreversible.")) { 
+            try {
+                const response = await apiFetch(`/api/users/${userId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.success) {
+                    setUsers(users.filter(u => u.id !== userId)); 
+                    setPosts(posts.filter(p => p.authorId !== userId)); 
+                    setReels(reels.filter(r => r.userId !== userId)); 
+                    setStories(stories.filter(s => s.userId !== userId)); 
+                    alert("User deleted successfully");
+                }
+            } catch (error) {
+                console.error('Failed to delete user:', error);
+                alert('Failed to delete user. Please try again.');
+            }
+        } 
+    };
+    
+    const handleMakeModerator = async (userId: number) => { 
+        if (isAdmin) {
+            try {
+                const response = await apiFetch(`/api/users/${userId}/role`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ 
+                        role: users.find(u => u.id === userId)?.role === 'moderator' ? 'user' : 'moderator' 
+                    })
+                });
+
+                if (response.success) {
+                    setUsers(users.map(u => u.id === userId ? { ...u, role: u.role === 'moderator' ? 'user' : 'moderator' } : u));
+                    const user = users.find(u => u.id === userId);
+                    alert(`${user?.name} is now ${user?.role === 'moderator' ? 'a user' : 'a moderator'}!`);
+                }
+            } catch (error) {
+                console.error('Failed to update user role:', error);
+                alert('Failed to update user role. Please try again.');
+            }
+        }
+    };
+
+    const handleTrackComment = async (trackId: string) => {
+        // Update song/episode comment count via API
+        const track = songs.find(s => s.id === trackId) || episodes.find(e => e.id === trackId);
+        if (track) {
+            try {
+                const endpoint = 'artist' in track ? `/api/songs/${trackId}/comment` : `/api/podcasts/${trackId}/comment`;
+                await apiFetch(endpoint, {
+                    method: 'POST',
+                    body: JSON.stringify({ increment: 1 })
+                });
+                
+                if ('artist' in track) {
+                    setSongs(prev => prev.map(song => 
+                        song.id === trackId 
+                            ? { 
+                                ...song, 
+                                comments: (song.comments || 0) + 1,
+                                stats: {
+                                    ...song.stats,
+                                    comments: (song.stats?.comments || 0) + 1
+                                }
+                            }
+                            : song
+                    ));
+                } else {
+                    setEpisodes(prev => prev.map(episode => 
+                        episode.id === trackId 
+                            ? { 
+                                ...episode, 
+                                comments: (episode.comments || 0) + 1,
+                                stats: {
+                                    ...episode.stats,
+                                    comments: (episode.stats?.comments || 0) + 1
+                                }
+                            }
+                            : episode
+                    ));
+                }
+            } catch (error) {
+                console.error('Failed to update comment count:', error);
+            }
+        }
+    };
+
+    const handleTrackShare = async (trackId: string) => {
+        // Update song/episode share count via API
+        const track = songs.find(s => s.id === trackId) || episodes.find(e => e.id === trackId);
+        if (track) {
+            try {
+                const endpoint = 'artist' in track ? `/api/songs/${trackId}/share` : `/api/podcasts/${trackId}/share`;
+                await apiFetch(endpoint, {
+                    method: 'POST',
+                    body: JSON.stringify({ increment: 1 })
+                });
+                
+                if ('artist' in track) {
+                    setSongs(prev => prev.map(song => 
+                        song.id === trackId 
+                            ? { 
+                                ...song, 
+                                shares: (song.shares || 0) + 1,
+                                stats: {
+                                    ...song.stats,
+                                    shares: (song.stats?.shares || 0) + 1
+                                }
+                            }
+                            : song
+                    ));
+                } else {
+                    setEpisodes(prev => prev.map(episode => 
+                        episode.id === trackId 
+                            ? { 
+                                ...episode, 
+                                shares: (episode.shares || 0) + 1,
+                                stats: {
+                                    ...episode.stats,
+                                    shares: (episode.stats?.shares || 0) + 1
+                                }
+                            }
+                            : episode
+                    ));
+                }
+            } catch (error) {
+                console.error('Failed to update share count:', error);
+            }
+        }
+    };
+
+    const handleUploadToFeed = (song: Song) => {
+        console.log("Uploading to feed:", song);
+        handleAddSong(song);
+    };
+
+    const handleLikeStory = async (storyId: number) => {
+        if (!currentUser) { alert("Please login to like stories."); return; }
+        
+        try {
+            const response = await apiFetch('/api/stories/like', {
+                method: 'POST',
+                body: JSON.stringify({
+                    storyId,
+                    userId: currentUser.id
+                })
+            });
+
+            if (response.success) {
+                setStories(prev => prev.map(s => {
+                    if (s.id === storyId) {
+                        const reactions = s.reactions || [];
+                        const existingLike = reactions.find(r => r.userId === currentUser!.id);
+                        if (existingLike) {
+                            return { ...s, reactions: reactions.filter(r => r.userId !== currentUser!.id) };
+                        } else {
+                            // Send notification to story owner (prevent self-notification)
+                            if (s.userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                                handleCreateNotification(
+                                    s.userId,
+                                    currentUser.id,
+                                    'like_story',
+                                    'liked your story.',
+                                    { storyId }
+                                );
+                            }
+                            return { ...s, reactions: [...reactions, { userId: currentUser!.id }] };
+                        }
+                    }
+                    return s;
+                }));
+            }
+        } catch (error) {
+            console.error('Failed to like story:', error);
+        }
+    };
+    
+    const handleReplyStory = async (storyId: number, text: string) => {
+        if (!currentUser) { alert("Please login to reply."); return; }
+        
+        try {
+            const response = await apiFetch('/api/stories/reply', {
+                method: 'POST',
+                body: JSON.stringify({
+                    storyId,
+                    userId: currentUser.id,
+                    text
+                })
+            });
+
+            if (response.success) {
+                setStories(prev => prev.map(s => {
+                    if (s.id === storyId) {
+                        const replies = s.replies || [];
+                        const newReply = { userId: currentUser!.id, text, timestamp: Date.now() };
+                        
+                        // Send notification to story owner (prevent self-notification)
+                        if (s.userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                            handleCreateNotification(
+                                s.userId,
+                                currentUser.id,
+                                'comment_story',
+                                'replied to your story.',
+                                { storyId }
+                            );
+                        }
+                        
+                        return { ...s, replies: [...replies, newReply] };
+                    }
+                    return s;
+                }));
+            }
+        } catch (error) {
+            console.error('Failed to reply to story:', error);
+        }
+    };
+
+    // FIXED: Prevent self-notifications for reel reactions
+    const handleReelReact = async (reelId: number, type: ReactionType | undefined) => {
+        if (!currentUser) return alert("Please login to react.");
+        
+        try {
+            const response = await apiFetch('/api/reels/react', {
+                method: 'POST',
+                body: JSON.stringify({
+                    reelId,
+                    userId: currentUser.id,
+                    type: type || 'like'
+                })
+            });
+
+            if (response.success) {
+                setReels(prev => prev.map(reel => {
+                    if (reel.id === reelId) {
+                        const existing = reel.reactions.find(r => r.userId === currentUser!.id);
+                        let newReactions = [...reel.reactions];
+                        if (type === undefined || (existing && existing.type === type)) {
+                            newReactions = newReactions.filter(r => r.userId !== currentUser!.id);
+                        } else if (existing) {
+                            newReactions = newReactions.map(r => r.userId === currentUser!.id ? { ...r, type: type! } : r);
+                        } else {
+                            newReactions.push({ userId: currentUser!.id, type: type! });
+                            
+                            // Send notification to reel owner (prevent self-notification)
+                            if (reel.userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                                const content = type === 'like' 
+                                    ? 'liked your reel.' 
+                                    : `reacted with ${type} to your reel.`;
+                                
+                                handleCreateNotification(
+                                    reel.userId,
+                                    currentUser.id,
+                                    'like_reel',
+                                    content,
+                                    { reelId }
+                                );
+                            }
+                        }
+                        return { ...reel, reactions: newReactions };
+                    }
+                    return reel;
+                }));
+            }
+        } catch (error) {
+            console.error('Failed to react to reel:', error);
+        }
+    };
+
+    // ========== ENHANCED GROUP FUNCTIONS WITH SELF-NOTIFICATION PREVENTION ==========
+    const handleGroupComment = async (groupId: string, postId: number, text: string, attachment?: any, parentId?: number) => {
+        if (!currentUser) return;
+        
+        try {
+            const response = await apiFetch('/api/group-comments', {
+                method: 'POST',
+                body: JSON.stringify({
+                    groupId,
+                    postId,
+                    userId: currentUser.id,
+                    text,
+                    attachment,
+                    parentId
+                })
+            });
+
+            if (response.success) {
+                const timestamp = Date.now();
+                const formattedTime = formatRelativeTime(timestamp);
+                const newComment: Comment = { 
+                    id: timestamp, 
+                    userId: currentUser.id, 
+                    text, 
+                    timestamp: timestamp,
+                    formattedTime: formattedTime,
+                    likes: 0, 
+                    attachment,
+                    authorName: currentUser.name,
+                    authorImage: currentUser.profileImage
+                };
+                
+                // Update the group post with new comment
+                setGroups(prev => prev.map(g => {
+                    if (g.id === groupId) {
+                        const updatedPosts = g.posts.map(p => {
+                            if (p.id === postId) {
+                                const updatedComments = [...(p.comments || []), newComment];
+                                
+                                // Send notification to post author (prevent self-notification)
+                                if (p.authorId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                                    const group = groups.find(gr => gr.id === groupId);
+                                    handleCreateNotification(
+                                        p.authorId,
+                                        currentUser.id,
+                                        'group_comment',
+                                        `commented on your post in ${group?.name || 'the group'}.`,
+                                        { postId, groupId, commentId: newComment.id }
+                                    );
+                                }
+                                
+                                return { ...p, comments: updatedComments };
+                            }
+                            return p;
+                        });
+                        return { ...g, posts: updatedPosts };
+                    }
+                    return g;
+                }));
+
+                // Handle mentions in group comments with self-notification prevention
+                const mentionRegex = /@(\w+(?:\s\w+)?)/g;
+                const mentions = [...text.matchAll(mentionRegex)];
+                if (mentions.length > 0) {
+                    const mentionedUserIds = new Set<number>();
+                    mentions.forEach(match => {
+                        const userName = match[1];
+                        const user = users.find(u => u.name.toLowerCase() === userName.toLowerCase());
+                        if (user && user.id !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                            mentionedUserIds.add(user.id);
+                            
+                            const group = groups.find(g => g.id === groupId);
+                            handleCreateNotification(
+                                user.id,
+                                currentUser.id,
+                                'group_mention',
+                                `mentioned you in a comment in ${group?.name || 'a group'}.`,
+                                { postId, groupId, commentId: newComment.id }
+                            );
+                        }
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Failed to add group comment:', error);
+        }
+    };
+
+    const handleInviteToGroup = async (groupId: string, userIds: number[]) => {
+        if (!currentUser) return;
+        
+        try {
+            const response = await apiFetch('/api/groups/invite', {
+                method: 'POST',
+                body: JSON.stringify({
+                    groupId,
+                    inviterId: currentUser.id,
+                    userIds
+                })
+            });
+
+            if (response.success) {
+                setGroups(prev => prev.map(g => 
+                    g.id === groupId 
+                        ? { 
+                            ...g, 
+                            members: [...new Set([...g.members, ...userIds])] 
+                        } 
+                        : g
+                ));
+                
+                // Send notifications to invited users
+                const group = groups.find(g => g.id === groupId);
+                userIds.forEach(userId => {
+                    if (userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                        handleCreateNotification(
+                            userId,
+                            currentUser.id,
+                            'group_invite',
+                            `invited you to join ${group?.name || 'a group'}.`,
+                            { groupId }
+                        );
+                    }
+                });
+                
+                alert(`Invited ${userIds.length} user(s) to the group!`);
+            }
+        } catch (error) {
+            console.error('Failed to invite to group:', error);
+            alert('Failed to invite users. Please try again.');
+        }
+    };
+    
+    const handleLeaveGroup = async (groupId: string) => { 
+        if (!currentUser) return; 
+        
+        try {
+            const response = await apiFetch('/api/groups/leave', {
+                method: 'POST',
+                body: JSON.stringify({
+                    groupId,
+                    userId: currentUser.id
+                })
+            });
+
+            if (response.success) {
+                setGroups(prev => prev.map(g => 
+                    (g.id === groupId) 
+                        ? { ...g, members: g.members.filter(id => id !== currentUser!.id) } 
+                        : g
+                )); 
+            }
+        } catch (error) {
+            console.error('Failed to leave group:', error);
+            alert('Failed to leave group. Please try again.');
+        }
+    };
+    
+    const handleDeleteGroup = async (groupId: string) => { 
+        if (!currentUser) return; 
+        const group = groups.find(g => g.id === groupId); 
+        if (group && (group.adminId === currentUser.id || isAdmin)) { 
+            if (window.confirm("Are you sure you want to permanently delete this group?")) { 
+                try {
+                    const response = await apiFetch(`/api/groups/${groupId}`, {
+                        method: 'DELETE'
+                    });
+
+                    if (response.success) {
+                        setGroups(prev => prev.filter(g => g.id !== groupId)); 
+                        alert("Group deleted successfully!");
+                    }
+                } catch (error) {
+                    console.error('Failed to delete group:', error);
+                    alert('Failed to delete group. Please try again.');
+                }
+            } 
+        } else {
+            alert("You don't have permission to delete this group.");
+        }
+    };
+    
+    const handleUpdateGroupImage = async (groupId: string, type: 'cover' | 'profile', file: File) => { 
+        try {
+            const formData = new FormData();
+            formData.append('groupId', groupId);
+            formData.append('type', type);
+            formData.append('image', file);
+
+            const response = await apiFetch('/api/groups/update-image', {
+                method: 'POST',
+                body: formData,
+                headers: {} // Remove Content-Type header for FormData
+            });
+
+            if (response.success) {
+                const url = URL.createObjectURL(file); 
+                setGroups(prev => prev.map(g => 
+                    g.id === groupId 
+                        ? (type === 'cover' 
+                            ? { ...g, coverImage: url } 
+                            : { ...g, image: url }) 
+                        : g
+                )); 
+            }
+        } catch (error) {
+            console.error('Failed to update group image:', error);
+            alert('Failed to update group image. Please try again.');
+        }
+    };
+    
+    const handleCreateGroupEvent = async (groupId: string, eventData: Partial<Event>) => {
+        if (!currentUser) return;
+        
+        try {
+            const response = await apiFetch('/api/group-events', {
+                method: 'POST',
+                body: JSON.stringify({
+                    ...eventData,
+                    groupId,
+                    organizerId: currentUser.id
+                })
+            });
+
+            if (response.success) {
+                const timestamp = Date.now();
+                const formattedTime = formatRelativeTime(timestamp);
+                const newEvent: Event = { 
+                    ...eventData, 
+                    id: timestamp, 
+                    attendees: [currentUser.id], 
+                    interestedIds: [],
+                    groupId: groupId,
+                    groupName: groups.find(g => g.id === groupId)?.name
+                } as Event;
+                
+                // Add event to the group
+                setGroups(prev => prev.map(g => 
+                    g.id === groupId 
+                        ? { ...g, events: [...(g.events || []), newEvent] } 
+                        : g
+                ));
+                
+                // Also add to global events
+                setEvents(prev => [newEvent, ...prev]);
+                
+                // Create a post about the event
+                const eventPost: PostType = { 
+                    id: timestamp + 1, 
+                    authorId: currentUser.id, 
+                    content: `is hosting a new event in ${groups.find(g => g.id === groupId)?.name}: ${newEvent.title}`, 
+                    timestamp: timestamp,
+                    formattedTime: formattedTime,
+                    createdAt: timestamp, 
+                    reactions: [], 
+                    comments: [], 
+                    shares: 0, 
+                    type: 'event', 
+                    visibility: 'Public', 
+                    event: newEvent, 
+                    eventId: newEvent.id,
+                    groupId: groupId,
+                    groupName: groups.find(g => g.id === groupId)?.name
+                };
+                setPosts(prev => [eventPost, ...prev]);
+            }
+        } catch (error) {
+            console.error('Failed to create group event:', error);
+            alert('Failed to create group event. Please try again.');
+        }
+    };
+    
+    // FIXED: Prevent self-notifications in group shares
+    const handleGroupShare = async (groupId: string, postId: number, targetType: 'profile' | 'group' | 'brand', targetId?: string | number, extraCaption?: string) => {
+        if (!currentUser) return;
+        
+        // Find the group post
+        const group = groups.find(g => g.id === groupId);
+        if (!group) return;
+        
+        const groupPost = group.posts.find(p => p.id === postId);
+        if (!groupPost) return;
+        
+        try {
+            const response = await apiFetch('/api/group-shares', {
+                method: 'POST',
+                body: JSON.stringify({
+                    groupId,
+                    postId,
+                    sharerId: currentUser.id,
+                    targetType,
+                    targetId,
+                    caption: extraCaption
+                })
+            });
+
+            if (response.success) {
+                // Create a shared post for the feed
+                const timestamp = Date.now();
+                const formattedTime = formatRelativeTime(timestamp);
+                const newSharedPost: PostType = {
+                    id: timestamp,
+                    authorId: currentUser.id,
+                    content: extraCaption ? `${extraCaption}\n\nShared from ${group.name}: ${groupPost.content}` : `Shared from ${group.name}: ${groupPost.content}`,
+                    images: groupPost.images,
+                    video: groupPost.video,
+                    timestamp: timestamp,
+                    formattedTime: formattedTime,
+                    createdAt: timestamp,
+                    reactions: [],
+                    comments: [],
+                    shares: 0,
+                    views: 0,
+                    type: groupPost.video ? 'video' : (groupPost.images ? 'image' : 'text'),
+                    visibility: 'Public',
+                    sharedPostId: postId,
+                    groupId: groupId,
+                    groupName: group.name
+                };
+                
+                // Add to main feed
+                setPosts(prev => [newSharedPost, ...prev]);
+                
+                // Update share count in the group post
+                setGroups(prev => prev.map(g => {
+                    if (g.id === groupId) {
+                        const updatedPosts = g.posts.map(p => {
+                            if (p.id === postId) {
+                                return { ...p, shares: (p.shares || 0) + 1 };
+                            }
+                            return p;
+                        });
+                        return { ...g, posts: updatedPosts };
+                    }
+                    return g;
+                }));
+                
+                // Send notification to original post author (prevent self-notification)
+                if (groupPost.authorId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                    handleCreateNotification(
+                        groupPost.authorId,
+                        currentUser.id,
+                        'group_share',
+                        `shared your post from ${group.name}.`,
+                        { postId, groupId }
+                    );
+                }
+                
+                setActiveGroupShare(null);
+                alert("Shared successfully from group!");
+            }
+        } catch (error) {
+            console.error('Failed to share group post:', error);
+            alert('Failed to share group post. Please try again.');
+        }
+    };
+    
+    // FIXED: Prevent self-notifications for group post reactions
+    const handleReactGroupPost = async (groupId: string, postId: number, type: ReactionType) => { 
+        if (!currentUser) return; 
+        
+        try {
+            const response = await apiFetch('/api/group-reactions', {
+                method: 'POST',
+                body: JSON.stringify({
+                    groupId,
+                    postId,
+                    userId: currentUser.id,
+                    type
+                })
+            });
+
+            if (response.success) {
+                setGroups(prev => prev.map(g => {
+                    if (g.id === groupId) {
+                        const updatedPosts = g.posts.map(p => {
+                            if (p.id === postId) {
+                                const reactions = p.reactions || [];
+                                const existing = reactions.find(r => r.userId === currentUser.id);
+                                let newReactions = [...reactions];
+                                if (existing) {
+                                    if (existing.type === type) {
+                                        newReactions = newReactions.filter(r => r.userId !== currentUser!.id);
+                                    } else {
+                                        newReactions = newReactions.map(r => 
+                                            r.userId === currentUser!.id ? { ...r, type } : r
+                                        );
+                                    }
+                                } else {
+                                    newReactions.push({ userId: currentUser!.id, type });
+                                    
+                                    // Send notification to post author (prevent self-notification)
+                                    if (p.authorId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                                        const group = groups.find(g => g.id === groupId);
+                                        handleCreateNotification(
+                                            p.authorId,
+                                            currentUser.id,
+                                            'group_reaction',
+                                            `reacted to your post in ${group?.name || 'the group'}.`,
+                                            { postId, groupId, reactionType: type }
+                                        );
+                                    }
+                                }
+                                return { ...p, reactions: newReactions };
+                            }
+                            return p;
+                        });
+                        return { ...g, posts: updatedPosts };
+                    }
+                    return g;
+                }));
+            }
+        } catch (error) {
+            console.error('Failed to react to group post:', error);
+        }
+    };
+    
+    const handleOpenGroupComments = (groupId: string, postId: number) => {
+        console.log('Opening group comments:', { groupId, postId });
+        setActiveGroupComments({ groupId, postId });
+    };
+    
+    const handleShareGroupPost = (groupId: string, postId: number) => {
+        console.log('Sharing group post:', { groupId, postId });
+        setActiveGroupShare({ groupId, postId });
+    };
+    
+    const handleUpdateGroupSettings = async (groupId: string, settings: Partial<Group>) => { 
+        try {
+            const response = await apiFetch(`/api/groups/${groupId}/settings`, {
+                method: 'PATCH',
+                body: JSON.stringify(settings)
+            });
+
+            if (response.success) {
+                setGroups(prev => prev.map(g => 
+                    g.id === groupId ? { ...g, ...settings } : g
+                )); 
+            }
+        } catch (error) {
+            console.error('Failed to update group settings:', error);
+            alert('Failed to update group settings. Please try again.');
+        }
+    };
+    
+    const handleRemoveMember = async (groupId: string, memberId: number) => { 
+        const group = groups.find(g => g.id === groupId); 
+        if (currentUser && group && (group.adminId === currentUser.id || isAdmin)) { 
+            try {
+                const response = await apiFetch('/api/groups/remove-member', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        groupId,
+                        adminId: currentUser.id,
+                        memberId
+                    })
+                });
+
+                if (response.success) {
+                    setGroups(prev => prev.map(g => 
+                        g.id === groupId 
+                            ? { ...g, members: g.members.filter(id => id !== memberId) } 
+                            : g
+                    )); 
+                    
+                    // Notify removed member
+                    handleCreateNotification(
+                        memberId,
+                        currentUser.id,
+                        'group_removed',
+                        `removed you from ${group.name}.`,
+                        { groupId }
+                    );
+                }
+            } catch (error) {
+                console.error('Failed to remove member:', error);
+                alert('Failed to remove member. Please try again.');
+            }
+        } 
+    };
+    
+    const handleDeleteGroupPost = async (groupId: string, postId: number) => { 
+        const group = groups.find(g => g.id === groupId); 
+        const post = group?.posts.find(p => p.id === postId); 
+        if (currentUser && group && post && (group.adminId === currentUser.id || isAdmin || post.authorId === currentUser.id)) { 
+            if (window.confirm("Are you sure you want to delete this group post?")) {
+                try {
+                    const response = await apiFetch(`/api/group-posts/${postId}`, {
+                        method: 'DELETE',
+                        body: JSON.stringify({ groupId })
+                    });
+
+                    if (response.success) {
+                        setGroups(prev => prev.map(g => 
+                            (g.id === groupId) 
+                                ? { ...g, posts: g.posts.filter(p => p.id !== postId) } 
+                                : g
+                        )); 
+                        
+                        // Also delete from main feed if it exists
+                        setPosts(prev => prev.filter(p => !(p.id === postId && p.groupId === groupId)));
+                        
+                        alert("Group post deleted successfully!");
+                    }
+                } catch (error) {
+                    console.error('Failed to delete group post:', error);
+                    alert('Failed to delete group post. Please try again.');
+                }
+            }
+        } else {
+            alert("You don't have permission to delete this post.");
+        }
+    };
+
+    // Birthday notification check with self-notification prevention
+    useEffect(() => {
+        const checkBirthdays = () => {
+            if (!currentUser) return;
+            
+            const today = new Date();
+            const todayStr = `${today.getMonth() + 1}/${today.getDate()}`;
+            
+            users.forEach(user => {
+                if (user.birthDate && user.id !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                    const birthDate = new Date(user.birthDate);
+                    const birthStr = `${birthDate.getMonth() + 1}/${birthDate.getDate()}`;
+                    
+                    if (birthStr === todayStr) {
+                        // Check if birthday notification was already sent today
+                        const alreadySent = notifications.some(n => 
+                            n.type === 'birthday' && 
+                            n.senderId === user.id && 
+                            new Date(n.timestamp).toDateString() === today.toDateString()
+                        );
+                        
+                        if (!alreadySent) {
+                            handleCreateNotification(
+                                currentUser.id,
+                                user.id,
+                                'birthday',
+                                `It's ${user.name}'s birthday today!`,
+                                {}
+                            );
+                        }
+                    }
+                }
+            });
+        };
+        
+        // Check birthdays on mount and every 24 hours
+        checkBirthdays();
+        const interval = setInterval(checkBirthdays, 24 * 60 * 60 * 1000);
+        
+        return () => clearInterval(interval);
+    }, [currentUser, users, notifications, handleCreateNotification]);
+
+    const effectiveView = isClient ? view : (initialData?.view || parsedPath.view);
+    
+    // Function to render music/podcast posts
+    const renderMusicPost = (post: PostType, author: any) => {
+        const song = getSongForPost(post, songs, episodes);
+        if (!song) return null;
+        
+        return (
+            <MusicFeedPost 
+                key={post.id}
+                song={song}
+                currentUser={currentUser}
+                users={users}
+                onPlayTrack={handlePlayTrack}
+                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
+                onLikeTrack={handleLikeTrack}
+                onTrackComment={handleTrackComment}
+                onTrackShare={handleTrackShare}
+                isLiked={likedTracks.includes(song.id)}
+            />
+        );
+    };
+
+    // Function to render regular posts with brand support and Facebook-style image grids
+    const renderRegularPost = (post: PostType, author: any, isFollowing?: boolean) => {
+        const isBrandAuthor = author?.type === 'brand';
+        const isFollowingBrand = isBrandAuthor && currentUser ? 
+            brands.find(b => b.id === author.id)?.followers.includes(currentUser.id) || false : 
+            false;
+        
+        // Ensure post has formattedTime
+        const postWithFormattedTime = {
+            ...post,
+            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now()),
+            // Ensure images property exists and is properly formatted
+            images: post.images ? post.images : undefined
+        };
+        
+        return (
+            <Post 
+                key={post.id} 
+                post={postWithFormattedTime}
+                author={author as any} 
+                currentUser={currentUser} 
+                users={users} 
+                onProfileClick={(id) => { 
+                    if (isBrandAuthor) {
+                        setActiveBrandId(id);
+                        handleNavigate('brand_view');
+                    } else {
+                        setSelectedUserId(id); 
+                        setView('profile');
+                    }
+                }} 
+                onReact={handleReact} 
+                onShare={(id) => setActiveSharePostId(id)} 
+                onViewImage={(url) => setFullScreenImage(url)} 
+                onOpenComments={(postId) => setActiveCommentsPostId(postId)} 
+                onVideoClick={(p) => { setActiveReelId(p.id - 200000); setView('reels'); }} 
+                onViewProduct={(p) => setActiveProduct(p)} 
+                onGroupClick={(groupId) => { setInitialGroupIdToView(groupId); setView('groups'); setActiveTab('groups'); }} 
+                onPlayAudioTrack={handlePlayTrack} 
+                onFollow={isBrandAuthor ? handleFollowBrand : handleFollowUser} 
+                isFollowing={isBrandAuthor ? isFollowingBrand : isFollowing} 
+                onHashtagClick={handleTagClick} 
+                onDeletePost={handleDeletePost} 
+                isAdmin={isAdmin}
+                // Pass image grid utilities
+                getImageGridClass={getImageGridClass}
+                getImageItemClass={getImageItemClass}
+            />
+        );
+    };
+    
+    return (
+        <div className="bg-[#18191A] min-h-screen flex flex-col font-sans">
+            {isLoading ? (
+                <div className="flex items-center justify-center min-h-screen bg-[#18191A] flex-col">
+                    <div className="w-20 h-20 border-4 border-[#1877F2] border-t-transparent rounded-full animate-spin mb-4"></div>
+                    <div className="text-[#1877F2] font-bold text-xl animate-pulse">Loading UNERA...</div>
+                </div>
+            ) : effectiveView === 'login' ? (
+                 showRegister 
+                    ? <Register onRegister={handleRegister} onBackToLogin={() => { setShowRegister(false); setShowForgotPassword(false); }} /> 
+                    : showForgotPassword
+                    ? <ForgotPassword onBackToLogin={() => { setShowForgotPassword(false); setShowRegister(false); }} />
+                    : <Login onLogin={handleLogin} onNavigateToRegister={() => { setShowRegister(true); setShowForgotPassword(false); }} onNavigateToForgotPassword={() => { setShowForgotPassword(true); setShowRegister(false); }} onClose={() => { setView('home'); setCurrentUser(null); }} error={loginError} />
+            ) : (
+                <>
+                    {currentAudioTrack && (
+                        <GlobalAudioPlayer 
+                            currentTrack={currentAudioTrack} 
+                            isPlaying={isAudioPlaying} 
+                            onTogglePlay={() => setIsAudioPlaying(!isAudioPlaying)} 
+                            onNext={() => {}} 
+                            onPrevious={() => {}} 
+                            onClose={() => { setCurrentAudioTrack(null); setIsAudioPlaying(false); }} 
+                            onDownload={() => alert("Download started...")} 
+                            onLike={(id) => setLikedTracks(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])} 
+                            isLiked={likedTracks.includes(currentAudioTrack.id)} 
+                            uploaderProfile={users.find(u => u.id === currentAudioTrack.uploaderId)} 
+                            onArtistClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                        />
+                    )}
+                    <Header 
+                        onHomeClick={() => handleNavigate('home')} 
+                        onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                        onReelsClick={() => handleNavigate('reels')} 
+                        onMarketplaceClick={() => handleNavigate('marketplace')} 
+                        onGroupsClick={() => handleNavigate('groups')} 
+                        currentUser={currentUser} 
+                        notifications={notifications} 
+                        users={users} 
+                        onLogout={handleLogout} 
+                        onLoginClick={() => setView('login')} 
+                        onMarkNotificationsRead={handleMarkAllNotificationsRead} 
+                        onNotificationClick={handleNotificationClick}
+                        activeTab={activeTab} 
+                        onNavigate={handleNavigate} 
+                    />
+                    <div className="flex justify-center w-full max-w-[1920px] mx-auto relative flex-1">
+                        <div className="sticky top-14 h-[calc(100vh-56px)] z-20 hidden lg:block">
+                            <Sidebar 
+                                currentUser={currentUser || INITIAL_USERS[0]} 
+                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                onReelsClick={() => handleNavigate('reels')} 
+                                onMarketplaceClick={() => handleNavigate('marketplace')} 
+                                onGroupsClick={() => handleNavigate('groups')} 
+                            />
+                        </div>
+                        <div className="w-full lg:w-[740px] xl:w-[700px] min-h-screen">
+                            {effectiveView === 'home' && (
+                                <div className="w-full pt-4 md:px-8 pb-10">
+                                    <StoryReel 
+                                        stories={storiesWithUsers} 
+                                        onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                        onCreateStory={() => currentUser ? setShowCreateStoryModal(true) : setView('login')} 
+                                        onViewStory={(s) => setActiveStory(s)} 
+                                        currentUser={currentUser} 
+                                        onRequestLogin={() => setView('login')} 
+                                    />
+                                    {currentUser && (
+                                        <> 
+                                            <CreatePost 
+                                                currentUser={currentUser} 
+                                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                                onClick={() => setShowCreatePostModal(true)} 
+                                                onCreateEventClick={() => setShowCreateEventModal(true)} 
+                                            /> 
+                                            <SuggestedProductsWidget 
+                                                products={products} 
+                                                currentUser={currentUser} 
+                                                onViewProduct={(p) => { setActiveProduct(p); }} 
+                                                onSeeAll={() => handleNavigate('marketplace')} 
+                                            /> 
+                                        </>
+                                    )}
+                                    {rankedPosts.map(post => {
+                                        const author = getAuthorForPost(post, users, brands);
+                                        if (!author) return null;
+                                        
+                                        let isFollowing = false;
+                                        if (author.type === 'user' && currentUser) {
+                                            isFollowing = currentUser.following.includes(author.id);
+                                        } else if (author.type === 'brand' && currentUser) {
+                                            const brand = brands.find(b => b.id === author.id);
+                                            isFollowing = brand ? brand.followers.includes(currentUser.id) : false;
+                                        }
+                                        
+                                        if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
+                                            return renderMusicPost(post, author);
+                                        }
+                                        
+                                        return renderRegularPost(post, author, isFollowing);
+                                    })}
+                                </div>
+                            )}
+                            
+                            {effectiveView === 'profile' && selectedUserId !== null && (
+                                <UserProfile 
+                                    user={users.find(u => u.id === selectedUserId)!} 
+                                    currentUser={currentUser} 
+                                    users={users} 
+                                    posts={(() => {
+                                        const userPosts = posts.filter(p => p.authorId === selectedUserId);
+                                        const enhancedPosts = userPosts.map(post => ({
+                                            ...post,
+                                            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+                                        }));
+                                        
+                                        return [
+                                            ...enhancedPosts,
+                                            ...products
+                                                .filter(p => p.sellerId === selectedUserId)
+                                                .map(p => ({
+                                                    id: p.id + 100000,
+                                                    authorId: p.sellerId,
+                                                    content: `Just listed a new item: ${p.title}`,
+                                                    timestamp: p.date,
+                                                    formattedTime: formatRelativeTime(p.date),
+                                                    createdAt: p.date,
+                                                    reactions: [],
+                                                    comments: [],
+                                                    shares: 0,
+                                                    views: p.views,
+                                                    type: 'product' as const,
+                                                    visibility: 'Public' as const,
+                                                    product: p,
+                                                    productId: p.id
+                                                }))
+                                        ];
+                                    })()}
+                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                    onFollow={handleFollowUser} 
+                                    onReact={handleReact} 
+                                    onComment={handleComment} 
+                                    onShare={(id) => setActiveSharePostId(id)} 
+                                    onMessage={(id) => setActiveChatUser(users.find(u => u.id === id) || null)} 
+                                    onCreatePost={handleCreatePost} 
+                                    onUpdateProfileImage={(f) => {}} 
+                                    onUpdateCoverImage={(f) => {}} 
+                                    onUpdateUserDetails={(d) => {}} 
+                                    onDeletePost={(id) => {
+                                        if (id > 100000) {
+                                            const productId = id - 100000;
+                                            setProducts(prev => prev.filter(p => p.id !== productId));
+                                        } else {
+                                            const postToDelete = posts.find(p => p.id === id);
+                                            if (postToDelete && (postToDelete.type === 'music' || postToDelete.type === 'podcast') && postToDelete.audioTrack) {
+                                                const trackId = postToDelete.audioTrack.id;
+                                                setSongs(prev => prev.filter(s => s.id !== trackId));
+                                                setEpisodes(prev => prev.filter(e => e.id !== trackId));
+                                            }
+                                            setPosts(posts.filter(p => p.id !== id));
+                                        }
+                                    }} 
+                                    onEditPost={() => {}} 
+                                    getCommentAuthor={(id) => users.find(u => u.id === id)} 
+                                    onViewImage={setFullScreenImage} 
+                                    onOpenComments={setActiveCommentsPostId} 
+                                    onVideoClick={() => {}} 
+                                    onCreateEventClick={() => setShowCreateEventModal(true)} 
+                                    onPlayAudioTrack={handlePlayTrack} 
+                                    onVerifyUser={handleVerifyUser} 
+                                    onRestrictUser={handleRestrictUser} 
+                                    onDeleteUser={handleDeleteUser} 
+                                    onMakeModerator={handleMakeModerator} 
+                                    onHashtagClick={handleTagClick} 
+                                    songs={songs}
+                                    episodes={episodes}
+                                    likedTracks={likedTracks}
+                                    onLikeTrack={handleLikeTrack}
+                                    onTrackComment={handleTrackComment}
+                                    onTrackShare={handleTrackShare}
+                                    renderMusicPost={(post: PostType, author: any) => {
+                                        const song = getSongForPost(post, songs, episodes);
+                                        if (!song) return null;
+                                        
+                                        return (
+                                            <MusicFeedPost 
+                                                key={post.id}
+                                                song={song}
+                                                currentUser={currentUser}
+                                                users={users}
+                                                onPlayTrack={handlePlayTrack}
+                                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
+                                                onLikeTrack={handleLikeTrack}
+                                                onTrackComment={handleTrackComment}
+                                                onTrackShare={handleTrackShare}
+                                                isLiked={likedTracks.includes(song.id)}
+                                            />
+                                        );
+                                    }}
+                                    renderRegularPost={renderRegularPost}
+                                    getImageGridClass={getImageGridClass}
+                                    getImageItemClass={getImageItemClass}
+                                />
+                            )}
+                            
+                            {effectiveView === 'single_post' && activeSinglePostId !== null && (
+                                <div className="w-full pt-4 md:px-8 pb-10">
+                                    {(() => {
+                                        const post = posts.find(p => p.id === activeSinglePostId);
+                                        if (!post) return null;
+                                        
+                                        const author = getAuthorForPost(post, users, brands);
+                                        if (!author) return null;
+                                        
+                                        if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
+                                            return renderMusicPost(post, author);
+                                        }
+                                        
+                                        return (
+                                            <Post
+                                                key={activeSinglePostId}
+                                                post={{...post, formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())}}
+                                                author={author}
+                                                currentUser={currentUser}
+                                                users={users}
+                                                onProfileClick={(id) => { 
+                                                    if (author.type === 'brand') {
+                                                        setActiveBrandId(id);
+                                                        handleNavigate('brand_view');
+                                                    } else {
+                                                        setSelectedUserId(id); 
+                                                        setView('profile');
+                                                    }
+                                                }}
+                                                onReact={handleReact}
+                                                onShare={(id) => setActiveSharePostId(id)}
+                                                onViewImage={setFullScreenImage}
+                                                onOpenComments={setActiveCommentsPostId}
+                                                onVideoClick={() => {}}
+                                                onPlayAudioTrack={handlePlayTrack}
+                                                onFollow={author.type === 'brand' ? handleFollowBrand : handleFollowUser}
+                                                isFollowing={author.type === 'brand' && currentUser ? 
+                                                    brands.find(b => b.id === author.id)?.followers.includes(currentUser.id) || false :
+                                                    author.type === 'user' && currentUser ?
+                                                    currentUser.following.includes(author.id) : false}
+                                                onHashtagClick={handleTagClick}
+                                                onDeletePost={handleDeletePost}
+                                                isAdmin={isAdmin}
+                                                getImageGridClass={getImageGridClass}
+                                                getImageItemClass={getImageItemClass}
+                                            />
+                                        );
+                                    })()}
+                                </div>
+                            )}
+                            
+                            {effectiveView === 'marketplace' && (
+                                <MarketplacePage 
+                                    products={products} 
+                                    currentUser={currentUser} 
+                                    onNavigateHome={() => handleNavigate('home')}
+                                    onCreateProduct={handleCreateProduct}
+                                    onViewProduct={(product) => setActiveProduct(product)}
+                                />
+                            )}
+                            
+                            {effectiveView === 'reels' && (
+                                <ReelsFeed 
+                                    reels={reels} 
+                                    users={users} 
+                                    currentUser={currentUser} 
+                                    activeReelId={activeReelId} 
+                                    onReelClick={setActiveReelId} 
+                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                    onNavigate={handleNavigate} 
+                                    onReact={handleReelReact}
+                                    onShare={(reelId, type) => {
+                                        if (type === 'feed') {
+                                            const reel = reels.find(r => r.id === reelId);
+                                            if (reel && currentUser) {
+                                                const timestamp = Date.now();
+                                                const formattedTime = formatRelativeTime(timestamp);
+                                                const newPost: PostType = { 
+                                                    id: timestamp, 
+                                                    authorId: currentUser.id, 
+                                                    content: `Shared a reel: ${reel.caption}`, 
+                                                    video: reel.videoUrl,
+                                                    timestamp: timestamp,
+                                                    formattedTime: formattedTime,
+                                                    createdAt: timestamp, 
+                                                    reactions: [], 
+                                                    comments: [], 
+                                                    shares: 0, 
+                                                    views: 0, 
+                                                    type: 'video', 
+                                                    visibility: 'Public' 
+                                                };
+                                                setPosts([newPost, ...posts]);
+                                                setReels(prev => prev.map(r => 
+                                                    r.id === reelId 
+                                                        ? { ...r, shares: (r.shares || 0) + 1 }
+                                                        : r
+                                                ));
+                                                
+                                                // Send notification to reel owner (prevent self-notification)
+                                                if (reel.userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                                                    handleCreateNotification(
+                                                        reel.userId,
+                                                        currentUser.id,
+                                                        'reel_share',
+                                                        'shared your reel.',
+                                                        { reelId }
+                                                    );
+                                                }
+                                                
+                                                alert("Reel shared to your feed!");
+                                            }
+                                        } else if (type === 'copy' && isClient) {
+                                            navigator.clipboard.writeText(`https://unera.social/reels/${reelId}`);
+                                            alert("Link copied to clipboard!");
+                                        }
+                                    }}
+                                    onComment={(reelId, text) => {
+                                        if (!currentUser) return;
+                                        const timestamp = Date.now();
+                                        const formattedTime = formatRelativeTime(timestamp);
+                                        const newComment = { 
+                                            id: timestamp, 
+                                            userId: currentUser.id, 
+                                            text, 
+                                            timestamp: timestamp,
+                                            formattedTime: formattedTime,
+                                            likes: 0,
+                                            authorName: currentUser.name,
+                                            authorImage: currentUser.profileImage
+                                        };
+                                        setReels(prev => prev.map(reel => 
+                                            reel.id === reelId 
+                                                ? { ...reel, comments: [...reel.comments, newComment] }
+                                                : reel
+                                        ));
+                                        
+                                        // Send notification to reel owner (prevent self-notification)
+                                        const reel = reels.find(r => r.id === reelId);
+                                        if (reel && reel.userId !== currentUser.id) { // PREVENT SELF-NOTIFICATION
+                                            handleCreateNotification(
+                                                reel.userId,
+                                                currentUser.id,
+                                                'reel_comment',
+                                                'commented on your reel.',
+                                                { reelId, commentId: newComment.id }
+                                            );
+                                        }
+                                    }}
+                                    onCreateReelClick={() => setShowCreateReelModal(true)}
+                                    onFollow={handleFollowUser}
+                                    getCommentAuthor={(id) => users.find(u => u.id === id)}
+                                />
+                            )}
+                            
+                            {effectiveView === 'groups' && (
+                                <GroupsPage 
+                                    key="groups-page"
+                                    groups={groups}
+                                    currentUser={currentUser}
+                                    users={users}
+                                    initialGroupId={initialGroupIdToView}
+                                    onCreateGroup={handleCreateGroup}
+                                    onJoinGroup={handleJoinGroup}
+                                    onLeaveGroup={handleLeaveGroup}
+                                    onDeleteGroup={handleDeleteGroup}
+                                    onUpdateGroupImage={handleUpdateGroupImage}
+                                    onPostToGroup={handlePostToGroup}
+                                    onCreateGroupEvent={handleCreateGroupEvent}
+                                    onInviteToGroup={handleInviteToGroup}
+                                    onProfileClick={(id) => { 
+                                        setSelectedUserId(id); 
+                                        setView('profile'); 
+                                        setActiveTab('profile');
+                                    }}
+                                    onLikePost={handleReactGroupPost}
+                                    onOpenComments={handleOpenGroupComments}
+                                    onSharePost={handleShareGroupPost}
+                                    onDeleteGroupPost={handleDeleteGroupPost}
+                                    onRemoveMember={handleRemoveMember}
+                                    onUpdateGroupSettings={handleUpdateGroupSettings}
+                                    onPlayAudioTrack={handlePlayTrack}
+                                    getImageGridClass={getImageGridClass}
+                                    getImageItemClass={getImageItemClass}
+                                />
+                            )}
+                            
+                            {effectiveView === 'brands' && (
+                                <BrandsPage 
+                                    currentUser={currentUser}
+                                    brands={brands}
+                                    posts={posts}
+                                    users={users}
+                                    onCreateBrand={handleCreateBrand}
+                                    onFollowBrand={handleFollowBrand}
+                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
+                                    onPostAsBrand={handlePostAsBrand}
+                                    onReact={handleReact}
+                                    onShare={(id) => setActiveSharePostId(id)}
+                                    onOpenComments={(postId) => setActiveCommentsPostId(postId)}
+                                    onUpdateBrand={handleUpdateBrand}
+                                    onDeleteBrand={handleDeleteBrand}
+                                    onMessage={(brandId) => {
+                                        const brand = brands.find(b => b.id === brandId);
+                                        if (brand && currentUser) {
+                                            alert(`Messaging ${brand.name} - Feature coming soon!`);
+                                        }
+                                    }}
+                                    onCreateEvent={(brandId, eventData) => {
+                                        if (currentUser) {
+                                            const eventWithBrand = {
+                                                ...eventData,
+                                                brandId: brandId,
+                                                brandName: brands.find(b => b.id === brandId)?.name
+                                            };
+                                            handleCreateEvent(eventWithBrand);
+                                        }
+                                    }}
+                                    onUpdateBrandImage={handleUpdateBrandImage}
+                                    onDeletePost={handleDeletePost}
+                                    onVerifyBrand={handleVerifyBrand}
+                                    initialBrandId={activeBrandId}
+                                    onPlayAudioTrack={handlePlayTrack}
+                                    getImageGridClass={getImageGridClass}
+                                    getImageItemClass={getImageItemClass}
+                                />
+                            )}
+                            
+                            {effectiveView === 'events' && (
+                                <EventsPage 
+                                    events={events} 
+                                    users={users} 
+                                    currentUser={currentUser} 
+                                    onJoinEvent={handleJoinEvent} 
+                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                    onCreateEvent={() => setShowCreateEventModal(true)} 
+                                />
+                            )}
+                            
+                            {effectiveView === 'birthdays' && (
+                                <BirthdaysPage 
+                                    users={users} 
+                                    currentUser={currentUser} 
+                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                />
+                            )}
+                            
+                            {effectiveView === 'suggested_profiles' && (
+                                <SuggestedProfilesPage 
+                                    users={users} 
+                                    currentUser={currentUser} 
+                                    onFollow={handleFollowUser} 
+                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                />
+                            )}
+                            
+                            {effectiveView === 'memories' && (
+                                <MemoriesPage 
+                                    posts={posts} 
+                                    currentUser={currentUser} 
+                                    users={users} 
+                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                    onPostClick={(postId) => { setActiveSinglePostId(postId); setView('single_post'); }} 
+                                />
+                            )}
+                            
+                            {effectiveView === 'music' && (
+                                <MusicSystem 
+                                    songs={songs} 
+                                    episodes={episodes} 
+                                    currentUser={currentUser} 
+                                    onPlayTrack={handlePlayTrack} 
+                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                    onDeleteSong={handleDeleteSong} 
+                                    onDeleteEpisode={handleDeleteEpisode} 
+                                    likedTracks={likedTracks} 
+                                    onToggleLike={handleLikeTrack} 
+                                    onUploadToFeed={handleUploadToFeed} 
+                                    onAddSong={handleAddSong} 
+                                    onAddEpisode={handleAddEpisode} 
+                                    playHistory={playHistory}
+                                />
+                            )}
+                            
+                            {effectiveView === 'tools' && (
+                                <ToolsPage 
+                                    currentUser={currentUser} 
+                                    onNavigate={handleNavigate} 
+                                />
+                            )}
+                            
+                            {effectiveView === 'help_support' && (
+                                <HelpSupportPage 
+                                    currentUser={currentUser} 
+                                />
+                            )}
+                            
+                            {effectiveView === 'settings' && (
+                                <SettingsPage 
+                                    currentUser={currentUser} 
+                                    onUpdateUser={(updates) => { 
+                                        if (currentUser) {
+                                            const updatedUser = { ...currentUser, ...updates };
+                                            setCurrentUser(updatedUser);
+                                            setUsers(users.map(u => u.id === currentUser.id ? updatedUser : u));
+                                        }
+                                    }} 
+                                    onLogout={handleLogout} 
+                                />
+                            )}
+                            
+                            {effectiveView === 'privacy_policy' && (
+                                <PrivacyPolicyPage />
+                            )}
+                            
+                            {effectiveView === 'terms_of_service' && (
+                                <TermsOfServicePage />
+                            )}
+                        </div>
+                        <div className="sticky top-14 h-[calc(100vh-56px)] z-20 hidden xl:block pl-4">
+                            <RightSidebar 
+                                contacts={users.filter(u => u.id !== currentUser?.id)} 
+                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                            />
+                        </div>
+                    </div>
+                    
+                    {/* Modals */}
+                    {showCreatePostModal && currentUser && (
+                        <CreatePostModal 
+                            currentUser={currentUser} 
+                            users={users} 
+                            onClose={() => setShowCreatePostModal(false)} 
+                            onCreatePost={handleCreatePost} 
+                        />
+                    )}
+                    
+                    {showCreateStoryModal && currentUser && (
+                        <CreateStoryModal 
+                            currentUser={currentUser} 
+                            songs={songs} 
+                            onClose={() => setShowCreateStoryModal(false)} 
+                            onCreate={handleCreateStory} 
+                        />
+                    )}
+                    
+                    {showCreateReelModal && currentUser && (
+                        <CreateReelModal 
+                            currentUser={currentUser} 
+                            songs={songs} 
+                            onClose={() => setShowCreateReelModal(false)} 
+                            onSubmit={handleCreateReel} 
+                        />
+                    )}
+                    
+                    {showCreateEventModal && currentUser && (
+                        <CreateEventModal 
+                            currentUser={currentUser} 
+                            onClose={() => setShowCreateEventModal(false)} 
+                            onCreate={handleCreateEvent} 
+                        />
+                    )}
+                    
+                    {/* Regular Post Comments Modal */}
+                    {activeCommentsPostId && (
+                        <CommentsSheet 
+                            post={posts.find(p => p.id === activeCommentsPostId)!} 
+                            currentUser={currentUser || INITIAL_USERS[0]} 
+                            users={users} 
+                            onClose={() => setActiveCommentsPostId(null)} 
+                            onComment={handleComment} 
+                            onLikeComment={() => {}} 
+                            getCommentAuthor={(id) => users.find(u => u.id === id)} 
+                            onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); setActiveCommentsPostId(null); }} 
+                        />
+                    )}
+                    
+                    {/* Group Post Comments Modal */}
+                    {activeGroupComments && (
+                        (() => {
+                            const { groupId, postId } = activeGroupComments;
+                            const group = groups.find(g => g.id === groupId);
+                            const groupPost = group?.posts.find(p => p.id === postId);
+                            
+                            if (group && groupPost) {
+                                const postForComments: PostType = {
+                                    id: groupPost.id,
+                                    authorId: groupPost.authorId,
+                                    content: groupPost.content || '',
+                                    images: groupPost.images,
+                                    video: groupPost.video,
+                                    timestamp: groupPost.timestamp,
+                                    formattedTime: groupPost.formattedTime || formatRelativeTime(groupPost.timestamp),
+                                    createdAt: groupPost.timestamp,
+                                    reactions: groupPost.reactions || [],
+                                    comments: groupPost.comments || [],
+                                    shares: groupPost.shares || 0,
+                                    views: 0,
+                                    type: groupPost.video ? 'video' : (groupPost.images ? 'image' : 'text'),
+                                    visibility: 'Public',
+                                    groupId: groupId,
+                                    groupName: group.name
+                                };
+                                
+                                return (
+                                    <CommentsSheet 
+                                        post={postForComments}
+                                        currentUser={currentUser || INITIAL_USERS[0]}
+                                        users={users}
+                                        onClose={() => setActiveGroupComments(null)}
+                                        onComment={(postId, text, attachment) => handleGroupComment(groupId, postId, text, attachment)}
+                                        onLikeComment={() => {}}
+                                        getCommentAuthor={(id) => users.find(u => u.id === id)}
+                                        onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); setActiveGroupComments(null); }}
+                                        title={`Comments from ${group.name}`}
+                                    />
+                                );
+                            }
+                            return null;
+                        })()
+                    )}
+                    
+                    {/* Regular Post Share Modal */}
+                    {activeSharePostId && (
+                        <ShareSheet 
+                            currentUser={currentUser} 
+                            groups={groups} 
+                            brands={brands} 
+                            postId={activeSharePostId} 
+                            onClose={() => setActiveSharePostId(null)} 
+                            onShare={(type, id, caption) => handleShare(activeSharePostId, type, id, caption)} 
+                            onCopyLink={() => { if(isClient) { navigator.clipboard.writeText(`https://unera.social/posts/${activeSharePostId}`); alert("Link copied!"); } }} 
+                        />
+                    )}
+                    
+                    {/* Group Post Share Modal */}
+                    {activeGroupShare && (
+                        (() => {
+                            const { groupId, postId } = activeGroupShare;
+                            const group = groups.find(g => g.id === groupId);
+                            
+                            if (group) {
+                                return (
+                                    <ShareSheet 
+                                        currentUser={currentUser} 
+                                        groups={groups.filter(g => g.id !== groupId)} // Don't show current group
+                                        brands={brands} 
+                                        postId={postId} 
+                                        onClose={() => setActiveGroupShare(null)} 
+                                        onShare={(type, id, caption) => handleGroupShare(groupId, postId, type, id, caption)} 
+                                        onCopyLink={() => { 
+                                            if(isClient) { 
+                                                navigator.clipboard.writeText(`https://unera.social/groups/${groupId}/posts/${postId}`); 
+                                                alert("Link copied!"); 
+                                            } 
+                                        }}
+                                        title={`Share post from ${group.name}`}
+                                    />
+                                );
+                            }
+                            return null;
+                        })()
+                    )}
+                    
+                    {activeStory && (
+                        <StoryViewer 
+                            story={activeStory} 
+                            user={users.find(u => u.id === activeStory.userId)!} 
+                            currentUser={currentUser} 
+                            allStories={storiesWithUsers} 
+                            onClose={() => setActiveStory(null)} 
+                            onLike={() => handleLikeStory(activeStory.id)} 
+                            onReply={(text) => handleReplyStory(activeStory.id, text)} 
+                            onNext={() => {}} 
+                            onPrev={() => {}} 
+                            onFollow={handleFollowUser} 
+                            isFollowing={currentUser ? currentUser.following.includes(activeStory.userId) : false} 
+                        />
+                    )}
+                    {activeChatUser && currentUser && (
+                        <ChatWindow 
+                            currentUser={currentUser} 
+                            recipient={activeChatUser} 
+                            messages={messages} 
+                            onClose={() => setActiveChatUser(null)} 
+                            onSendMessage={() => {}} 
+                        />
+                    )}
+                    {activeProduct && (
+                        <ProductDetailModal 
+                            product={activeProduct} 
+                            currentUser={currentUser} 
+                            onClose={() => setActiveProduct(null)} 
+                            onMessage={(sid) => setActiveChatUser(users.find(u => u.id === sid) || null)} 
+                        />
+                    )}
+                    {fullScreenImage && (
+                        <ImageViewer 
+                            imageUrl={fullScreenImage} 
+                            onClose={() => setFullScreenImage(null)} 
+                        />
+                    )}
+                </>
+            )}
+        </div>
+    );
+}
