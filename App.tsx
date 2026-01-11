@@ -1,4 +1,4 @@
-// App.tsx - Fixed Version with Complete API Integration
+// App.tsx - Fully Fixed Version with Complete API Integration
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Login, Register, ForgotPassword } from './components/Auth';
 import { Header, Sidebar, RightSidebar, MenuOverlay } from './components/Layout';
@@ -144,15 +144,22 @@ const formatRelativeTime = (timestamp: number): string => {
 
 // ========== CRITICAL FIX: Safe Profile Image Helper ==========
 const getSafeProfileImage = (user: User | Brand | null | undefined): string => {
-  if (!user) return '/default-profile.png';
-  
-  // Check if it's a Brand
-  if ('isVerified' in user && 'followers' in user) {
-    return user.profileImage || '/default-brand.png';
+  // First check: handle null/undefined immediately
+  if (!user || typeof user !== 'object') {
+    return '/default-profile.png';
   }
   
-  // It's a User
-  return user.profileImage || '/default-profile.png';
+  // Second check: handle missing profileImage property safely
+  if (!('profileImage' in user) || !user.profileImage) {
+    // Check if it's a Brand or User to return appropriate default
+    if ('isVerified' in user && 'followers' in user) {
+      return '/default-brand.png';
+    }
+    return '/default-profile.png';
+  }
+  
+  // Safe to access profileImage now
+  return user.profileImage;
 };
 
 const getDefaultUser = (): User => ({
@@ -172,6 +179,24 @@ const getDefaultUser = (): User => ({
   birthDate: undefined,
   isRestricted: false,
   restrictedUntil: undefined
+});
+
+const getDefaultBrand = (): Brand => ({
+  id: 0,
+  name: 'Unknown Brand',
+  category: 'Business',
+  description: '',
+  website: '',
+  location: '',
+  contactEmail: '',
+  contactPhone: '',
+  adminId: 0,
+  profileImage: '/default-brand.png',
+  coverImage: 'https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-1.2.1&auto=format&fit=crop&w=1500&q=80',
+  isVerified: false,
+  followers: [],
+  posts: [],
+  createdAt: Date.now(),
 });
 
 // ========== API HELPER FUNCTIONS ==========
@@ -241,10 +266,23 @@ const UNERA_API = {
     getUser: (userId: number) =>
       apiRequest(`/users/${userId}`),
     
+    getAll: () =>
+      apiRequest('/users'),
+    
     updateProfile: (data: Partial<{ username: string; bio: string; avatar_url: string }>) =>
       apiRequest('/users/me', {
         method: 'PUT',
         body: JSON.stringify(data),
+      }),
+    
+    follow: (userId: number) =>
+      apiRequest(`/users/${userId}/follow`, {
+        method: 'POST',
+      }),
+    
+    unfollow: (userId: number) =>
+      apiRequest(`/users/${userId}/unfollow`, {
+        method: 'POST',
       }),
   },
 
@@ -252,6 +290,7 @@ const UNERA_API = {
   posts: {
     create: (data: { 
       user_id?: number;
+      brand_id?: number;
       content: string; 
       media_url?: string;
       background?: string;
@@ -263,17 +302,14 @@ const UNERA_API = {
     }) =>
       apiRequest('/posts', {
         method: 'POST',
-        body: JSON.stringify({
-          content: data.content,
-          media_url: data.media_url,
-          ...(data.user_id && { user_id: data.user_id })
-        }),
+        body: JSON.stringify(data),
       }),
     
     getAll: (params?: { 
       page?: number; 
       limit?: number; 
       user_id?: number;
+      brand_id?: number;
       type?: string;
     }) => {
       const query = params ? new URLSearchParams(params as any).toString() : '';
@@ -292,49 +328,49 @@ const UNERA_API = {
   // 3. Brands API
   brands: {
     getAll: () =>
-      apiRequest('/brands_pages'),
+      apiRequest('/brands'),
     
     getById: (brandId: number) =>
-      apiRequest(`/brands_pages/${brandId}`),
+      apiRequest(`/brands/${brandId}`),
     
     create: (data: any) =>
-      apiRequest('/brands_pages', {
+      apiRequest('/brands', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
     
     update: (brandId: number, data: any) =>
-      apiRequest(`/brands_pages/${brandId}`, {
+      apiRequest(`/brands/${brandId}`, {
         method: 'PUT',
         body: JSON.stringify(data),
       }),
     
     delete: (brandId: number) =>
-      apiRequest(`/brands_pages/${brandId}`, {
+      apiRequest(`/brands/${brandId}`, {
         method: 'DELETE',
       }),
     
     follow: (brandId: number) =>
-      apiRequest(`/brands_pages/${brandId}/follow`, {
+      apiRequest(`/brands/${brandId}/follow`, {
         method: 'POST',
       }),
     
     unfollow: (brandId: number) =>
-      apiRequest(`/brands_pages/${brandId}/unfollow`, {
+      apiRequest(`/brands/${brandId}/unfollow`, {
         method: 'POST',
       }),
     
     getPosts: (brandId: number) =>
-      apiRequest(`/brands_pages/${brandId}/posts`),
+      apiRequest(`/brands/${brandId}/posts`),
     
     createPost: (brandId: number, data: any) =>
-      apiRequest(`/brands_pages/${brandId}/posts`, {
+      apiRequest(`/brands/${brandId}/posts`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
     
     verify: (brandId: number) =>
-      apiRequest(`/brands_pages/${brandId}/verify`, {
+      apiRequest(`/brands/${brandId}/verify`, {
         method: 'POST',
       }),
   },
@@ -394,6 +430,9 @@ const UNERA_API = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    
+    getAll: () =>
+      apiRequest('/events'),
   },
 
   // 8. Messages API
@@ -403,12 +442,18 @@ const UNERA_API = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    
+    getConversation: (userId: number) =>
+      apiRequest(`/messages/conversation/${userId}`),
   },
 
   // 9. Groups API
   groups: {
     getAll: () =>
       apiRequest('/groups'),
+    
+    getById: (groupId: string) =>
+      apiRequest(`/groups/${groupId}`),
   },
 
   // 10. Music API
@@ -421,6 +466,12 @@ const UNERA_API = {
   stories: {
     getAll: () =>
       apiRequest('/stories'),
+    
+    create: (data: any) =>
+      apiRequest('/stories', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
   },
 
   // 12. Products API
@@ -432,6 +483,7 @@ const UNERA_API = {
 
 // ========== CRITICAL FIX: Safe getAuthorForPost function ==========
 const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
+  // Try to find by brandId first
   if (post.brandId) {
     const brand = brands.find(b => b.id === post.brandId);
     if (brand) {
@@ -440,13 +492,14 @@ const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
         type: 'brand' as const,
         name: brand.name,
         profileImage: getSafeProfileImage(brand),
-        isVerified: brand.isVerified,
+        isVerified: brand.isVerified || false,
         id: brand.id,
         followers: brand.followers || []
       };
     }
   }
   
+  // Try to find brand by authorId
   const brandByAuthorId = brands.find(b => b.id === post.authorId);
   if (brandByAuthorId) {
     return {
@@ -454,12 +507,13 @@ const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
       type: 'brand' as const,
       name: brandByAuthorId.name,
       profileImage: getSafeProfileImage(brandByAuthorId),
-      isVerified: brandByAuthorId.isVerified,
+      isVerified: brandByAuthorId.isVerified || false,
       id: brandByAuthorId.id,
       followers: brandByAuthorId.followers || []
     };
   }
   
+  // Try to find user by authorId
   const user = users.find(u => u.id === post.authorId);
   if (user) {
     return {
@@ -469,7 +523,7 @@ const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
     };
   }
   
-  // Return a default user if none found
+  // Return a safe default user if none found
   return {
     ...getDefaultUser(),
     id: post.authorId || 0,
@@ -506,7 +560,7 @@ const getSongForPost = (post: PostType, songs: Song[], episodes: Episode[]) => {
       id: episode.id,
       title: episode.title,
       artist: episode.host || 'Podcast Host',
-      cover: episode.thumbnail || episode.cover,
+      cover: episode.thumbnail || episode.cover || '/default-cover.jpg',
       audioUrl: episode.audioUrl,
       duration: episode.duration,
       uploaderId: episode.uploaderId,
@@ -529,12 +583,12 @@ const getSongForPost = (post: PostType, songs: Song[], episodes: Episode[]) => {
   
   return {
     id: post.audioTrack.id,
-    title: post.audioTrack.title,
-    artist: post.audioTrack.artist,
+    title: post.audioTrack.title || 'Unknown Track',
+    artist: post.audioTrack.artist || 'Unknown Artist',
     cover: post.audioTrack.cover || '/default-cover.jpg',
-    audioUrl: post.audioTrack.url,
-    duration: post.audioTrack.duration,
-    uploaderId: post.audioTrack.uploaderId,
+    audioUrl: post.audioTrack.url || '',
+    duration: post.audioTrack.duration || 180,
+    uploaderId: post.audioTrack.uploaderId || 0,
     type: post.type === 'podcast' ? 'podcast' : 'music',
     plays: post.audioTrack.plays || 0,
     likes: post.audioTrack.likes || 0,
@@ -602,7 +656,7 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
   
-  // State with safe initialization
+  // State with safe initialization - ALL using getSafeProfileImage
   const [users, setUsers] = useState<User[]>(() => {
     return (initialData?.users || INITIAL_USERS).map(user => ({
       ...user,
@@ -622,7 +676,7 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
     return INITIAL_STORIES.map(s => ({
       ...s, 
       createdAt: Date.now(), 
-      user: users.find((u: User) => u.id === s.userId) || getDefaultUser()
+      user: (initialData?.users || INITIAL_USERS).find((u: User) => u.id === s.userId) || getDefaultUser()
     }));
   }); 
   
@@ -830,6 +884,30 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
         }
         break;
         
+      case 'settings':
+        setView('settings');
+        setActiveTab('settings');
+        if (isClient) window.history.pushState({}, '', '/settings');
+        break;
+        
+      case 'help_support':
+        setView('help_support');
+        setActiveTab('help_support');
+        if (isClient) window.history.pushState({}, '', '/help');
+        break;
+        
+      case 'privacy_policy':
+        setView('privacy_policy');
+        setActiveTab('privacy_policy');
+        if (isClient) window.history.pushState({}, '', '/privacy');
+        break;
+        
+      case 'terms_of_service':
+        setView('terms_of_service');
+        setActiveTab('terms_of_service');
+        if (isClient) window.history.pushState({}, '', '/terms');
+        break;
+        
       default:
         console.warn('Unknown navigation destination:', destination);
         setView('home');
@@ -839,6 +917,21 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
     
     window.scrollTo(0, 0);
   }, [isClient]);
+
+  // ========== ERROR TRACKING ==========
+  useEffect(() => {
+    const handleError = (error: ErrorEvent) => {
+      console.error('Global error caught:', error);
+      console.error('Error stack:', error.error?.stack);
+      setApiError(`Runtime Error: ${error.message}`);
+    };
+    
+    window.addEventListener('error', handleError);
+    
+    return () => {
+      window.removeEventListener('error', handleError);
+    };
+  }, []);
 
   // ========== OTHER HANDLERS ==========
   const handleTagClick = useCallback((tag: string) => {
@@ -854,34 +947,34 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
       return;
     }
     
+    if (userId === currentUser.id) return;
+    
     try {
-      const token = getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/users/${userId}/follow`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      const user = users.find(u => u.id === userId);
+      const isFollowing = user?.followers?.includes(currentUser.id) || false;
       
-      if (response.ok) {
-        // Update local state
-        setUsers(prev => prev.map(user => {
-          if (user.id === userId) {
-            return { ...user, followers: [...(user.followers || []), currentUser.id] };
-          }
-          if (user.id === currentUser.id) {
-            return { ...user, following: [...(user.following || []), userId] };
-          }
-          return user;
-        }));
-        
-        if (currentUser) {
-          setCurrentUser(prev => prev ? {
-            ...prev,
-            following: [...(prev.following || []), userId]
-          } : prev);
-        }
+      if (isFollowing) {
+        await UNERA_API.users.unfollow(userId);
+        setUsers(prev => prev.map(u => 
+          u.id === userId 
+            ? { ...u, followers: (u.followers || []).filter(id => id !== currentUser.id) } 
+            : u
+        ));
+        setCurrentUser(prev => prev ? {
+          ...prev,
+          following: (prev.following || []).filter(id => id !== userId)
+        } : prev);
+      } else {
+        await UNERA_API.users.follow(userId);
+        setUsers(prev => prev.map(u => 
+          u.id === userId 
+            ? { ...u, followers: [...(u.followers || []), currentUser.id] } 
+            : u
+        ));
+        setCurrentUser(prev => prev ? {
+          ...prev,
+          following: [...(prev.following || []), userId]
+        } : prev);
         
         // Create notification
         handleCreateNotification(
@@ -892,11 +985,11 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
           {}
         );
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to follow user:', err);
-      alert('Failed to follow user');
+      setApiError(`Failed to follow user: ${err.message}`);
     }
-  }, [currentUser]);
+  }, [currentUser, users]);
 
   const handleCreateNotification = useCallback((
     userId: number,
@@ -947,7 +1040,14 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
   };
 
   const handlePlayTrack = (track: AudioTrack) => {
-    setCurrentAudioTrack(track);
+    if (!track) return;
+    
+    setCurrentAudioTrack({
+      ...track,
+      cover: track.cover || '/default-cover.jpg',
+      title: track.title || 'Unknown Track',
+      artist: track.artist || 'Unknown Artist'
+    });
     setIsAudioPlaying(true);
     
     // Add to play history
@@ -961,7 +1061,7 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
     if (!likedTracks.includes(track.id)) {
       setTimeout(() => {
         setLikedTracks(prev => [...prev, track.id]);
-      }, 30000); // Like after 30 seconds of listening
+      }, 30000);
     }
   };
 
@@ -985,11 +1085,16 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
       const newBrand = await UNERA_API.brands.create({
         ...brandData,
         admin_id: currentUser.id,
-        profile_image: brandData.profileImage,
-        cover_image: brandData.coverImage,
+        profile_image: getSafeProfileImage(brandData),
+        cover_image: brandData.coverImage || 'https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-1.2.1&auto=format&fit=crop&w=1500&q=80',
       });
       
-      setBrands(prev => [newBrand, ...prev]);
+      const safeBrand = {
+        ...newBrand,
+        profileImage: getSafeProfileImage(newBrand)
+      };
+      
+      setBrands(prev => [safeBrand, ...prev]);
       
       // Auto-follow the brand
       await UNERA_API.brands.follow(newBrand.id);
@@ -1002,7 +1107,7 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
         } : prev);
       }
       
-      return newBrand;
+      return safeBrand;
     } catch (err: any) {
       setApiError(err.message || 'Failed to create brand');
       throw err;
@@ -1103,6 +1208,10 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
         formattedTime: formatRelativeTime(brandPost.timestamp || Date.now()),
         brandId: brandId,
         authorId: brandId,
+        reactions: [],
+        comments: [],
+        shares: 0,
+        views: 0,
       };
       
       setPosts(prev => [newPost, ...prev]);
@@ -1139,9 +1248,13 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
       }
       
       const updatedBrand = await UNERA_API.brands.update(brandId, data);
-      setBrands(prev => prev.map(b => b.id === brandId ? updatedBrand : b));
+      const safeBrand = {
+        ...updatedBrand,
+        profileImage: getSafeProfileImage(updatedBrand)
+      };
+      setBrands(prev => prev.map(b => b.id === brandId ? safeBrand : b));
       
-      return updatedBrand;
+      return safeBrand;
     } catch (err: any) {
       setApiError(err.message || 'Failed to update brand');
       throw err;
@@ -1214,9 +1327,13 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
         : { coverImage: imageUrl };
       
       const updatedBrand = await UNERA_API.brands.update(brandId, updateData);
-      setBrands(prev => prev.map(b => b.id === brandId ? updatedBrand : b));
+      const safeBrand = {
+        ...updatedBrand,
+        profileImage: getSafeProfileImage(updatedBrand)
+      };
+      setBrands(prev => prev.map(b => b.id === brandId ? safeBrand : b));
       
-      return updatedBrand;
+      return safeBrand;
     } catch (err: any) {
       setApiError(err.message || 'Failed to update brand image');
       throw err;
@@ -1232,7 +1349,11 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
     try {
       setApiError(null);
       const verifiedBrand = await UNERA_API.brands.verify(brandId);
-      setBrands(prev => prev.map(b => b.id === brandId ? verifiedBrand : b));
+      const safeBrand = {
+        ...verifiedBrand,
+        profileImage: getSafeProfileImage(verifiedBrand)
+      };
+      setBrands(prev => prev.map(b => b.id === brandId ? safeBrand : b));
       
       // Notify brand admin
       const brand = brands.find(b => b.id === brandId);
@@ -1247,7 +1368,7 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
       }
       
       alert("Brand verified successfully");
-      return verifiedBrand;
+      return safeBrand;
     } catch (err: any) {
       setApiError(err.message || 'Failed to verify brand');
       throw err;
@@ -1315,7 +1436,10 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
       }
       
       // Start conversation with brand admin
-      setActiveChatUser(brandAdmin);
+      setActiveChatUser({
+        ...brandAdmin,
+        profileImage: getSafeProfileImage(brandAdmin)
+      });
       setView('chat');
       
     } catch (err: any) {
@@ -1609,16 +1733,17 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
       
       if (data.token && data.user) {
         setAuthToken(data.token);
-        setCurrentUser({
+        const safeUser = {
           ...data.user,
           profileImage: getSafeProfileImage(data.user)
-        });
+        };
+        setCurrentUser(safeUser);
         
         // Load user data after login
         const [postsData, brandsData, usersData] = await Promise.all([
           UNERA_API.posts.getAll().catch(() => []),
           UNERA_API.brands.getAll().catch(() => []),
-          UNERA_API.users.getAll?.().catch(() => []) // Add this endpoint to your API
+          UNERA_API.users.getAll().catch(() => []),
         ]);
         
         if (postsData && Array.isArray(postsData)) {
@@ -1704,19 +1829,22 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
           // Load current user
           const userData = await UNERA_API.users.getCurrentUser();
           if (userData) {
-            setCurrentUser({
+            const safeUser = {
               ...userData,
               profileImage: getSafeProfileImage(userData)
-            });
+            };
+            setCurrentUser(safeUser);
           }
           
           // Load other data
-          const [postsData, brandsData, storiesData, groupsData, musicData] = await Promise.all([
+          const [postsData, brandsData, storiesData, groupsData, musicData, usersData, eventsData] = await Promise.all([
             UNERA_API.posts.getAll().catch(() => []),
             UNERA_API.brands.getAll().catch(() => []),
             UNERA_API.stories.getAll().catch(() => []),
             UNERA_API.groups.getAll().catch(() => []),
             UNERA_API.music.getAll().catch(() => []),
+            UNERA_API.users.getAll().catch(() => []),
+            UNERA_API.events.getAll().catch(() => []),
           ]);
           
           if (postsData && Array.isArray(postsData)) {
@@ -1743,6 +1871,17 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
           
           if (musicData && Array.isArray(musicData)) {
             setSongs(musicData);
+          }
+          
+          if (usersData && Array.isArray(usersData)) {
+            setUsers(usersData.map((user: any) => ({
+              ...user,
+              profileImage: getSafeProfileImage(user)
+            })));
+          }
+          
+          if (eventsData && Array.isArray(eventsData)) {
+            setEvents(eventsData);
           }
           
         } catch (error) {
@@ -1946,12 +2085,12 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
               <div className="max-w-4xl mx-auto flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <img 
-                    src={currentAudioTrack.cover || '/default-cover.jpg'} 
+                    src={getSafeProfileImage(currentAudioTrack)} 
                     alt={currentAudioTrack.title}
                     className="w-12 h-12 rounded"
                   />
                   <div>
-                    <h4 className="text-white font-medium">{currentAudioTrack.title}</h4>
+                    <h4 className="text-white font-medium">{currentAudioTrack.title || 'Unknown Track'}</h4>
                     <p 
                       className="text-gray-400 text-sm cursor-pointer hover:text-white"
                       onClick={() => {
@@ -1961,7 +2100,7 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
                         }
                       }}
                     >
-                      {currentAudioTrack.artist}
+                      {currentAudioTrack.artist || 'Unknown Artist'}
                     </p>
                   </div>
                 </div>
@@ -2088,19 +2227,165 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
                 />
               )}
               
-              {/* Add other views here (profile, marketplace, groups, etc.) */}
+              {effectiveView === 'profile' && selectedUserId && (
+                <UserProfile 
+                  userId={selectedUserId}
+                  currentUser={currentUser}
+                  onFollow={handleFollowUser}
+                  onNavigate={handleNavigate}
+                />
+              )}
+              
+              {effectiveView === 'marketplace' && (
+                <MarketplacePage 
+                  currentUser={currentUser}
+                  onNavigate={handleNavigate}
+                />
+              )}
+              
+              {effectiveView === 'groups' && (
+                <GroupsPage 
+                  currentUser={currentUser}
+                  initialGroupId={initialGroupIdToView}
+                  onNavigate={handleNavigate}
+                />
+              )}
+              
+              {effectiveView === 'reels' && (
+                <ReelsFeed 
+                  currentUser={currentUser}
+                  initialReelId={activeReelId}
+                  onNavigate={handleNavigate}
+                />
+              )}
+              
+              {effectiveView === 'events' && (
+                <EventsPage 
+                  currentUser={currentUser}
+                  onNavigate={handleNavigate}
+                />
+              )}
+              
+              {effectiveView === 'music' && (
+                <MusicSystem 
+                  currentUser={currentUser}
+                  onPlayTrack={handlePlayTrack}
+                  likedTracks={likedTracks}
+                  onLikeTrack={handleLikeTrack}
+                  onNavigate={handleNavigate}
+                />
+              )}
+              
+              {effectiveView === 'tools' && (
+                <ToolsPage 
+                  currentUser={currentUser}
+                  onNavigate={handleNavigate}
+                />
+              )}
+              
+              {effectiveView === 'settings' && (
+                <SettingsPage 
+                  currentUser={currentUser}
+                  onNavigate={handleNavigate}
+                  onLogout={handleLogout}
+                />
+              )}
+              
+              {effectiveView === 'help_support' && (
+                <HelpSupportPage 
+                  currentUser={currentUser}
+                  onNavigate={handleNavigate}
+                />
+              )}
+              
+              {effectiveView === 'privacy_policy' && (
+                <PrivacyPolicyPage 
+                  currentUser={currentUser}
+                  onNavigate={handleNavigate}
+                />
+              )}
+              
+              {effectiveView === 'terms_of_service' && (
+                <TermsOfServicePage 
+                  currentUser={currentUser}
+                  onNavigate={handleNavigate}
+                />
+              )}
+              
+              {effectiveView === 'suggested_profiles' && (
+                <SuggestedProfilesPage 
+                  currentUser={currentUser}
+                  onNavigate={handleNavigate}
+                  onFollowUser={handleFollowUser}
+                />
+              )}
+              
+              {effectiveView === 'birthdays' && (
+                <BirthdaysPage 
+                  currentUser={currentUser}
+                  onNavigate={handleNavigate}
+                />
+              )}
+              
+              {effectiveView === 'memories' && (
+                <MemoriesPage 
+                  currentUser={currentUser}
+                  onNavigate={handleNavigate}
+                />
+              )}
+              
+              {effectiveView === 'single_post' && activeSinglePostId && (
+                <div className="max-w-[1000px] mx-auto p-4">
+                  {(() => {
+                    const post = posts.find(p => p.id === activeSinglePostId);
+                    if (!post) {
+                      return (
+                        <div className="text-center py-10">
+                          <p className="text-gray-400">Post not found</p>
+                          <button 
+                            onClick={() => handleNavigate('home')}
+                            className="mt-4 bg-[#1877F2] text-white px-4 py-2 rounded"
+                          >
+                            Go Home
+                          </button>
+                        </div>
+                      );
+                    }
+                    
+                    const author = getAuthorForPost(post, users, brands);
+                    if (post.type === 'music' || post.type === 'podcast') {
+                      return renderMusicPost(post, author);
+                    } else {
+                      const isFollowing = author.type === 'user' && currentUser 
+                        ? currentUser.following.includes(author.id) 
+                        : false;
+                      return renderRegularPost(post, author, isFollowing);
+                    }
+                  })()}
+                </div>
+              )}
+              
+              {effectiveView === 'chat' && activeChatUser && (
+                <ChatWindow 
+                  otherUser={activeChatUser}
+                  currentUser={currentUser}
+                  onClose={() => setActiveChatUser(null)}
+                />
+              )}
               
             </main>
             
-            <RightSidebar 
-              currentUser={currentUser} 
-              users={users} 
-              groups={groups} 
-              events={events} 
-              onNavigate={handleNavigate} 
-              onFollowUser={handleFollowUser} 
-              onJoinGroup={(groupId) => console.log('Join group:', groupId)} 
-            />
+            {effectiveView !== 'chat' && effectiveView !== 'reels' && (
+              <RightSidebar 
+                currentUser={currentUser} 
+                users={users} 
+                groups={groups} 
+                events={events} 
+                onNavigate={handleNavigate} 
+                onFollowUser={handleFollowUser} 
+                onJoinGroup={(groupId) => console.log('Join group:', groupId)} 
+              />
+            )}
           </div>
           
           {/* Modals */}
@@ -2108,9 +2393,14 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
             <CreateStoryModal 
               currentUser={currentUser}
               onClose={() => setShowCreateStoryModal(false)}
-              onCreateStory={(storyData) => {
-                console.log('Create story:', storyData);
-                setShowCreateStoryModal(false);
+              onCreateStory={async (storyData) => {
+                try {
+                  const story = await UNERA_API.stories.create(storyData);
+                  setStories(prev => [story, ...prev]);
+                  setShowCreateStoryModal(false);
+                } catch (err) {
+                  console.error('Failed to create story:', err);
+                }
               }}
             />
           )}
@@ -2119,9 +2409,14 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
             <CreateEventModal 
               currentUser={currentUser}
               onClose={() => setShowCreateEventModal(false)}
-              onCreate={(eventData) => {
-                console.log('Create event:', eventData);
-                setShowCreateEventModal(false);
+              onCreate={async (eventData) => {
+                try {
+                  const event = await UNERA_API.events.create(eventData);
+                  setEvents(prev => [event, ...prev]);
+                  setShowCreateEventModal(false);
+                } catch (err) {
+                  console.error('Failed to create event:', err);
+                }
               }}
             />
           )}
@@ -2178,14 +2473,6 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
             />
           )}
           
-          {activeChatUser && (
-            <ChatWindow 
-              otherUser={activeChatUser}
-              currentUser={currentUser}
-              onClose={() => setActiveChatUser(null)}
-            />
-          )}
-          
           {showCreateReelModal && (
             <CreateReelModal 
               onClose={() => setShowCreateReelModal(false)}
@@ -2202,14 +2489,6 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
             onClose={() => {}}
             onNavigate={handleNavigate}
             currentUser={currentUser}
-          />
-          
-          <MusicSystem 
-            currentUser={currentUser}
-            onPlayTrack={handlePlayTrack}
-            likedTracks={likedTracks}
-            onLikeTrack={handleLikeTrack}
-            onNavigate={handleNavigate}
           />
         </>
       )}
