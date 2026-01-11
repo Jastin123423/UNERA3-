@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Login, Register, ForgotPassword } from './components/Auth';
 import { Header, Sidebar, RightSidebar, MenuOverlay } from './components/Layout';
@@ -401,7 +400,16 @@ const transformUserFromAPI = (apiUser: any): User => {
         isRestricted: apiUser.is_restricted || false,
         role: apiUser.role || 'user',
         birthDate: apiUser.birth_date,
-        joinedDate: apiUser.created_at || apiUser.joined_date || new Date().toISOString()
+        joinedDate: apiUser.created_at || apiUser.joined_date || new Date().toISOString(),
+        isOnline: apiUser.is_online || false,
+        firstName: apiUser.first_name || '',
+        lastName: apiUser.last_name || '',
+        work: apiUser.work,
+        education: apiUser.education,
+        gender: apiUser.gender,
+        nationality: apiUser.nationality,
+        isMusician: apiUser.is_musician || false,
+        interests: apiUser.interests || []
     };
 };
 
@@ -415,12 +423,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     }, []);
 
     const [users, setUsers] = useState<User[]>(INITIAL_USERS);
-    const [posts, setPosts] = useState<PostType[]>(() => {
-        return INITIAL_POSTS.map(post => ({
-            ...post,
-            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
-        }));
-    });
+    const [posts, setPosts] = useState<PostType[]>(INITIAL_POSTS);
     const [stories, setStories] = useState<Story[]>(INITIAL_STORIES);
     const [reels, setReels] = useState<Reel[]>(INITIAL_REELS);
     const [events, setEvents] = useState<Event[]>(INITIAL_EVENTS);
@@ -431,7 +434,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const [songs, setSongs] = useState<Song[]>(MOCK_SONGS);
     const [episodes, setEpisodes] = useState<Episode[]>(MOCK_EPISODES);
     
-    const [currentUser, setCurrentUser] = useState<User | null>(INITIAL_USERS[0]);
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [showRegister, setShowRegister] = useState(false);
     const [showForgotPassword, setShowForgotPassword] = useState(false);
     const [loginError, setLoginError] = useState('');
@@ -510,20 +513,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 const transformedPosts = response.data.map(transformPostFromAPI);
                 setPosts(transformedPosts);
             } else {
-                console.log('Using initial posts as fallback');
-                // Fallback to initial posts
-                setPosts(INITIAL_POSTS.map(post => ({
-                    ...post,
-                    formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || Date.now())
-                })));
+                console.log('No posts found or API error');
+                setPosts([]);
             }
         } catch (error) {
             console.error('Failed to fetch posts:', error);
-            // Fallback to initial posts
-            setPosts(INITIAL_POSTS.map(post => ({
-                ...post,
-                formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || Date.now())
-            })));
+            setPosts([]);
         }
     };
 
@@ -538,17 +533,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 const transformedUsers = response.data.map(transformUserFromAPI);
                 setUsers(transformedUsers);
                 
-                // Set current user if not set
-                if (!currentUser && transformedUsers.length > 0) {
-                    setCurrentUser(transformedUsers[0]);
-                }
+                console.log('First user from API:', transformedUsers[0]);
             } else {
-                console.log('Using initial users as fallback');
-                setUsers(INITIAL_USERS);
+                console.log('No users found or API error');
+                setUsers([]);
             }
         } catch (error) {
             console.error('Failed to fetch users:', error);
-            setUsers(INITIAL_USERS);
+            setUsers([]);
         }
     };
 
@@ -566,6 +558,48 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
+    // Fetch current user from token
+    const fetchCurrentUser = async () => {
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+            setIsLoading(false);
+            return;
+        }
+
+        try {
+            console.log('Fetching current user with token...');
+            const response = await apiFetch('/api/users/me');
+            
+            if (response.success && response.data) {
+                console.log('Current user fetched:', response.data);
+                const transformedUser = transformUserFromAPI(response.data);
+                setCurrentUser(transformedUser);
+                
+                // Add to users list if not already there
+                setUsers(prev => {
+                    const exists = prev.find(u => u.id === transformedUser.id);
+                    if (!exists) {
+                        return [...prev, transformedUser];
+                    }
+                    return prev.map(u => u.id === transformedUser.id ? transformedUser : u);
+                });
+                
+                setView('home');
+                setActiveTab('home');
+            } else {
+                console.log('No current user found, clearing token');
+                localStorage.removeItem('authToken');
+                setView('login');
+            }
+        } catch (error) {
+            console.error('Failed to fetch current user:', error);
+            localStorage.removeItem('authToken');
+            setView('login');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     // Initial data loading
     useEffect(() => {
         const loadInitialData = async () => {
@@ -573,9 +607,16 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             console.log('Loading initial data...');
             
             try {
-                // Load essential data in sequence
+                // Load users first
                 await fetchUsers();
-                await fetchPosts();
+                
+                // Try to get current user from token
+                await fetchCurrentUser();
+                
+                // Load posts after user is set
+                if (currentUser) {
+                    await fetchPosts();
+                }
                 
                 console.log('Initial data loaded successfully');
                 console.log('Users count:', users.length);
@@ -583,11 +624,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 
             } catch (error) {
                 console.error('Failed to load initial data:', error);
-            } finally {
-                setTimeout(() => {
-                    setIsLoading(false);
-                    console.log('Loading complete');
-                }, 500);
+                setIsLoading(false);
             }
         };
 
@@ -596,42 +633,29 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     // Load data from localStorage as fallback
     useEffect(() => {
-        if (isClient) {
+        if (isClient && !currentUser) {
             const storedUser = localStorage.getItem('universeCurrentUser');
-            const storedUsers = localStorage.getItem('universeUsers');
-            const storedPosts = localStorage.getItem('universePosts');
             
-            // Only use localStorage if API failed
-            if (users.length === 0 && storedUsers) {
-                console.log('Using localStorage users as fallback');
-                setUsers(JSON.parse(storedUsers));
-            }
-            
-            if (posts.length === 0 && storedPosts) {
-                console.log('Using localStorage posts as fallback');
-                const parsedPosts = JSON.parse(storedPosts);
-                const postsWithFormattedTime = parsedPosts.map((post: PostType) => ({
-                    ...post,
-                    formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || Date.now())
-                }));
-                setPosts(postsWithFormattedTime);
-            }
-            
-            if (!currentUser && storedUser) {
-                console.log('Using localStorage current user');
-                setCurrentUser(JSON.parse(storedUser));
+            if (storedUser) {
+                console.log('Using localStorage current user as fallback');
+                try {
+                    const parsedUser = JSON.parse(storedUser);
+                    setCurrentUser(parsedUser);
+                    setView('home');
+                    setActiveTab('home');
+                } catch (error) {
+                    console.error('Failed to parse stored user:', error);
+                }
             }
         }
-    }, [isClient]);
+    }, [isClient, currentUser]);
 
-    // Save data to localStorage
+    // Save current user to localStorage
     useEffect(() => {
         if (isClient && currentUser) {
             localStorage.setItem('universeCurrentUser', JSON.stringify(currentUser));
-            localStorage.setItem('universeUsers', JSON.stringify(users));
-            localStorage.setItem('universePosts', JSON.stringify(posts));
         }
-    }, [currentUser, users, posts, isClient]);
+    }, [currentUser, isClient]);
 
     const storiesWithUsers = useMemo(() => {
         return stories.map(story => {
@@ -736,35 +760,104 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     };
 
     // ========== AUTHENTICATION FUNCTIONS ==========
-    const handleLogin = (email: string, pass: string) => {
-        const user = users.find(u => u.email === email && u.password === pass);
-        if (user) {
-            setCurrentUser(user);
-            setView('home');
-            setActiveTab('home');
-            setLoginError('');
-            setShowRegister(false);
-            setShowForgotPassword(false);
-            if (isClient) window.history.pushState({}, '', '/');
-        } else {
-            setLoginError('Invalid email or password');
+    const handleLogin = async (email: string, pass: string) => {
+        setLoginError('');
+        setIsLoading(true);
+        
+        try {
+            console.log('Attempting login with:', email);
+            
+            // Authenticate with the API
+            const authResponse = await apiFetch('/api/auth/login', {
+                method: 'POST',
+                body: JSON.stringify({ email, password: pass })
+            }, false); // Don't include auth header for login
+            
+            if (!authResponse.success) {
+                throw new Error(authResponse.error || 'Authentication failed');
+            }
+            
+            // Store the token if provided
+            if (authResponse.token) {
+                localStorage.setItem('authToken', authResponse.token);
+            }
+            
+            // If the response contains user data directly, use it
+            if (authResponse.user) {
+                const transformedUser = transformUserFromAPI(authResponse.user);
+                setCurrentUser(transformedUser);
+                
+                // Add to users list
+                setUsers(prev => {
+                    const exists = prev.find(u => u.id === transformedUser.id);
+                    if (!exists) {
+                        return [...prev, transformedUser];
+                    }
+                    return prev.map(u => u.id === transformedUser.id ? transformedUser : u);
+                });
+                
+                setView('home');
+                setActiveTab('home');
+                setShowRegister(false);
+                setShowForgotPassword(false);
+                
+                // Fetch posts after successful login
+                await fetchPosts();
+                
+                if (isClient) window.history.pushState({}, '', '/');
+            } else {
+                // If no user data in response, fetch current user
+                await fetchCurrentUser();
+            }
+            
+        } catch (error) {
+            console.error('Login error:', error);
+            setLoginError(error.message || 'Invalid email or password');
+            setCurrentUser(null);
+            setView('login');
+        } finally {
+            setIsLoading(false);
         }
     };
 
-    const handleRegister = (newUser: Partial<User>) => {
-        const id = Math.max(...users.map(u => u.id)) + 1;
-        const user: User = { ...newUser, id, role: 'user', followers: [], following: [], joinedDate: new Date().toISOString() } as User;
-        setUsers([...users, user]);
-        setCurrentUser(user);
-        setShowRegister(false);
-        setShowForgotPassword(false);
-        setView('home');
-        if (isClient) window.history.pushState({}, '', '/');
+    const handleRegister = async (newUser: Partial<User>) => {
+        try {
+            setIsLoading(true);
+            
+            const registerResponse = await apiFetch('/api/auth/register', {
+                method: 'POST',
+                body: JSON.stringify(newUser)
+            }, false);
+            
+            if (!registerResponse.success) {
+                throw new Error(registerResponse.error || 'Registration failed');
+            }
+            
+            // After successful registration, auto-login
+            if (registerResponse.user && registerResponse.token) {
+                localStorage.setItem('authToken', registerResponse.token);
+                const transformedUser = transformUserFromAPI(registerResponse.user);
+                setCurrentUser(transformedUser);
+                setUsers(prev => [...prev, transformedUser]);
+            }
+            
+            setShowRegister(false);
+            setShowForgotPassword(false);
+            setView('home');
+            if (isClient) window.history.pushState({}, '', '/');
+            
+        } catch (error) {
+            console.error('Registration error:', error);
+            setLoginError(error.message || 'Registration failed');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleLogout = () => {
         setCurrentUser(null);
         if (isClient) {
+            localStorage.removeItem('authToken');
             localStorage.removeItem('universeCurrentUser');
             window.history.pushState({}, '', '/');
         }
@@ -1806,6 +1899,131 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }));
     };
 
+    // Brand functions (placeholder implementations)
+    const handleCreateBrand = (brandData: Partial<Brand>) => {
+        if (!currentUser) return;
+        const timestamp = Date.now();
+        const newBrand: Brand = {
+            ...brandData,
+            id: timestamp,
+            adminId: currentUser.id,
+            followers: [currentUser.id],
+            createdAt: timestamp,
+            isVerified: false,
+            posts: []
+        } as Brand;
+        setBrands(prev => [newBrand, ...prev]);
+        alert("Brand created successfully!");
+    };
+
+    const handleFollowBrand = (brandId: number) => {
+        if (!currentUser) return;
+        setBrands(prev => prev.map(brand => {
+            if (brand.id === brandId) {
+                const isFollowing = brand.followers.includes(currentUser.id);
+                const updatedFollowers = isFollowing
+                    ? brand.followers.filter(id => id !== currentUser.id)
+                    : [...brand.followers, currentUser.id];
+                return { ...brand, followers: updatedFollowers };
+            }
+            return brand;
+        }));
+    };
+
+    const handlePostAsBrand = (brandId: number, content: string, files?: File[]) => {
+        if (!currentUser) return;
+        const timestamp = Date.now();
+        const formattedTime = formatRelativeTime(timestamp);
+        const newPost: PostType = {
+            id: timestamp,
+            authorId: currentUser.id,
+            brandId: brandId,
+            content,
+            timestamp: timestamp,
+            formattedTime: formattedTime,
+            createdAt: timestamp,
+            reactions: [],
+            comments: [],
+            shares: 0,
+            views: 0,
+            type: files && files.length > 0 ? 'image' : 'text',
+            visibility: 'Public',
+            images: files ? files.map(file => URL.createObjectURL(file)) : undefined
+        };
+        setPosts(prev => [newPost, ...prev]);
+        alert("Post published as brand!");
+    };
+
+    const handleUpdateBrand = (brandId: number, updates: Partial<Brand>) => {
+        setBrands(prev => prev.map(brand =>
+            brand.id === brandId ? { ...brand, ...updates } : brand
+        ));
+        alert("Brand updated successfully!");
+    };
+
+    const handleDeleteBrand = (brandId: number) => {
+        if (!currentUser) return;
+        const brand = brands.find(b => b.id === brandId);
+        if (brand && (brand.adminId === currentUser.id || isAdmin)) {
+            if (window.confirm("Are you sure you want to delete this brand?")) {
+                setBrands(prev => prev.filter(b => b.id !== brandId));
+                setPosts(prev => prev.filter(p => p.brandId !== brandId));
+                alert("Brand deleted successfully!");
+            }
+        } else {
+            alert("You don't have permission to delete this brand.");
+        }
+    };
+
+    const handleUpdateBrandImage = (brandId: number, type: 'cover' | 'profile', file: File) => {
+        const url = URL.createObjectURL(file);
+        setBrands(prev => prev.map(brand =>
+            brand.id === brandId
+                ? type === 'cover'
+                    ? { ...brand, coverImage: url }
+                    : { ...brand, profileImage: url }
+                : brand
+        ));
+    };
+
+    const handleVerifyBrand = (brandId: number) => {
+        if (!isAdmin) {
+            alert("Only admins can verify brands");
+            return;
+        }
+        setBrands(prev => prev.map(brand =>
+            brand.id === brandId ? { ...brand, isVerified: !brand.isVerified } : brand
+        ));
+        alert(`Brand ${brands.find(b => b.id === brandId)?.isVerified ? 'unverified' : 'verified'}!`);
+    };
+
+    const handleAddEpisode = (episode: Episode) => {
+        console.log("Adding new episode to library:", episode);
+        const newEpisode = {
+            ...episode,
+            plays: episode.plays || 0,
+            likes: episode.likes || 0,
+            shares: episode.shares || 0,
+            comments: episode.comments || 0,
+            stats: episode.stats || {
+                plays: episode.plays || 0,
+                likes: episode.likes || 0,
+                shares: episode.shares || 0,
+                comments: episode.comments || 0,
+                downloads: 0,
+                reelsUse: 0
+            }
+        };
+        
+        setEpisodes(prev => {
+            const exists = prev.find(e => e.id === episode.id);
+            if (exists) {
+                return prev.map(e => e.id === episode.id ? newEpisode : e);
+            }
+            return [newEpisode, ...prev];
+        });
+    };
+
     const effectiveView = view;
 
     // Function to render music/podcast posts
@@ -1926,7 +2144,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     <div className="flex justify-center w-full max-w-[1920px] mx-auto relative flex-1">
                         <div className="sticky top-14 h-[calc(100vh-56px)] z-20 hidden lg:block">
                             <Sidebar 
-                                currentUser={currentUser || INITIAL_USERS[0]} 
+                                currentUser={currentUser} 
                                 onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
                                 onReelsClick={() => handleNavigate('reels')} 
                                 onMarketplaceClick={() => handleNavigate('marketplace')} 
@@ -2425,7 +2643,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     {activeCommentsPostId && (
                         <CommentsSheet 
                             post={posts.find(p => p.id === activeCommentsPostId)!} 
-                            currentUser={currentUser || INITIAL_USERS[0]} 
+                            currentUser={currentUser} 
                             users={users} 
                             onClose={() => setActiveCommentsPostId(null)} 
                             onComment={handleComment} 
@@ -2465,7 +2683,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                 return (
                                     <CommentsSheet 
                                         post={postForComments}
-                                        currentUser={currentUser || INITIAL_USERS[0]}
+                                        currentUser={currentUser}
                                         users={users}
                                         onClose={() => setActiveGroupComments(null)}
                                         onComment={(postId, text, attachment) => handleGroupComment(groupId, postId, text, attachment)}
