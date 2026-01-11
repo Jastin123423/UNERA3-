@@ -50,13 +50,17 @@ const apiFetch = async (endpoint: string, options: RequestInit = {}, withAuth = 
         // Check if response is JSON
         const contentType = response.headers.get('content-type');
         if (!contentType || !contentType.includes('application/json')) {
+            // If not JSON but response is ok, return empty success
+            if (response.ok) {
+                return { data: [], success: true };
+            }
             throw new Error('API did not return JSON');
         }
 
         const data = await response.json();
 
         if (!response.ok) {
-            throw new Error(data.message || `API Error: ${response.status}`);
+            throw new Error(data.message || data.error || `API Error: ${response.status}`);
         }
 
         // CRITICAL FIX: Your API returns arrays directly, not {data: array}
@@ -66,11 +70,20 @@ const apiFetch = async (endpoint: string, options: RequestInit = {}, withAuth = 
         }
         
         // If it's already an object with data property, return as-is
-        return data;
-    } catch (error) {
+        if (data && typeof data === 'object') {
+            return data;
+        }
+        
+        // If it's a single object, wrap it in data property
+        return { data: data, success: true };
+    } catch (error: any) {
         console.error('API Error for', endpoint, ':', error);
         // Return empty data structure to prevent crashes
-        return { data: [], success: false, error: error.message };
+        return { 
+            data: [], 
+            success: false, 
+            error: error.message || 'Network error' 
+        };
     }
 };
 
@@ -350,11 +363,28 @@ const getImageItemClass = (imageCount: number, index: number): string => {
 // ========== DATA TRANSFORMATION FUNCTIONS ==========
 // Transform API post data to frontend format
 const transformPostFromAPI = (apiPost: any): PostType => {
-    const timestamp = new Date(apiPost.created_at).getTime() || Date.now();
+    if (!apiPost) {
+        return {
+            id: 0,
+            authorId: 0,
+            content: '',
+            timestamp: Date.now(),
+            formattedTime: 'Just now',
+            createdAt: Date.now(),
+            reactions: [],
+            comments: [],
+            shares: 0,
+            views: 0,
+            type: 'text',
+            visibility: 'Public'
+        };
+    }
+    
+    const timestamp = new Date(apiPost.created_at || apiPost.timestamp || Date.now()).getTime();
     
     return {
-        id: apiPost.id,
-        authorId: apiPost.user_id || apiPost.authorId || 1, // Default to user 1 if missing
+        id: apiPost.id || Date.now(),
+        authorId: apiPost.user_id || apiPost.authorId || 0,
         content: apiPost.content || '',
         images: apiPost.media_url && apiPost.media_type === 'image' ? [apiPost.media_url] : undefined,
         video: apiPost.media_url && apiPost.media_type === 'video' ? apiPost.media_url : undefined,
@@ -383,11 +413,41 @@ const transformPostFromAPI = (apiPost: any): PostType => {
 
 // Transform API user data to frontend format
 const transformUserFromAPI = (apiUser: any): User => {
+    if (!apiUser) {
+        return {
+            id: 0,
+            name: 'Unknown User',
+            email: '',
+            username: 'unknown',
+            password: '',
+            profileImage: 'https://ui-avatars.com/api/?name=Unknown&background=random',
+            coverImage: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f',
+            bio: '',
+            location: '',
+            followers: [],
+            following: [],
+            posts: [],
+            isVerified: false,
+            isRestricted: false,
+            role: 'user',
+            joinedDate: new Date().toISOString(),
+            isOnline: false,
+            firstName: '',
+            lastName: '',
+            work: '',
+            education: '',
+            gender: '',
+            nationality: '',
+            isMusician: false,
+            interests: []
+        };
+    }
+    
     return {
-        id: apiUser.id,
-        name: apiUser.name || `User ${apiUser.id}`,
+        id: apiUser.id || 0,
+        name: apiUser.name || `User ${apiUser.id || 'Unknown'}`,
         email: apiUser.email || '',
-        username: apiUser.username || `user${apiUser.id}`,
+        username: apiUser.username || `user${apiUser.id || 'unknown'}`,
         password: apiUser.password || '',
         profileImage: apiUser.profile_image || apiUser.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(apiUser.name || 'User')}&background=random`,
         coverImage: apiUser.cover_image || 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f',
@@ -440,6 +500,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const [loginError, setLoginError] = useState('');
     
     const [isLoading, setIsLoading] = useState(true);
+    const [hasError, setHasError] = useState(false);
     
     const serverPath = initialPath || '/';
     const clientPath = isClient ? getPath() : serverPath;
@@ -503,7 +564,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     // ========== API DATA FETCHING ==========
 
     // Fetch posts from API
-    const fetchPosts = async () => {
+    const fetchPosts = useCallback(async () => {
         try {
             console.log('Fetching posts from API...');
             const response = await apiFetch('/api/posts', { method: 'GET' });
@@ -520,10 +581,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             console.error('Failed to fetch posts:', error);
             setPosts([]);
         }
-    };
+    }, []);
 
     // Fetch users from API
-    const fetchUsers = async () => {
+    const fetchUsers = useCallback(async () => {
         try {
             console.log('Fetching users from API...');
             const response = await apiFetch('/api/users', { method: 'GET' });
@@ -542,24 +603,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             console.error('Failed to fetch users:', error);
             setUsers([]);
         }
-    };
-
-    // Fetch feed from API (ranked posts)
-    const fetchFeed = async () => {
-        try {
-            const response = await apiFetch('/api/feed', { method: 'GET' });
-            
-            if (response.success && Array.isArray(response.data)) {
-                const feedPosts = response.data.map(transformPostFromAPI);
-                setPosts(feedPosts);
-            }
-        } catch (error) {
-            console.error('Failed to fetch feed:', error);
-        }
-    };
+    }, []);
 
     // Fetch current user from token
-    const fetchCurrentUser = async () => {
+    const fetchCurrentUser = useCallback(async () => {
         const token = localStorage.getItem('authToken');
         if (!token) {
             setIsLoading(false);
@@ -595,10 +642,8 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             console.error('Failed to fetch current user:', error);
             localStorage.removeItem('authToken');
             setView('login');
-        } finally {
-            setIsLoading(false);
         }
-    };
+    }, []);
 
     // Initial data loading
     useEffect(() => {
@@ -607,29 +652,29 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             console.log('Loading initial data...');
             
             try {
-                // Load users first
-                await fetchUsers();
-                
-                // Try to get current user from token
+                // Try to get current user from token first
                 await fetchCurrentUser();
                 
-                // Load posts after user is set
+                // Load users
+                await fetchUsers();
+                
+                // Load posts if user is logged in
                 if (currentUser) {
                     await fetchPosts();
                 }
                 
                 console.log('Initial data loaded successfully');
-                console.log('Users count:', users.length);
-                console.log('Posts count:', posts.length);
                 
             } catch (error) {
                 console.error('Failed to load initial data:', error);
+                setHasError(true);
+            } finally {
                 setIsLoading(false);
             }
         };
 
         loadInitialData();
-    }, []);
+    }, [fetchCurrentUser, fetchUsers, fetchPosts, currentUser]);
 
     // Load data from localStorage as fallback
     useEffect(() => {
@@ -780,11 +825,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             // Store the token if provided
             if (authResponse.token) {
                 localStorage.setItem('authToken', authResponse.token);
+                console.log('Token stored:', authResponse.token.substring(0, 20) + '...');
             }
             
             // If the response contains user data directly, use it
             if (authResponse.user) {
                 const transformedUser = transformUserFromAPI(authResponse.user);
+                console.log('User from login response:', transformedUser);
                 setCurrentUser(transformedUser);
                 
                 // Add to users list
@@ -810,7 +857,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 await fetchCurrentUser();
             }
             
-        } catch (error) {
+        } catch (error: any) {
             console.error('Login error:', error);
             setLoginError(error.message || 'Invalid email or password');
             setCurrentUser(null);
@@ -846,7 +893,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             setView('home');
             if (isClient) window.history.pushState({}, '', '/');
             
-        } catch (error) {
+        } catch (error: any) {
             console.error('Registration error:', error);
             setLoginError(error.message || 'Registration failed');
         } finally {
@@ -2097,7 +2144,17 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     
     return (
         <div className="bg-[#18191A] min-h-screen flex flex-col font-sans">
-            {isLoading ? (
+            {hasError ? (
+                <div className="flex items-center justify-center min-h-screen bg-[#18191A] flex-col">
+                    <div className="text-red-500 font-bold text-xl mb-4">Something went wrong</div>
+                    <button 
+                        onClick={() => window.location.reload()} 
+                        className="px-6 py-3 bg-[#1877F2] text-white rounded-lg hover:bg-[#166FE5] transition"
+                    >
+                        Reload Page
+                    </button>
+                </div>
+            ) : isLoading ? (
                 <div className="flex items-center justify-center min-h-screen bg-[#18191A] flex-col">
                     <div className="w-20 h-20 border-4 border-[#1877F2] border-t-transparent rounded-full animate-spin mb-4"></div>
                     <div className="text-[#1877F2] font-bold text-xl animate-pulse">Loading UNERA...</div>
@@ -2178,24 +2235,30 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                             /> 
                                         </>
                                     )}
-                                    {rankedPosts.map(post => {
-                                        const author = getAuthorForPost(post, users, brands);
-                                        if (!author) return null;
-                                        
-                                        let isFollowing = false;
-                                        if (author.type === 'user' && currentUser) {
-                                            isFollowing = currentUser.following.includes(author.id);
-                                        } else if (author.type === 'brand' && currentUser) {
-                                            const brand = brands.find(b => b.id === author.id);
-                                            isFollowing = brand ? brand.followers.includes(currentUser.id) : false;
-                                        }
-                                        
-                                        if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
-                                            return renderMusicPost(post, author);
-                                        }
-                                        
-                                        return renderRegularPost(post, author, isFollowing);
-                                    })}
+                                    {rankedPosts.length > 0 ? (
+                                        rankedPosts.map(post => {
+                                            const author = getAuthorForPost(post, users, brands);
+                                            if (!author) return null;
+                                            
+                                            let isFollowing = false;
+                                            if (author.type === 'user' && currentUser) {
+                                                isFollowing = currentUser.following.includes(author.id);
+                                            } else if (author.type === 'brand' && currentUser) {
+                                                const brand = brands.find(b => b.id === author.id);
+                                                isFollowing = brand ? brand.followers.includes(currentUser.id) : false;
+                                            }
+                                            
+                                            if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
+                                                return renderMusicPost(post, author);
+                                            }
+                                            
+                                            return renderRegularPost(post, author, isFollowing);
+                                        })
+                                    ) : (
+                                        <div className="text-center py-10 text-gray-400">
+                                            No posts to show. Be the first to post something!
+                                        </div>
+                                    )}
                                 </div>
                             )}
                             
@@ -2304,10 +2367,18 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                                 <div className="w-full pt-4 md:px-8 pb-10">
                                     {(() => {
                                         const post = posts.find(p => p.id === activeSinglePostId);
-                                        if (!post) return null;
+                                        if (!post) return (
+                                            <div className="text-center py-10 text-gray-400">
+                                                Post not found
+                                            </div>
+                                        );
                                         
                                         const author = getAuthorForPost(post, users, brands);
-                                        if (!author) return null;
+                                        if (!author) return (
+                                            <div className="text-center py-10 text-gray-400">
+                                                Author not found
+                                            </div>
+                                        );
                                         
                                         if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
                                             return renderMusicPost(post, author);
