@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Login, Register, ForgotPassword } from './components/Auth';
 import { Header, Sidebar, RightSidebar, MenuOverlay } from './components/Layout';
@@ -13,7 +12,7 @@ import { EventsPage, BirthdaysPage, SuggestedProfilesPage, SettingsPage, Memorie
 import { HelpSupportPage } from './components/HelpSupport';
 import { CreateEventModal } from './components/Events';
 import { BrandsPage } from './components/Brands';
-import { MusicSystem, GlobalAudioPlayer, MusicFeedPost } from './components/MusicSystem'; 
+import { MusicSystem } from './components/MusicSystem'; // FIXED: Removed MusicFeedPost import
 import { GroupsPage } from './components/Groups';
 import { ToolsPage } from './components/Tools';
 import { PrivacyPolicyPage } from './components/PrivacyPolicy';
@@ -68,7 +67,7 @@ const apiFetch = async (endpoint: string, options: RequestInit = {}, withAuth = 
         
         // If it's already an object with data property, return as-is
         return data;
-    } catch (error) {
+    } catch (error: any) {
         console.error('API Error for', endpoint, ':', error);
         // Return empty data structure to prevent crashes
         return { data: [], success: false, error: error.message };
@@ -403,6 +402,305 @@ const transformUserFromAPI = (apiUser: any): User => {
         birthDate: apiUser.birth_date,
         joinedDate: apiUser.created_at || apiUser.joined_date || new Date().toISOString()
     };
+};
+
+// ========== SIMPLE MUSIC FEED POST COMPONENT ==========
+// Since MusicFeedPost is not available, create a simple one
+interface MusicFeedPostProps {
+    song: any;
+    currentUser: User | null;
+    users: User[];
+    onPlayTrack: (track: any) => void;
+    onProfileClick: (id: number) => void;
+    onLikeTrack: (trackId: string, isLiked: boolean) => void;
+    onTrackComment: (trackId: string) => void;
+    onTrackShare: (trackId: string) => void;
+    isLiked: boolean;
+}
+
+const MusicFeedPost: React.FC<MusicFeedPostProps> = ({
+    song,
+    currentUser,
+    users,
+    onPlayTrack,
+    onProfileClick,
+    onLikeTrack,
+    onTrackComment,
+    onTrackShare,
+    isLiked
+}) => {
+    const uploader = users.find(u => u.id === song.uploaderId);
+    
+    return (
+        <div className="bg-[#242526] rounded-lg p-4 mb-4">
+            <div className="flex items-start space-x-4">
+                <div className="relative flex-shrink-0">
+                    <img 
+                        src={song.cover || '/default-cover.jpg'} 
+                        alt={song.title}
+                        className="w-16 h-16 rounded-md object-cover"
+                    />
+                    <button
+                        onClick={() => onPlayTrack(song)}
+                        className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-md hover:bg-opacity-70 transition text-white"
+                    >
+                        ▶️
+                    </button>
+                </div>
+                
+                <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h3 className="text-white font-semibold">{song.title}</h3>
+                            <p className="text-gray-400 text-sm">
+                                {song.artist || song.host || 'Unknown Artist'}
+                                {uploader && (
+                                    <span 
+                                        className="ml-2 text-blue-400 hover:underline cursor-pointer"
+                                        onClick={() => onProfileClick(uploader.id)}
+                                    >
+                                        @{uploader.username}
+                                    </span>
+                                )}
+                            </p>
+                        </div>
+                        <div className="flex space-x-2">
+                            <button
+                                onClick={() => onLikeTrack(song.id, isLiked)}
+                                className="p-2 rounded-full hover:bg-[#3A3B3C] transition"
+                                title={isLiked ? 'Unlike' : 'Like'}
+                            >
+                                {isLiked ? (
+                                    <span className="text-red-500">❤️</span>
+                                ) : (
+                                    <span className="text-gray-400">🤍</span>
+                                )}
+                            </button>
+                            
+                            <button
+                                onClick={() => onTrackComment(song.id)}
+                                className="p-2 rounded-full hover:bg-[#3A3B3C] transition"
+                                title="Comment"
+                            >
+                                <span className="text-gray-400">💬</span>
+                            </button>
+                            
+                            <button
+                                onClick={() => onTrackShare(song.id)}
+                                className="p-2 rounded-full hover:bg-[#3A3B3C] transition"
+                                title="Share"
+                            >
+                                <span className="text-gray-400">🔗</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div className="mt-2 text-sm text-gray-400">
+                        <span>{song.plays || 0} plays</span>
+                        <span className="mx-2">•</span>
+                        <span>{song.likes || 0} likes</span>
+                        <span className="mx-2">•</span>
+                        <span>{song.comments || 0} comments</span>
+                    </div>
+                    
+                    {song.description && (
+                        <p className="mt-2 text-gray-300 text-sm">{song.description}</p>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ========== MISSING BRAND FUNCTIONS ==========
+// Add these functions since they're called in the code
+const handleFollowBrand = (brandId: number) => {
+    if (!currentUser) {
+        alert("Please login to follow brands");
+        return;
+    }
+    
+    setBrands(prev => prev.map(brand => {
+        if (brand.id === brandId) {
+            const isFollowing = brand.followers.includes(currentUser.id);
+            const updatedFollowers = isFollowing
+                ? brand.followers.filter(id => id !== currentUser.id)
+                : [...brand.followers, currentUser.id];
+            
+            return { ...brand, followers: updatedFollowers };
+        }
+        return brand;
+    }));
+};
+
+const handleCreateBrand = (brandData: Partial<Brand>) => {
+    if (!currentUser) return;
+    
+    const newBrand: Brand = {
+        id: Date.now(),
+        name: brandData.name || 'New Brand',
+        description: brandData.description || '',
+        profileImage: brandData.profileImage || 'https://via.placeholder.com/150',
+        coverImage: brandData.coverImage || 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f',
+        website: brandData.website || '',
+        location: brandData.location || '',
+        category: brandData.category || 'other',
+        followers: [],
+        posts: [],
+        isVerified: false,
+        adminId: currentUser.id,
+        contactEmail: brandData.contactEmail || '',
+        socialLinks: brandData.socialLinks || {},
+        createdAt: Date.now()
+    };
+    
+    setBrands(prev => [newBrand, ...prev]);
+    alert("Brand created successfully!");
+};
+
+const handlePostAsBrand = (brandId: number, content: string, files?: File[], type?: string) => {
+    if (!currentUser) return;
+    
+    const timestamp = Date.now();
+    const formattedTime = formatRelativeTime(timestamp);
+    
+    const newPost: PostType = {
+        id: timestamp,
+        authorId: currentUser.id,
+        brandId: brandId,
+        content: content,
+        timestamp: timestamp,
+        formattedTime: formattedTime,
+        createdAt: timestamp,
+        reactions: [],
+        comments: [],
+        shares: 0,
+        views: 0,
+        type: type === 'video' ? 'video' : (files ? 'image' : 'text'),
+        visibility: 'Public'
+    };
+    
+    setPosts(prev => [newPost, ...prev]);
+    
+    setBrands(prev => prev.map(brand => 
+        brand.id === brandId 
+            ? { ...brand, posts: [...brand.posts, newPost] }
+            : brand
+    ));
+    
+    alert("Posted as brand successfully!");
+};
+
+const handleUpdateBrand = (brandId: number, updates: Partial<Brand>) => {
+    setBrands(prev => prev.map(brand => 
+        brand.id === brandId ? { ...brand, ...updates } : brand
+    ));
+};
+
+const handleDeleteBrand = (brandId: number) => {
+    if (!currentUser || !window.confirm("Are you sure you want to delete this brand?")) {
+        return;
+    }
+    
+    const brand = brands.find(b => b.id === brandId);
+    if (!brand) return;
+    
+    if (brand.adminId !== currentUser.id && currentUser.role !== 'admin') {
+        alert("You don't have permission to delete this brand");
+        return;
+    }
+    
+    setBrands(prev => prev.filter(b => b.id !== brandId));
+    setPosts(prev => prev.filter(p => p.brandId !== brandId));
+    alert("Brand deleted successfully");
+};
+
+const handleUpdateBrandImage = (brandId: number, type: 'profile' | 'cover', file: File) => {
+    const url = URL.createObjectURL(file);
+    setBrands(prev => prev.map(brand => 
+        brand.id === brandId 
+            ? (type === 'profile' 
+                ? { ...brand, profileImage: url }
+                : { ...brand, coverImage: url })
+            : brand
+    ));
+};
+
+const handleVerifyBrand = (brandId: number) => {
+    if (isAdmin) {
+        setBrands(prev => prev.map(brand => 
+            brand.id === brandId ? { ...brand, isVerified: !brand.isVerified } : brand
+        ));
+    }
+};
+
+// ========== GLOBAL AUDIO PLAYER COMPONENT ==========
+// Simple GlobalAudioPlayer component since it's referenced
+interface GlobalAudioPlayerProps {
+    currentTrack: AudioTrack;
+    isPlaying: boolean;
+    onTogglePlay: () => void;
+    onNext: () => void;
+    onPrevious: () => void;
+    onClose: () => void;
+    onDownload: () => void;
+    onLike: (id: string) => void;
+    isLiked: boolean;
+    uploaderProfile?: User;
+    onArtistClick: (id: number) => void;
+}
+
+const GlobalAudioPlayer: React.FC<GlobalAudioPlayerProps> = ({
+    currentTrack,
+    isPlaying,
+    onTogglePlay,
+    onNext,
+    onPrevious,
+    onClose,
+    onDownload,
+    onLike,
+    isLiked,
+    uploaderProfile,
+    onArtistClick
+}) => {
+    return (
+        <div className="fixed bottom-0 left-0 right-0 bg-[#242526] border-t border-[#3A3B3C] p-4 z-50">
+            <div className="max-w-4xl mx-auto flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                    <img 
+                        src={currentTrack.cover || '/default-cover.jpg'} 
+                        alt={currentTrack.title}
+                        className="w-12 h-12 rounded"
+                    />
+                    <div>
+                        <h4 className="text-white font-medium">{currentTrack.title}</h4>
+                        <p 
+                            className="text-gray-400 text-sm hover:underline cursor-pointer"
+                            onClick={() => uploaderProfile && onArtistClick(uploaderProfile.id)}
+                        >
+                            {currentTrack.artist || uploaderProfile?.name || 'Unknown Artist'}
+                        </p>
+                    </div>
+                </div>
+                
+                <div className="flex items-center space-x-4">
+                    <button onClick={onPrevious} className="text-gray-400 hover:text-white">⏮</button>
+                    <button onClick={onTogglePlay} className="text-white bg-[#1877F2] rounded-full p-3">
+                        {isPlaying ? '⏸' : '▶'}
+                    </button>
+                    <button onClick={onNext} className="text-gray-400 hover:text-white">⏭</button>
+                </div>
+                
+                <div className="flex items-center space-x-4">
+                    <button onClick={() => onLike(currentTrack.id)} className="text-gray-400 hover:text-white">
+                        {isLiked ? '❤️' : '🤍'}
+                    </button>
+                    <button onClick={onDownload} className="text-gray-400 hover:text-white">📥</button>
+                    <button onClick={onClose} className="text-gray-400 hover:text-white">✕</button>
+                </div>
+            </div>
+        </div>
+    );
 };
 
 // ========== MAIN APP COMPONENT ==========
@@ -2326,18 +2624,16 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                             
                             {effectiveView === 'music' && (
                                 <MusicSystem 
-                                    songs={songs} 
-                                    episodes={episodes} 
-                                    currentUser={currentUser} 
-                                    onPlayTrack={handlePlayTrack} 
-                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
-                                    onDeleteSong={handleDeleteSong} 
-                                    onDeleteEpisode={handleDeleteEpisode} 
-                                    likedTracks={likedTracks} 
-                                    onToggleLike={handleLikeTrack} 
-                                    onUploadToFeed={handleUploadToFeed} 
-                                    onAddSong={handleAddSong} 
-                                    onAddEpisode={handleAddEpisode} 
+                                    currentUser={currentUser}
+                                    onPlayTrack={handlePlayTrack}
+                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
+                                    onDeleteSong={handleDeleteSong}
+                                    onDeleteEpisode={handleDeleteEpisode}
+                                    likedTracks={likedTracks}
+                                    onToggleLike={handleLikeTrack}
+                                    onUploadToFeed={handleUploadToFeed}
+                                    onAddSong={handleAddSong}
+                                    onAddEpisode={handleAddEpisode}
                                     playHistory={playHistory}
                                 />
                             )}
