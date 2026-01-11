@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Login, Register, ForgotPassword } from './components/Auth';
-import { Header, Sidebar, RightSidebar, MenuOverlay } from './components/Layout';
+import { Header, Sidebar, RightSidebar } from './components/Layout';
 import { CreatePost, Post, CommentsSheet, ShareSheet, CreatePostModal, SuggestedProductsWidget } from './components/Feed';
 import { StoryReel, StoryViewer, CreateStoryModal } from './components/Story';
 import { UserProfile } from './components/UserProfile';
@@ -12,7 +12,7 @@ import { EventsPage, BirthdaysPage, SuggestedProfilesPage, SettingsPage, Memorie
 import { HelpSupportPage } from './components/HelpSupport';
 import { CreateEventModal } from './components/Events';
 import { BrandsPage } from './components/Brands';
-import { MusicSystem, GlobalAudioPlayer, MusicFeedPost } from './components/MusicSystem'; 
+import { MusicSystem, GlobalAudioPlayer, MusicFeedPost } from './components/MusicSystem';
 import { GroupsPage } from './components/Groups';
 import { ToolsPage } from './components/Tools';
 import { PrivacyPolicyPage } from './components/PrivacyPolicy';
@@ -20,7 +20,7 @@ import { TermsOfServicePage } from './components/TermsOfService';
 import { useLanguage } from './contexts/LanguageContext';
 import { User, Post as PostType, Story, Reel, Notification, Message, Event, Product, Comment, ReactionType, LinkPreview, Group, GroupPost, AudioTrack, Brand, Song, Episode } from './types';
 import { INITIAL_USERS, INITIAL_POSTS, INITIAL_STORIES, INITIAL_REELS, INITIAL_EVENTS, INITIAL_GROUPS, INITIAL_BRANDS, MOCK_SONGS, MOCK_EPISODES } from './constants';
-import { rankFeed } from './utils/ranking'; 
+import { rankFeed } from './utils/ranking';
 
 // ========== LOCAL API CLIENT ==========
 const localApi = {
@@ -629,7 +629,26 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
   const handleRegister = (newUser: Partial<User>) => {
     const id = Math.max(...users.map(u => u.id)) + 1;
-    const user: User = { ...newUser, id, role: 'user', followers: [], following: [], joinedDate: new Date().toISOString() } as User;
+    const user: User = { 
+      ...newUser, 
+      id, 
+      role: 'user', 
+      followers: [], 
+      following: [], 
+      joinedDate: new Date().toISOString(),
+      name: newUser.name || 'New User',
+      email: newUser.email || '',
+      username: newUser.username || `user${id}`,
+      password: newUser.password || '',
+      profileImage: newUser.profileImage || 'https://ui-avatars.com/api/?name=New+User&background=random',
+      coverImage: newUser.coverImage || 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f',
+      bio: newUser.bio || '',
+      location: newUser.location || '',
+      posts: [],
+      isVerified: false,
+      isRestricted: false,
+      birthDate: newUser.birthDate
+    } as User;
     setUsers([...users, user]);
     setCurrentUser(user);
     setShowRegister(false);
@@ -833,14 +852,20 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
   };
 
   const handleReact = (itemId: number, type: ReactionType) => {
-    if (!currentUser) return alert("Please login to react.");
+    if (!currentUser) {
+      alert("Please login to react.");
+      return;
+    }
     setPosts(prev => prev.map(post => {
       if (post.id === itemId) {
         const existing = post.reactions.find(r => r.userId === currentUser!.id);
         let newReactions = [...post.reactions];
         if (existing) {
-          if (existing.type === type) newReactions = newReactions.filter(r => r.userId !== currentUser!.id);
-          else newReactions = newReactions.map(r => r.userId === currentUser!.id ? { ...r, type } : r);
+          if (existing.type === type) {
+            newReactions = newReactions.filter(r => r.userId !== currentUser!.id);
+          } else {
+            newReactions = newReactions.map(r => r.userId === currentUser!.id ? { ...r, type } : r);
+          }
         } else {
           newReactions.push({ userId: currentUser!.id, type });
         }
@@ -1199,10 +1224,12 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
   const handleTrackComment = (trackId: string) => {
     // Track comment logic
+    console.log("Commenting on track:", trackId);
   };
 
   const handleTrackShare = (trackId: string) => {
     // Track share logic
+    console.log("Sharing track:", trackId);
   };
 
   // ========== MISSING FUNCTIONS ==========
@@ -1634,7 +1661,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
   };
 
   const handleReelReact = (reelId: number, type: ReactionType | undefined) => {
-    if (!currentUser) return alert("Please login to react.");
+    if (!currentUser) {
+      alert("Please login to react.");
+      return;
+    }
     setReels(prev => prev.map(reel => {
       if (reel.id === reelId) {
         const existing = reel.reactions.find(r => r.userId === currentUser!.id);
@@ -1719,32 +1749,117 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
       alert("Please login to follow brands.");
       return;
     }
-    // Add brand follow logic here
-    alert(`Following brand ${brandId} - feature coming soon!`);
+    // Simple brand follow logic
+    setBrands(prev => prev.map(brand => {
+      if (brand.id === brandId) {
+        const isFollowing = brand.followers.includes(currentUser.id);
+        if (isFollowing) {
+          return { ...brand, followers: brand.followers.filter(id => id !== currentUser.id) };
+        } else {
+          return { ...brand, followers: [...brand.followers, currentUser.id] };
+        }
+      }
+      return brand;
+    }));
+    alert(`Brand ${brandId} followed!`);
   };
   
   const handleCreateBrand = (brandData: Partial<Brand>) => {
-    alert("Create brand feature coming soon!");
+    if (!currentUser) {
+      alert("Please login to create a brand.");
+      return;
+    }
+    const newBrand: Brand = {
+      id: Date.now(),
+      name: brandData.name || 'New Brand',
+      description: brandData.description || '',
+      profileImage: brandData.profileImage || 'https://ui-avatars.com/api/?name=New+Brand&background=random',
+      coverImage: brandData.coverImage || 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f',
+      ownerId: currentUser.id,
+      followers: [],
+      posts: [],
+      isVerified: false,
+      category: brandData.category || 'other',
+      website: brandData.website,
+      contactEmail: brandData.contactEmail,
+      phone: brandData.phone,
+      location: brandData.location
+    };
+    setBrands(prev => [...prev, newBrand]);
+    alert("Brand created successfully!");
   };
   
   const handlePostAsBrand = (brandId: number, postData: any) => {
-    alert("Post as brand feature coming soon!");
+    if (!currentUser) {
+      alert("Please login to post as a brand.");
+      return;
+    }
+    const brand = brands.find(b => b.id === brandId);
+    if (!brand) {
+      alert("Brand not found.");
+      return;
+    }
+    
+    const timestamp = Date.now();
+    const formattedTime = formatRelativeTime(timestamp);
+    const newPost: PostType = {
+      id: timestamp,
+      authorId: brand.ownerId,
+      brandId: brand.id,
+      content: postData.content || '',
+      timestamp: timestamp,
+      formattedTime: formattedTime,
+      createdAt: timestamp,
+      reactions: [],
+      comments: [],
+      shares: 0,
+      views: 0,
+      type: 'text',
+      visibility: 'Public'
+    };
+    setPosts(prev => [newPost, ...prev]);
+    alert("Posted as brand successfully!");
   };
   
   const handleUpdateBrand = (brandId: number, updates: Partial<Brand>) => {
-    alert("Update brand feature coming soon!");
+    setBrands(prev => prev.map(brand => 
+      brand.id === brandId ? { ...brand, ...updates } : brand
+    ));
+    alert("Brand updated successfully!");
   };
   
   const handleDeleteBrand = (brandId: number) => {
-    alert("Delete brand feature coming soon!");
+    if (!currentUser || !isAdmin) {
+      alert("Only admins can delete brands.");
+      return;
+    }
+    if (window.confirm("Are you sure you want to delete this brand?")) {
+      setBrands(prev => prev.filter(b => b.id !== brandId));
+      alert("Brand deleted successfully!");
+    }
   };
   
   const handleUpdateBrandImage = (brandId: number, type: 'profile' | 'cover', file: File) => {
-    alert("Update brand image feature coming soon!");
+    const url = URL.createObjectURL(file);
+    setBrands(prev => prev.map(brand => 
+      brand.id === brandId 
+        ? (type === 'profile' 
+            ? { ...brand, profileImage: url }
+            : { ...brand, coverImage: url })
+        : brand
+    ));
+    alert("Brand image updated!");
   };
   
   const handleVerifyBrand = (brandId: number) => {
-    alert("Verify brand feature coming soon!");
+    if (!isAdmin) {
+      alert("Only admins can verify brands.");
+      return;
+    }
+    setBrands(prev => prev.map(brand => 
+      brand.id === brandId ? { ...brand, isVerified: !brand.isVerified } : brand
+    ));
+    alert("Brand verification status updated!");
   };
   
   const handleAddEpisode = (episode: Episode) => {
@@ -1775,6 +1890,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     });
   };
   
+  // Render the app
   return (
     <div className="bg-[#18191A] min-h-screen flex flex-col font-sans">
       {isLoading ? (
@@ -2339,6 +2455,80 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
               onShare={(type, id, caption) => handleShare(activeSharePostId, type, id, caption)} 
               onCopyLink={() => { if(isClient) { navigator.clipboard.writeText(`https://unera.social/posts/${activeSharePostId}`); alert("Link copied!"); } }} 
             />
+          )}
+          
+          {/* Group Post Comments Modal */}
+          {activeGroupComments && (
+            (() => {
+              const { groupId, postId } = activeGroupComments;
+              const group = groups.find(g => g.id === groupId);
+              const groupPost = group?.posts.find(p => p.id === postId);
+              
+              if (group && groupPost) {
+                const postForComments: PostType = {
+                  id: groupPost.id,
+                  authorId: groupPost.authorId,
+                  content: groupPost.content || '',
+                  images: groupPost.images,
+                  video: groupPost.video,
+                  timestamp: groupPost.timestamp,
+                  formattedTime: groupPost.formattedTime || formatRelativeTime(groupPost.timestamp),
+                  createdAt: groupPost.timestamp,
+                  reactions: groupPost.reactions || [],
+                  comments: groupPost.comments || [],
+                  shares: groupPost.shares || 0,
+                  views: 0,
+                  type: groupPost.video ? 'video' : (groupPost.images ? 'image' : 'text'),
+                  visibility: 'Public',
+                  groupId: groupId,
+                  groupName: group.name
+                };
+                
+                return (
+                  <CommentsSheet 
+                    post={postForComments}
+                    currentUser={currentUser || INITIAL_USERS[0]}
+                    users={users}
+                    onClose={() => setActiveGroupComments(null)}
+                    onComment={(postId, text, attachment) => handleGroupComment(groupId, postId, text, attachment)}
+                    onLikeComment={() => {}}
+                    getCommentAuthor={(id) => users.find(u => u.id === id)}
+                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); setActiveGroupComments(null); }}
+                    title={`Comments from ${group.name}`}
+                  />
+                );
+              }
+              return null;
+            })()
+          )}
+          
+          {/* Group Post Share Modal */}
+          {activeGroupShare && (
+            (() => {
+              const { groupId, postId } = activeGroupShare;
+              const group = groups.find(g => g.id === groupId);
+              
+              if (group) {
+                return (
+                  <ShareSheet 
+                    currentUser={currentUser} 
+                    groups={groups.filter(g => g.id !== groupId)} // Don't show current group
+                    brands={brands} 
+                    postId={postId} 
+                    onClose={() => setActiveGroupShare(null)} 
+                    onShare={(type, id, caption) => handleGroupShare(groupId, postId, type, id, caption)} 
+                    onCopyLink={() => { 
+                      if(isClient) { 
+                        navigator.clipboard.writeText(`https://unera.social/groups/${groupId}/posts/${postId}`); 
+                        alert("Link copied!"); 
+                      } 
+                    }}
+                    title={`Share post from ${group.name}`}
+                  />
+                );
+              }
+              return null;
+            })()
           )}
           
           {activeStory && (
