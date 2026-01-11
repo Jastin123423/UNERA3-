@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-// Removed react-icons import
+import React, { useState, useEffect, useCallback } from 'react';
 import { Song, Episode, User } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 
-// API Client (import from App.tsx or create local version)
+// API Client
 const API_BASE_URL = 'https://unera.social';
 
 const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
@@ -37,7 +36,7 @@ const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
         }
         
         return data;
-    } catch (error) {
+    } catch (error: any) {
         console.error('API Error:', error);
         return { 
             data: [], 
@@ -335,7 +334,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
         }
     };
 
-    // Handle upload (simplified version - would need file upload endpoint)
+    // Handle upload
     const handleUpload = async (file: File, isMusic: boolean) => {
         if (!currentUser) return;
         
@@ -349,7 +348,6 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
             
             const endpoint = isMusic ? '/api/songs/upload' : '/api/podcasts/upload';
             
-            // Note: This endpoint needs to be created on backend
             const response = await fetch(`${API_BASE_URL}${endpoint}`, {
                 method: 'POST',
                 headers: {
@@ -365,12 +363,12 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                 // Refresh the list
                 if (isMusic) {
                     fetchSongs();
-                    if (onAddSong) {
+                    if (onAddSong && result.data) {
                         onAddSong(result.data);
                     }
                 } else {
                     fetchPodcasts();
-                    if (onAddEpisode) {
+                    if (onAddEpisode && result.data) {
                         onAddEpisode(result.data);
                     }
                 }
@@ -427,7 +425,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                 fetchPodcasts();
             }
         }
-    }, [currentUser, activeTab, refreshTrigger]);
+    }, [currentUser, activeTab, refreshTrigger, fetchSongs, fetchPodcasts]);
 
     // Polling for updates every 30 seconds
     useEffect(() => {
@@ -462,7 +460,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                             onClick={() => handlePlay(track)}
                             className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-md hover:bg-opacity-70 transition text-white"
                         >
-                            ▶️ {/* Replaced FaPlay */}
+                            ▶️
                         </button>
                     </div>
                     
@@ -485,9 +483,9 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                             title={isLiked ? 'Unlike' : 'Like'}
                         >
                             {isLiked ? (
-                                <span className="text-red-500">❤️</span> {/* Replaced FaHeart */}
+                                <span className="text-red-500">❤️</span>
                             ) : (
-                                <span className="text-gray-400">🤍</span> {/* Replaced FaRegHeart */}
+                                <span className="text-gray-400">🤍</span>
                             )}
                         </button>
                         
@@ -496,7 +494,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                             className="p-2 rounded-full hover:bg-[#3A3B3C] transition"
                             title="Comment"
                         >
-                            <span className="text-gray-400">💬</span> {/* Replaced FaComment */}
+                            <span className="text-gray-400">💬</span>
                         </button>
                         
                         <button
@@ -515,7 +513,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                             className="p-2 rounded-full hover:bg-[#3A3B3C] transition"
                             title="Share"
                         >
-                            <span className="text-gray-400">🔗</span> {/* Replaced FaShare */}
+                            <span className="text-gray-400">🔗</span>
                         </button>
                         
                         {currentUser && (currentUser.id === track.uploaderId || currentUser.role === 'admin') && (
@@ -524,7 +522,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                                 className="p-2 rounded-full hover:bg-[#3A3B3C] transition text-red-400"
                                 title="Delete"
                             >
-                                🗑️ {/* Replaced FaTrash */}
+                                🗑️
                             </button>
                         )}
                     </div>
@@ -565,7 +563,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
             const song = songs.find(s => s.id === entry.trackId);
             const episode = episodes.find(e => e.id === entry.trackId);
             return song || episode;
-        }).filter(Boolean);
+        }).filter((track): track is Song | Episode => track !== undefined);
 
         return (
             <div>
@@ -573,7 +571,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                     historyTracks.map(track => track && renderTrackCard(track, track.type === 'music'))
                 ) : (
                     <div className="text-center py-8 text-gray-400">
-                        <div className="text-4xl mx-auto mb-4">📜</div> {/* Replaced FaHistory */}
+                        <div className="text-4xl mx-auto mb-4">📜</div>
                         <p>No play history yet</p>
                     </div>
                 )}
@@ -618,7 +616,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                     songs.map(song => renderTrackCard(song, true))
                 ) : (
                     <div className="text-center py-8 text-gray-400">
-                        <div className="text-4xl mx-auto mb-4">🎵</div> {/* Replaced FaMusic */}
+                        <div className="text-4xl mx-auto mb-4">🎵</div>
                         <p>No songs available</p>
                     </div>
                 );
@@ -628,7 +626,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                     episodes.map(episode => renderTrackCard(episode, false))
                 ) : (
                     <div className="text-center py-8 text-gray-400">
-                        <div className="text-4xl mx-auto mb-4">🎙️</div> {/* Replaced FaPodcast */}
+                        <div className="text-4xl mx-auto mb-4">🎙️</div>
                         <p>No podcasts available</p>
                     </div>
                 );
@@ -650,7 +648,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                     
                     {/* Search Bar */}
                     <div className="relative mb-6">
-                        <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">🔍</div> {/* Replaced FaSearch */}
+                        <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">🔍</div>
                         <input
                             type="text"
                             value={searchQuery}
@@ -670,7 +668,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                                     : 'text-gray-400 hover:text-gray-300'
                             }`}
                         >
-                            <span className="mr-2">🎵</span> {/* Replaced FaMusic */}
+                            <span className="mr-2">🎵</span>
                             Songs
                         </button>
                         <button
@@ -681,7 +679,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                                     : 'text-gray-400 hover:text-gray-300'
                             }`}
                         >
-                            <span className="mr-2">🎙️</span> {/* Replaced FaPodcast */}
+                            <span className="mr-2">🎙️</span>
                             Podcasts
                         </button>
                         <button
@@ -692,7 +690,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                                     : 'text-gray-400 hover:text-gray-300'
                             }`}
                         >
-                            <span className="mr-2">📜</span> {/* Replaced FaHistory */}
+                            <span className="mr-2">📜</span>
                             History
                         </button>
                     </div>
@@ -724,7 +722,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                                 {uploading ? (
                                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                                 ) : (
-                                    <span>📤</span> {/* Replaced FaUpload */}
+                                    <span>📤</span>
                                 )}
                             </div>
                         </label>
