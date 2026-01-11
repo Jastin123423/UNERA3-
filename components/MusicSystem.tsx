@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { FaPlay, FaPause, FaHeart, FaRegHeart, FaComment, FaShare, FaMusic, FaPodcast, FaHistory, FaUpload, FaSearch, FaTrash, FaEdit } from 'react-icons/fa';
+// Removed react-icons import
 import { Song, Episode, User } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 
@@ -460,9 +460,9 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                         />
                         <button
                             onClick={() => handlePlay(track)}
-                            className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-md hover:bg-opacity-70 transition"
+                            className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-md hover:bg-opacity-70 transition text-white"
                         >
-                            <FaPlay className="text-white text-xl" />
+                            ▶️ {/* Replaced FaPlay */}
                         </button>
                     </div>
                     
@@ -485,9 +485,9 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                             title={isLiked ? 'Unlike' : 'Like'}
                         >
                             {isLiked ? (
-                                <FaHeart className="text-red-500" />
+                                <span className="text-red-500">❤️</span> {/* Replaced FaHeart */}
                             ) : (
-                                <FaRegHeart className="text-gray-400" />
+                                <span className="text-gray-400">🤍</span> {/* Replaced FaRegHeart */}
                             )}
                         </button>
                         
@@ -496,7 +496,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                             className="p-2 rounded-full hover:bg-[#3A3B3C] transition"
                             title="Comment"
                         >
-                            <FaComment className="text-gray-400" />
+                            <span className="text-gray-400">💬</span> {/* Replaced FaComment */}
                         </button>
                         
                         <button
@@ -515,7 +515,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                             className="p-2 rounded-full hover:bg-[#3A3B3C] transition"
                             title="Share"
                         >
-                            <FaShare className="text-gray-400" />
+                            <span className="text-gray-400">🔗</span> {/* Replaced FaShare */}
                         </button>
                         
                         {currentUser && (currentUser.id === track.uploaderId || currentUser.role === 'admin') && (
@@ -524,7 +524,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                                 className="p-2 rounded-full hover:bg-[#3A3B3C] transition text-red-400"
                                 title="Delete"
                             >
-                                <FaTrash />
+                                🗑️ {/* Replaced FaTrash */}
                             </button>
                         )}
                     </div>
@@ -573,7 +573,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                     historyTracks.map(track => track && renderTrackCard(track, track.type === 'music'))
                 ) : (
                     <div className="text-center py-8 text-gray-400">
-                        <FaHistory className="text-4xl mx-auto mb-4" />
+                        <div className="text-4xl mx-auto mb-4">📜</div> {/* Replaced FaHistory */}
                         <p>No play history yet</p>
                     </div>
                 )}
@@ -618,7 +618,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                     songs.map(song => renderTrackCard(song, true))
                 ) : (
                     <div className="text-center py-8 text-gray-400">
-                        <FaMusic className="text-4xl mx-auto mb-4" />
+                        <div className="text-4xl mx-auto mb-4">🎵</div> {/* Replaced FaMusic */}
                         <p>No songs available</p>
                     </div>
                 );
@@ -628,7 +628,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                     episodes.map(episode => renderTrackCard(episode, false))
                 ) : (
                     <div className="text-center py-8 text-gray-400">
-                        <FaPodcast className="text-4xl mx-auto mb-4" />
+                        <div className="text-4xl mx-auto mb-4">🎙️</div> {/* Replaced FaPodcast */}
                         <p>No podcasts available</p>
                     </div>
                 );
@@ -650,7 +650,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                     
                     {/* Search Bar */}
                     <div className="relative mb-6">
-                        <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                        <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">🔍</div> {/* Replaced FaSearch */}
                         <input
                             type="text"
                             value={searchQuery}
@@ -670,7 +670,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                                     : 'text-gray-400 hover:text-gray-300'
                             }`}
                         >
-                            <FaMusic className="inline-block mr-2" />
+                            <span className="mr-2">🎵</span> {/* Replaced FaMusic */}
                             Songs
                         </button>
                         <button
@@ -681,7 +681,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                                     : 'text-gray-400 hover:text-gray-300'
                             }`}
                         >
-                            <FaPodcast className="inline-block mr-2" />
+                            <span className="mr-2">🎙️</span> {/* Replaced FaPodcast */}
                             Podcasts
                         </button>
                         <button
@@ -692,7 +692,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                                     : 'text-gray-400 hover:text-gray-300'
                             }`}
                         >
-                            <FaHistory className="inline-block mr-2" />
+                            <span className="mr-2">📜</span> {/* Replaced FaHistory */}
                             History
                         </button>
                     </div>
@@ -724,7 +724,7 @@ const MusicSystem: React.FC<MusicSystemProps> = ({
                                 {uploading ? (
                                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                                 ) : (
-                                    <FaUpload className="text-xl" />
+                                    <span>📤</span> {/* Replaced FaUpload */}
                                 )}
                             </div>
                         </label>
