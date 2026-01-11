@@ -13,7 +13,7 @@ import { EventsPage, BirthdaysPage, SuggestedProfilesPage, SettingsPage, Memorie
 import { HelpSupportPage } from './components/HelpSupport';
 import { CreateEventModal } from './components/Events';
 import { BrandsPage } from './components/Brands';
-import MusicSystem from './components/MusicSystem'; // Changed to default import
+import MusicSystem from './components/MusicSystem';
 import { GroupsPage } from './components/Groups';
 import { ToolsPage } from './components/Tools';
 import { PrivacyPolicyPage } from './components/PrivacyPolicy';
@@ -23,20 +23,113 @@ import { User, Post as PostType, Story, Reel, Notification, Message, Event, Prod
 import { INITIAL_USERS, INITIAL_POSTS, INITIAL_STORIES, INITIAL_REELS, INITIAL_EVENTS, INITIAL_GROUPS, INITIAL_BRANDS, MOCK_SONGS, MOCK_EPISODES } from './constants';
 import { rankFeed } from './utils/ranking'; 
 
-// ========== API BASE URL ==========
-const API_BASE_URL = 'https://unera.social';
+// ========== CONFIGURATION ==========
+const IS_DEVELOPMENT = process.env.NODE_ENV === 'development';
+const API_BASE_URL = IS_DEVELOPMENT 
+  ? 'http://localhost:3000'  // Your local API
+  : 'https://unera.social';   // Production API
+
+// ========== UTILITY FUNCTIONS ==========
+const getSafeProfileImage = (user: User | Brand | null | undefined): string => {
+  if (!user) return '/default-profile.png';
+  if ('profileImage' in user && user.profileImage) {
+    return user.profileImage;
+  }
+  return '/default-profile.png';
+};
+
+const getDefaultUser = (): User => ({
+  id: 0,
+  username: 'guest',
+  name: 'Guest User',
+  email: 'guest@example.com',
+  profileImage: '/default-profile.png',
+  coverImage: '/default-cover.jpg',
+  bio: '',
+  isVerified: false,
+  followers: [],
+  following: [],
+  role: 'user',
+  createdAt: Date.now(),
+  posts: [],
+  birthDate: undefined,
+  isRestricted: false,
+  restrictedUntil: undefined
+});
 
 // ========== API HELPER FUNCTIONS ==========
 const getAuthToken = (): string | null => {
+  if (typeof window === 'undefined') return null;
   return localStorage.getItem('unera_token');
 };
 
 const setAuthToken = (token: string): void => {
-  localStorage.setItem('unera_token', token);
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('unera_token', token);
+  }
 };
 
 const clearAuthToken = (): void => {
-  localStorage.removeItem('unera_token');
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('unera_token');
+  }
+};
+
+// Mock data for development/offline mode
+const getMockData = async (endpoint: string): Promise<any> => {
+  console.log('Using mock data for:', endpoint);
+  
+  // Simulate network delay
+  await new Promise(resolve => setTimeout(resolve, 300));
+  
+  switch(endpoint) {
+    case '/users/me':
+      return {
+        id: 1,
+        username: 'demo_user',
+        name: 'Demo User',
+        email: 'demo@example.com',
+        profileImage: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=80',
+        coverImage: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
+        bio: 'Welcome to my profile!',
+        isVerified: true,
+        followers: [2, 3, 4],
+        following: [2, 3],
+        role: 'user',
+        createdAt: Date.now() - 86400000 * 30
+      };
+    case '/posts':
+      return INITIAL_POSTS.map(post => ({
+        ...post,
+        formattedTime: formatRelativeTime(post.timestamp || Date.now())
+      }));
+    case '/stories':
+      return INITIAL_STORIES;
+    case '/groups':
+      return INITIAL_GROUPS;
+    case '/brands_pages':
+      return INITIAL_BRANDS;
+    case '/music':
+      return MOCK_SONGS;
+    case '/videos':
+      return INITIAL_REELS;
+    case '/events':
+      return INITIAL_EVENTS;
+    default:
+      if (endpoint.startsWith('/users/')) {
+        const userId = endpoint.split('/')[2];
+        const user = INITIAL_USERS.find(u => u.id.toString() === userId) || getDefaultUser();
+        return user;
+      }
+      if (endpoint.startsWith('/posts/')) {
+        const postId = endpoint.split('/')[2];
+        const post = INITIAL_POSTS.find(p => p.id.toString() === postId);
+        if (post) {
+          return { ...post, formattedTime: formatRelativeTime(post.timestamp || Date.now()) };
+        }
+      }
+      return { data: [], success: true };
+  }
 };
 
 const apiRequest = async <T = any>(
@@ -52,10 +145,33 @@ const apiRequest = async <T = any>(
 
   const url = `${API_BASE_URL}${endpoint}`;
   
+  // Development mode: Use mock data if API fails or is not available
+  if (IS_DEVELOPMENT) {
+    try {
+      // Try real API first
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (error) {
+      console.warn('API request failed, using mock data:', error);
+    }
+    
+    // Fall back to mock data
+    return await getMockData(endpoint) as T;
+  }
+  
+  // Production mode: Use real API
   try {
     const response = await fetch(url, {
       ...options,
       headers,
+      credentials: 'include'
     });
 
     if (!response.ok) {
@@ -66,6 +182,12 @@ const apiRequest = async <T = any>(
     return await response.json();
   } catch (error) {
     console.error(`API Request failed for ${endpoint}:`, error);
+    
+    // Even in production, fall back to mock data for better UX
+    if (endpoint === '/users/me' || endpoint === '/posts') {
+      return await getMockData(endpoint) as T;
+    }
+    
     throw error;
   }
 };
@@ -486,6 +608,8 @@ const parsePath = (path: string, users: User[]) => {
 };
 
 const formatRelativeTime = (timestamp: number): string => {
+    if (!timestamp) return 'Just now';
+    
     const now = Date.now();
     const diff = now - timestamp;
     
@@ -598,7 +722,7 @@ const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
                 ...brand,
                 type: 'brand' as const,
                 name: brand.name,
-                profileImage: brand.profileImage,
+                profileImage: brand.profileImage || '/default-brand.png',
                 isVerified: brand.isVerified,
                 id: brand.id,
                 followers: brand.followers || []
@@ -612,7 +736,7 @@ const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
             ...brandByAuthorId,
             type: 'brand' as const,
             name: brandByAuthorId.name,
-            profileImage: brandByAuthorId.profileImage,
+            profileImage: brandByAuthorId.profileImage || '/default-brand.png',
             isVerified: brandByAuthorId.isVerified,
             id: brandByAuthorId.id,
             followers: brandByAuthorId.followers || []
@@ -623,11 +747,17 @@ const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
     if (user) {
         return {
             ...user,
-            type: 'user' as const
+            type: 'user' as const,
+            profileImage: user.profileImage || '/default-profile.png'
         };
     }
     
-    return null;
+    // Return a default user if none found
+    return {
+        ...getDefaultUser(),
+        id: post.authorId || 0,
+        type: 'user' as const
+    };
 };
 
 const notificationExists = (notifications: Notification[], userId: number, senderId: number, type: string, postId?: number): boolean => {
@@ -673,29 +803,101 @@ const createNotification = (
     };
 };
 
+// Error Boundary Component
+class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: Error | null}> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('React Error Boundary Caught:', error);
+    console.error('Error Info:', errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-[#18191A] flex items-center justify-center p-4">
+          <div className="text-center max-w-md">
+            <h1 className="text-2xl text-white mb-4">Something went wrong</h1>
+            <p className="text-gray-400 mb-6">
+              {this.state.error?.message || 'An unexpected error occurred'}
+            </p>
+            <div className="flex gap-4 justify-center">
+              <button 
+                className="bg-[#1877F2] text-white px-4 py-2 rounded hover:bg-[#166FE5] transition"
+                onClick={() => window.location.reload()}
+              >
+                Reload Page
+              </button>
+              <button 
+                className="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-600 transition"
+                onClick={() => this.setState({ hasError: false, error: null })}
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 // ========== MAIN APP COMPONENT ==========
-export default function App({ initialData, initialPath }: { initialData?: any, initialPath?: string }) {
+function App({ initialData, initialPath }: { initialData?: any, initialPath?: string }) {
     const { t } = useLanguage();
 
     const [isClient, setIsClient] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [apiError, setApiError] = useState<string | null>(null);
     
-    // State
-    const [users, setUsers] = useState<User[]>(initialData?.users || INITIAL_USERS);
+    // State - with safe initialization
+    const [users, setUsers] = useState<User[]>(() => {
+        const initialUsers = initialData?.users || INITIAL_USERS;
+        return initialUsers.map(user => ({
+            ...user,
+            profileImage: user.profileImage || '/default-profile.png',
+            coverImage: user.coverImage || '/default-cover.jpg'
+        }));
+    });
+    
     const [posts, setPosts] = useState<PostType[]>(() => {
         const initialPosts = initialData?.posts || INITIAL_POSTS;
         return initialPosts.map(post => ({
             ...post,
-            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now()),
+            reactions: post.reactions || [],
+            comments: post.comments || [],
+            shares: post.shares || 0
         }));
     });
-    const [stories, setStories] = useState<Story[]>(INITIAL_STORIES.map(s => ({...s, createdAt: Date.now(), user: (initialData?.users || INITIAL_USERS).find((u: User) => u.id === s.userId)}))); 
+    
+    const [stories, setStories] = useState<Story[]>(INITIAL_STORIES.map(s => ({
+        ...s, 
+        createdAt: s.createdAt || Date.now(), 
+        user: (initialData?.users || INITIAL_USERS).find((u: User) => u.id === s.userId) || getDefaultUser()
+    }))); 
+    
     const [reels, setReels] = useState<Reel[]>(INITIAL_REELS);
     const [events, setEvents] = useState<Event[]>(INITIAL_EVENTS);
     const [products, setProducts] = useState<Product[]>([]);
     const [groups, setGroups] = useState<Group[]>(INITIAL_GROUPS);
-    const [brands, setBrands] = useState<Brand[]>(INITIAL_BRANDS);
+    const [brands, setBrands] = useState<Brand[]>(() => {
+        return INITIAL_BRANDS.map(brand => ({
+            ...brand,
+            profileImage: brand.profileImage || '/default-brand.png',
+            coverImage: brand.coverImage || '/default-cover.jpg'
+        }));
+    });
+    
     const [songs, setSongs] = useState<Song[]>(MOCK_SONGS.map(song => ({
         ...song,
         plays: song.plays || 0,
@@ -711,6 +913,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             reelsUse: 0
         }
     })));
+    
     const [episodes, setEpisodes] = useState<Episode[]>(MOCK_EPISODES.map(episode => ({
         ...episode,
         plays: episode.plays || 0,
@@ -726,7 +929,19 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             reelsUse: 0
         }
     })));
-    const [currentUser, setCurrentUser] = useState<User | null>(initialData?.currentUser || null);
+    
+    const [currentUser, setCurrentUser] = useState<User | null>(() => {
+        const user = initialData?.currentUser || null;
+        if (user) {
+            return {
+                ...user,
+                profileImage: user.profileImage || '/default-profile.png',
+                coverImage: user.coverImage || '/default-cover.jpg'
+            };
+        }
+        return null;
+    });
+    
     const [showRegister, setShowRegister] = useState(false);
     const [showForgotPassword, setShowForgotPassword] = useState(false);
     const [loginError, setLoginError] = useState('');
@@ -797,12 +1012,26 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const isAdmin = currentUser?.role === 'admin';
 
+    // Debug logging
+    useEffect(() => {
+        if (isClient && IS_DEVELOPMENT) {
+            console.log('App State Debug:', {
+                currentUser: currentUser ? { ...currentUser, profileImage: getSafeProfileImage(currentUser) } : null,
+                usersCount: users.length,
+                postsCount: posts.length,
+                view: view,
+                activeTab: activeTab,
+                apiError: apiError
+            });
+        }
+    }, [currentUser, users.length, posts.length, view, activeTab, apiError, isClient]);
+
     // Memoized values
     const storiesWithUsers = useMemo(() => {
         return stories.map(story => {
-            const user = users.find(u => u.id === story.userId);
+            const user = users.find(u => u.id === story.userId) || getDefaultUser();
             return { ...story, user };
-        }).sort((a,b) => b.createdAt - a.createdAt);
+        }).sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
     }, [stories, users]);
 
     const rankedPosts = useMemo(() => {
@@ -852,51 +1081,90 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     // Load data from API on mount
     useEffect(() => {
         const loadDataFromAPI = async () => {
-            if (isClient && getAuthToken()) {
+            if (isClient) {
                 try {
                     setIsLoading(true);
                     
-                    // Load current user
-                    const userData = await UNERA_API.users.getCurrentUser();
-                    if (userData) {
-                        setCurrentUser(userData);
-                    }
+                    // Check if we have a token
+                    const token = getAuthToken();
                     
-                    // Load posts
-                    const postsData = await UNERA_API.posts.getAll();
-                    if (postsData && Array.isArray(postsData)) {
-                        setPosts(postsData.map((post: any) => ({
-                            ...post,
-                            formattedTime: formatRelativeTime(post.timestamp || post.createdAt || Date.now())
-                        })));
-                    }
-                    
-                    // Load stories
-                    const storiesData = await UNERA_API.stories.getAll();
-                    if (storiesData && Array.isArray(storiesData)) {
-                        setStories(storiesData);
-                    }
-                    
-                    // Load groups
-                    const groupsData = await UNERA_API.groups.getAll();
-                    if (groupsData && Array.isArray(groupsData)) {
-                        setGroups(groupsData);
-                    }
-                    
-                    // Load brands
-                    const brandsData = await UNERA_API.brands_pages.getAll();
-                    if (brandsData && Array.isArray(brandsData)) {
-                        setBrands(brandsData);
-                    }
-                    
-                    // Load music
-                    const musicData = await UNERA_API.music.getAll();
-                    if (musicData && Array.isArray(musicData)) {
-                        setSongs(musicData);
+                    if (token) {
+                        // Load current user
+                        try {
+                            const userData = await UNERA_API.users.getCurrentUser();
+                            if (userData) {
+                                setCurrentUser({
+                                    ...userData,
+                                    profileImage: userData.profileImage || '/default-profile.png'
+                                });
+                            }
+                        } catch (userError) {
+                            console.warn('Failed to load current user:', userError);
+                        }
+                        
+                        // Load posts
+                        try {
+                            const postsData = await UNERA_API.posts.getAll();
+                            if (postsData && Array.isArray(postsData)) {
+                                setPosts(postsData.map((post: any) => ({
+                                    ...post,
+                                    formattedTime: formatRelativeTime(post.timestamp || post.createdAt || Date.now()),
+                                    reactions: post.reactions || [],
+                                    comments: post.comments || [],
+                                    shares: post.shares || 0
+                                })));
+                            }
+                        } catch (postsError) {
+                            console.warn('Failed to load posts:', postsError);
+                        }
+                        
+                        // Load stories
+                        try {
+                            const storiesData = await UNERA_API.stories.getAll();
+                            if (storiesData && Array.isArray(storiesData)) {
+                                setStories(storiesData);
+                            }
+                        } catch (storiesError) {
+                            console.warn('Failed to load stories:', storiesError);
+                        }
+                        
+                        // Load groups
+                        try {
+                            const groupsData = await UNERA_API.groups.getAll();
+                            if (groupsData && Array.isArray(groupsData)) {
+                                setGroups(groupsData);
+                            }
+                        } catch (groupsError) {
+                            console.warn('Failed to load groups:', groupsError);
+                        }
+                        
+                        // Load brands
+                        try {
+                            const brandsData = await UNERA_API.brands_pages.getAll();
+                            if (brandsData && Array.isArray(brandsData)) {
+                                setBrands(brandsData.map((brand: any) => ({
+                                    ...brand,
+                                    profileImage: brand.profileImage || '/default-brand.png'
+                                })));
+                            }
+                        } catch (brandsError) {
+                            console.warn('Failed to load brands:', brandsError);
+                        }
+                        
+                        // Load music
+                        try {
+                            const musicData = await UNERA_API.music.getAll();
+                            if (musicData && Array.isArray(musicData)) {
+                                setSongs(musicData);
+                            }
+                        } catch (musicError) {
+                            console.warn('Failed to load music:', musicError);
+                        }
                     }
                     
                 } catch (error) {
                     console.error('Failed to load data from API:', error);
+                    setApiError('Failed to load data. Using offline mode.');
                 } finally {
                     setIsLoading(false);
                 }
@@ -914,24 +1182,31 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const handleLogin = async (email: string, password: string) => {
         try {
             setApiError(null);
+            setLoginError('');
             const data = await UNERA_API.users.login({ email, password });
             
             if (data.token && data.user) {
                 setAuthToken(data.token);
-                setCurrentUser(data.user);
+                setCurrentUser({
+                    ...data.user,
+                    profileImage: data.user.profileImage || '/default-profile.png'
+                });
                 setView('home');
                 setActiveTab('home');
-                setLoginError('');
                 setShowRegister(false);
                 setShowForgotPassword(false);
                 
                 // Load user data
-                const postsData = await UNERA_API.posts.getAll();
-                if (postsData) {
-                    setPosts(postsData.map((post: any) => ({
-                        ...post,
-                        formattedTime: formatRelativeTime(post.timestamp || post.createdAt || Date.now())
-                    })));
+                try {
+                    const postsData = await UNERA_API.posts.getAll();
+                    if (postsData && Array.isArray(postsData)) {
+                        setPosts(postsData.map((post: any) => ({
+                            ...post,
+                            formattedTime: formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+                        })));
+                    }
+                } catch (postsError) {
+                    console.warn('Failed to load posts after login:', postsError);
                 }
                 
                 if (isClient) window.history.pushState({}, '', '/');
@@ -947,6 +1222,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     const handleRegister = async (newUser: Partial<User>) => {
         try {
             setApiError(null);
+            setLoginError('');
             const { username, email, password } = newUser;
             if (!username || !email || !password) {
                 setLoginError('All fields are required');
@@ -957,8 +1233,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             
             if (data.token && data.user) {
                 setAuthToken(data.token);
-                setCurrentUser(data.user);
-                setUsers(prev => [...prev, data.user]);
+                setCurrentUser({
+                    ...data.user,
+                    profileImage: data.user.profileImage || '/default-profile.png'
+                });
+                setUsers(prev => [...prev, {
+                    ...data.user,
+                    profileImage: data.user.profileImage || '/default-profile.png'
+                }]);
                 setShowRegister(false);
                 setShowForgotPassword(false);
                 setView('home');
@@ -1039,10 +1321,10 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 // Notify tagged users
                 if (taggedUsers && taggedUsers.length > 0) {
                     taggedUsers.forEach(userId => {
-                        if (userId !== currentUser.id) {
+                        if (userId !== currentUser!.id) {
                             handleCreateNotification(
                                 userId,
-                                currentUser.id,
+                                currentUser!.id,
                                 'tag_post',
                                 'tagged you in a post.',
                                 { postId: newPost.id }
@@ -1150,12 +1432,13 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     likes: 0,
                     attachment,
                     authorName: currentUser.name,
-                    authorImage: currentUser.profileImage
+                    authorImage: getSafeProfileImage(currentUser)
                 };
                 
                 setPosts(prev => prev.map(p => {
                     if (p.id === itemId) {
-                        return { ...p, comments: [...p.comments, newComment] };
+                        const comments = Array.isArray(p.comments) ? p.comments : [];
+                        return { ...p, comments: [...comments, newComment] };
                     }
                     return p;
                 }));
@@ -1189,14 +1472,14 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             
             // Check if already liked
             const post = posts.find(p => p.id === itemId);
-            const existingReaction = post?.reactions.find(r => r.userId === currentUser.id);
+            const existingReaction = post?.reactions?.find(r => r.userId === currentUser.id);
             
             if (existingReaction) {
                 // Unlike
                 await UNERA_API.likes.delete(itemId, 'post');
                 setPosts(prev => prev.map(p => 
                     p.id === itemId 
-                        ? { ...p, reactions: p.reactions.filter(r => r.userId !== currentUser.id) }
+                        ? { ...p, reactions: (p.reactions || []).filter(r => r.userId !== currentUser.id) }
                         : p
                 ));
             } else {
@@ -1208,7 +1491,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 
                 setPosts(prev => prev.map(p => {
                     if (p.id === itemId) {
-                        const newReactions = [...p.reactions, { userId: currentUser.id, type }];
+                        const newReactions = [...(p.reactions || []), { userId: currentUser.id, type }];
                         
                         // Send notification
                         if (p.authorId !== currentUser.id) {
@@ -1324,7 +1607,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                 name: brandData.name || 'New Brand',
                 description: brandData.description || '',
                 category: brandData.category || 'Business',
-                logo_url: brandData.profileImage,
+                logo_url: brandData.profileImage || '/default-brand.png',
             });
             
             if (data) {
@@ -1335,7 +1618,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                     isVerified: false,
                     posts: [],
                     createdAt: Date.now(),
-                    profileImage: brandData.profileImage || `https://ui-avatars.com/api/?name=${brandData.name || 'Brand'}&background=random&size=150`,
+                    profileImage: brandData.profileImage || '/default-brand.png',
                     coverImage: brandData.coverImage || 'https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-1.2.1&auto=format&fit=crop&w=1500&q=80'
                 };
                 
@@ -1623,7 +1906,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         }
     };
 
-    // ========== OTHER HANDLERS (Keep existing) ==========
+    // ========== OTHER HANDLERS ==========
     const handleTagClick = (tag: string) => {
         setActiveTag(tag.replace('#', ''));
         setView('tag_feed');
@@ -1847,7 +2130,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             phoneNumber: productData.phoneNumber || '',
             sellerId: currentUser.id,
             sellerName: currentUser.name,
-            sellerAvatar: currentUser.profileImage || 'https://via.placeholder.com/150',
+            sellerAvatar: getSafeProfileImage(currentUser),
             status: 'active',
             views: 0,
             ratings: [],
@@ -2313,7 +2596,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             likes: 0, 
             attachment,
             authorName: currentUser.name,
-            authorImage: currentUser.profileImage
+            authorImage: getSafeProfileImage(currentUser)
         };
         
         setGroups(prev => prev.map(g => {
@@ -2716,27 +2999,104 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             const storedGroups = localStorage.getItem('universeGroups');
             const storedNotifications = localStorage.getItem('universeNotifications');
             
-            if (storedUsers) setUsers(JSON.parse(storedUsers));
-            if (storedSongs) setSongs(JSON.parse(storedSongs));
-            if (storedEpisodes) setEpisodes(JSON.parse(storedEpisodes));
-            if (storedLikedTracks) setLikedTracks(JSON.parse(storedLikedTracks));
-            if (storedProducts) setProducts(JSON.parse(storedProducts));
-            if (storedBrands) setBrands(JSON.parse(storedBrands));
-            if (storedPosts) {
-                const parsedPosts = JSON.parse(storedPosts);
-                const postsWithFormattedTime = parsedPosts.map((post: PostType) => ({
-                    ...post,
-                    formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
-                }));
-                setPosts(postsWithFormattedTime);
+            if (storedUsers) {
+                try {
+                    const parsedUsers = JSON.parse(storedUsers);
+                    setUsers(parsedUsers.map((user: User) => ({
+                        ...user,
+                        profileImage: user.profileImage || '/default-profile.png'
+                    })));
+                } catch (e) {
+                    console.error('Error parsing stored users:', e);
+                }
             }
-            if (storedGroups) setGroups(JSON.parse(storedGroups));
-            if (storedNotifications) setNotifications(JSON.parse(storedNotifications));
+            
+            if (storedSongs) {
+                try {
+                    setSongs(JSON.parse(storedSongs));
+                } catch (e) {
+                    console.error('Error parsing stored songs:', e);
+                }
+            }
+            
+            if (storedEpisodes) {
+                try {
+                    setEpisodes(JSON.parse(storedEpisodes));
+                } catch (e) {
+                    console.error('Error parsing stored episodes:', e);
+                }
+            }
+            
+            if (storedLikedTracks) {
+                try {
+                    setLikedTracks(JSON.parse(storedLikedTracks));
+                } catch (e) {
+                    console.error('Error parsing stored liked tracks:', e);
+                }
+            }
+            
+            if (storedProducts) {
+                try {
+                    setProducts(JSON.parse(storedProducts));
+                } catch (e) {
+                    console.error('Error parsing stored products:', e);
+                }
+            }
+            
+            if (storedBrands) {
+                try {
+                    const parsedBrands = JSON.parse(storedBrands);
+                    setBrands(parsedBrands.map((brand: Brand) => ({
+                        ...brand,
+                        profileImage: brand.profileImage || '/default-brand.png'
+                    })));
+                } catch (e) {
+                    console.error('Error parsing stored brands:', e);
+                }
+            }
+            
+            if (storedPosts) {
+                try {
+                    const parsedPosts = JSON.parse(storedPosts);
+                    const postsWithFormattedTime = parsedPosts.map((post: PostType) => ({
+                        ...post,
+                        formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+                    }));
+                    setPosts(postsWithFormattedTime);
+                } catch (e) {
+                    console.error('Error parsing stored posts:', e);
+                }
+            }
+            
+            if (storedGroups) {
+                try {
+                    setGroups(JSON.parse(storedGroups));
+                } catch (e) {
+                    console.error('Error parsing stored groups:', e);
+                }
+            }
+            
+            if (storedNotifications) {
+                try {
+                    setNotifications(JSON.parse(storedNotifications));
+                } catch (e) {
+                    console.error('Error parsing stored notifications:', e);
+                }
+            }
             
             if (storedUser) {
-                const user = JSON.parse(storedUser);
-                const freshUser = (storedUsers ? JSON.parse(storedUsers) : INITIAL_USERS).find((u: User) => u.id === user.id);
-                if (freshUser) setCurrentUser(freshUser);
+                try {
+                    const user = JSON.parse(storedUser);
+                    const freshUser = (storedUsers ? JSON.parse(storedUsers) : INITIAL_USERS).find((u: User) => u.id === user.id);
+                    if (freshUser) {
+                        setCurrentUser({
+                            ...freshUser,
+                            profileImage: freshUser.profileImage || '/default-profile.png'
+                        });
+                    }
+                } catch (e) {
+                    console.error('Error parsing stored user:', e);
+                }
             }
         }
         setTimeout(() => setIsLoading(false), 800);
@@ -2745,21 +3105,29 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
     // Save data to localStorage
     useEffect(() => {
         if (isClient && currentUser) {
-            localStorage.setItem('universeCurrentUser', JSON.stringify(currentUser));
+            try {
+                localStorage.setItem('universeCurrentUser', JSON.stringify(currentUser));
+            } catch (e) {
+                console.error('Error saving current user:', e);
+            }
         }
     }, [currentUser, isClient]);
 
     useEffect(() => {
         if (isClient) {
-            localStorage.setItem('universeUsers', JSON.stringify(users));
-            localStorage.setItem('universeSongs', JSON.stringify(songs));
-            localStorage.setItem('universeEpisodes', JSON.stringify(episodes));
-            localStorage.setItem('universeLikedTracks', JSON.stringify(likedTracks));
-            localStorage.setItem('marketplaceProducts', JSON.stringify(products));
-            localStorage.setItem('universeBrands', JSON.stringify(brands));
-            localStorage.setItem('universePosts', JSON.stringify(posts));
-            localStorage.setItem('universeGroups', JSON.stringify(groups));
-            localStorage.setItem('universeNotifications', JSON.stringify(notifications));
+            try {
+                localStorage.setItem('universeUsers', JSON.stringify(users));
+                localStorage.setItem('universeSongs', JSON.stringify(songs));
+                localStorage.setItem('universeEpisodes', JSON.stringify(episodes));
+                localStorage.setItem('universeLikedTracks', JSON.stringify(likedTracks));
+                localStorage.setItem('marketplaceProducts', JSON.stringify(products));
+                localStorage.setItem('universeBrands', JSON.stringify(brands));
+                localStorage.setItem('universePosts', JSON.stringify(posts));
+                localStorage.setItem('universeGroups', JSON.stringify(groups));
+                localStorage.setItem('universeNotifications', JSON.stringify(notifications));
+            } catch (e) {
+                console.error('Error saving to localStorage:', e);
+            }
         }
     }, [users, songs, episodes, likedTracks, products, brands, posts, groups, notifications, isClient]);
 
@@ -2809,17 +3177,21 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
 
     const effectiveView = isClient ? view : (initialData?.view || parsedPath.view);
     
-    // Function to render music/podcast posts - REMOVED MusicFeedPost usage
+    // Function to render music/podcast posts
     const renderMusicPost = (post: PostType, author: any) => {
         const song = getSongForPost(post, songs, episodes);
         if (!song) return null;
         
-        // Instead of MusicFeedPost, we'll render a regular post with audio
+        const safePost = {
+            ...post,
+            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+        };
+        
         return (
             <Post 
                 key={post.id} 
-                post={{...post, formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())}}
-                author={author as any} 
+                post={safePost}
+                author={author} 
                 currentUser={currentUser} 
                 users={users} 
                 onProfileClick={(id) => { 
@@ -2865,7 +3237,7 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
             <Post 
                 key={post.id} 
                 post={postWithFormattedTime}
-                author={author as any} 
+                author={author} 
                 currentUser={currentUser} 
                 users={users} 
                 onProfileClick={(id) => { 
@@ -2950,9 +3322,9 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
         );
     };
     
-    return (
-        <div className="bg-[#18191A] min-h-screen flex flex-col font-sans">
-            {isLoading ? (
+    const renderContent = () => {
+        if (isLoading) {
+            return (
                 <div className="flex items-center justify-center min-h-screen bg-[#18191A] flex-col">
                     <div className="w-20 h-20 border-4 border-[#1877F2] border-t-transparent rounded-full animate-spin mb-4"></div>
                     <div className="text-[#1877F2] font-bold text-xl animate-pulse">Loading UNERA...</div>
@@ -2962,697 +3334,738 @@ export default function App({ initialData, initialPath }: { initialData?: any, i
                         </div>
                     )}
                 </div>
-            ) : effectiveView === 'login' ? (
-                 showRegister 
-                    ? <Register onRegister={handleRegister} onBackToLogin={() => { setShowRegister(false); setShowForgotPassword(false); }} /> 
-                    : showForgotPassword
-                    ? <ForgotPassword onBackToLogin={() => { setShowForgotPassword(false); setShowRegister(false); }} />
-                    : <Login onLogin={handleLogin} onNavigateToRegister={() => { setShowRegister(true); setShowForgotPassword(false); }} onNavigateToForgotPassword={() => { setShowForgotPassword(true); setShowRegister(false); }} onClose={() => { setView('home'); setCurrentUser(null); }} error={loginError} />
-            ) : (
-                <>
-                    {currentAudioTrack && (
-                        <GlobalAudioPlayerComponent 
-                            currentTrack={currentAudioTrack} 
-                            isPlaying={isAudioPlaying} 
-                            onTogglePlay={() => setIsAudioPlaying(!isAudioPlaying)} 
-                            onNext={() => {}} 
-                            onPrevious={() => {}} 
-                            onClose={() => { setCurrentAudioTrack(null); setIsAudioPlaying(false); }} 
-                            onDownload={() => alert("Download started...")} 
-                            onLike={(id: string) => handleLikeTrack(id, likedTracks.includes(id))} 
-                            isLiked={likedTracks.includes(currentAudioTrack.id)} 
-                            uploaderProfile={users.find(u => u.id === currentAudioTrack.uploaderId)} 
-                            onArtistClick={(id: number) => { setSelectedUserId(id); setView('profile'); }} 
-                        />
-                    )}
-                    
-                    {apiError && (
-                        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50">
-                            <div className="bg-red-900 text-red-100 px-4 py-2 rounded-lg shadow-lg">
-                                API Error: {apiError}
-                                <button 
-                                    onClick={() => setApiError(null)}
-                                    className="ml-3 text-red-300 hover:text-white"
-                                >
-                                    ✕
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                    
-                    <Header 
-                        onHomeClick={() => handleNavigate('home')} 
-                        onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
-                        onReelsClick={() => handleNavigate('reels')} 
-                        onMarketplaceClick={() => handleNavigate('marketplace')} 
-                        onGroupsClick={() => handleNavigate('groups')} 
-                        currentUser={currentUser} 
-                        notifications={notifications} 
-                        users={users} 
-                        onLogout={handleLogout} 
-                        onLoginClick={() => setView('login')} 
-                        onMarkNotificationsRead={handleMarkAllNotificationsRead} 
-                        onNotificationClick={handleNotificationClick}
-                        activeTab={activeTab} 
-                        onNavigate={handleNavigate} 
+            );
+        }
+        
+        if (effectiveView === 'login') {
+            if (showRegister) {
+                return <Register onRegister={handleRegister} onBackToLogin={() => { setShowRegister(false); setShowForgotPassword(false); }} />;
+            } else if (showForgotPassword) {
+                return <ForgotPassword onBackToLogin={() => { setShowForgotPassword(false); setShowRegister(false); }} />;
+            } else {
+                return <Login 
+                    onLogin={handleLogin} 
+                    onNavigateToRegister={() => { setShowRegister(true); setShowForgotPassword(false); }} 
+                    onNavigateToForgotPassword={() => { setShowForgotPassword(true); setShowRegister(false); }} 
+                    onClose={() => { setView('home'); setCurrentUser(null); }} 
+                    error={loginError} 
+                />;
+            }
+        }
+        
+        return (
+            <>
+                {currentAudioTrack && (
+                    <GlobalAudioPlayerComponent 
+                        currentTrack={currentAudioTrack} 
+                        isPlaying={isAudioPlaying} 
+                        onTogglePlay={() => setIsAudioPlaying(!isAudioPlaying)} 
+                        onNext={() => {}} 
+                        onPrevious={() => {}} 
+                        onClose={() => { setCurrentAudioTrack(null); setIsAudioPlaying(false); }} 
+                        onDownload={() => alert("Download started...")} 
+                        onLike={(id: string) => handleLikeTrack(id, likedTracks.includes(id))} 
+                        isLiked={likedTracks.includes(currentAudioTrack.id)} 
+                        uploaderProfile={users.find(u => u.id === currentAudioTrack.uploaderId)} 
+                        onArtistClick={(id: number) => { setSelectedUserId(id); setView('profile'); }} 
                     />
-                    <div className="flex justify-center w-full max-w-[1920px] mx-auto relative flex-1">
-                        <div className="sticky top-14 h-[calc(100vh-56px)] z-20 hidden lg:block">
-                            <Sidebar 
-                                currentUser={currentUser || INITIAL_USERS[0]} 
-                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
-                                onReelsClick={() => handleNavigate('reels')} 
-                                onMarketplaceClick={() => handleNavigate('marketplace')} 
-                                onGroupsClick={() => handleNavigate('groups')} 
-                            />
-                        </div>
-                        <div className="w-full lg:w-[740px] xl:w-[700px] min-h-screen">
-                            {effectiveView === 'home' && (
-                                <div className="w-full pt-4 md:px-8 pb-10">
-                                    <StoryReel 
-                                        stories={storiesWithUsers} 
-                                        onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
-                                        onCreateStory={() => currentUser ? setShowCreateStoryModal(true) : setView('login')} 
-                                        onViewStory={(s) => setActiveStory(s)} 
-                                        currentUser={currentUser} 
-                                        onRequestLogin={() => setView('login')} 
-                                    />
-                                    {currentUser && (
-                                        <> 
-                                            <CreatePost 
-                                                currentUser={currentUser} 
-                                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
-                                                onClick={() => setShowCreatePostModal(true)} 
-                                                onCreateEventClick={() => setShowCreateEventModal(true)} 
-                                            /> 
-                                            <SuggestedProductsWidget 
-                                                products={products} 
-                                                currentUser={currentUser} 
-                                                onViewProduct={(p) => { setActiveProduct(p); }} 
-                                                onSeeAll={() => handleNavigate('marketplace')} 
-                                            /> 
-                                        </>
-                                    )}
-                                    {rankedPosts.map(post => {
-                                        const author = getAuthorForPost(post, users, brands);
-                                        if (!author) return null;
-                                        
-                                        let isFollowing = false;
-                                        if (author.type === 'user' && currentUser) {
-                                            isFollowing = currentUser.following.includes(author.id);
-                                        } else if (author.type === 'brand' && currentUser) {
-                                            const brand = brands.find(b => b.id === author.id);
-                                            isFollowing = brand ? brand.followers.includes(currentUser.id) : false;
-                                        }
-                                        
-                                        if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
-                                            return renderMusicPost(post, author);
-                                        }
-                                        
-                                        return renderRegularPost(post, author, isFollowing);
-                                    })}
-                                </div>
-                            )}
-                            
-                            {effectiveView === 'profile' && selectedUserId !== null && (
-                                <UserProfile 
-                                    user={users.find(u => u.id === selectedUserId)!} 
-                                    currentUser={currentUser} 
-                                    users={users} 
-                                    posts={(() => {
-                                        const userPosts = posts.filter(p => p.authorId === selectedUserId);
-                                        const enhancedPosts = userPosts.map(post => ({
-                                            ...post,
-                                            formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
-                                        }));
-                                        
-                                        return [
-                                            ...enhancedPosts,
-                                            ...products
-                                                .filter(p => p.sellerId === selectedUserId)
-                                                .map(p => ({
-                                                    id: p.id + 100000,
-                                                    authorId: p.sellerId,
-                                                    content: `Just listed a new item: ${p.title}`,
-                                                    timestamp: p.date,
-                                                    formattedTime: formatRelativeTime(p.date),
-                                                    createdAt: p.date,
-                                                    reactions: [],
-                                                    comments: [],
-                                                    shares: 0,
-                                                    views: p.views,
-                                                    type: 'product' as const,
-                                                    visibility: 'Public' as const,
-                                                    product: p,
-                                                    productId: p.id
-                                                }))
-                                        ];
-                                    })()}
-                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
-                                    onFollow={handleFollowUser} 
-                                    onReact={handleReact} 
-                                    onComment={handleComment} 
-                                    onShare={(id) => setActiveSharePostId(id)} 
-                                    onMessage={(id) => setActiveChatUser(users.find(u => u.id === id) || null)} 
-                                    onCreatePost={handleCreatePost} 
-                                    onUpdateProfileImage={(f) => {}} 
-                                    onUpdateCoverImage={(f) => {}} 
-                                    onUpdateUserDetails={(d) => {}} 
-                                    onDeletePost={(id) => {
-                                        if (id > 100000) {
-                                            const productId = id - 100000;
-                                            setProducts(prev => prev.filter(p => p.id !== productId));
-                                        } else {
-                                            const postToDelete = posts.find(p => p.id === id);
-                                            if (postToDelete && (postToDelete.type === 'music' || postToDelete.type === 'podcast') && postToDelete.audioTrack) {
-                                                const trackId = postToDelete.audioTrack.id;
-                                                setSongs(prev => prev.filter(s => s.id !== trackId));
-                                                setEpisodes(prev => prev.filter(e => e.id !== trackId));
-                                            }
-                                            setPosts(posts.filter(p => p.id !== id));
-                                        }
-                                    }} 
-                                    onEditPost={() => {}} 
-                                    getCommentAuthor={(id) => users.find(u => u.id === id)} 
-                                    onViewImage={setFullScreenImage} 
-                                    onOpenComments={setActiveCommentsPostId} 
-                                    onVideoClick={() => {}} 
-                                    onCreateEventClick={() => setShowCreateEventModal(true)} 
-                                    onPlayAudioTrack={handlePlayTrack} 
-                                    onVerifyUser={handleVerifyUser} 
-                                    onRestrictUser={handleRestrictUser} 
-                                    onDeleteUser={handleDeleteUser} 
-                                    onMakeModerator={handleMakeModerator} 
-                                    onHashtagClick={handleTagClick} 
-                                    songs={songs}
-                                    episodes={episodes}
-                                    likedTracks={likedTracks}
-                                    onLikeTrack={handleLikeTrack}
-                                    onTrackComment={handleTrackComment}
-                                    onTrackShare={handleTrackShare}
-                                    renderMusicPost={(post: PostType, author: any) => {
-                                        return renderMusicPost(post, author);
-                                    }}
-                                    renderRegularPost={renderRegularPost}
-                                />
-                            )}
-                            
-                            {effectiveView === 'single_post' && activeSinglePostId !== null && (
-                                <div className="w-full pt-4 md:px-8 pb-10">
-                                    {(() => {
-                                        const post = posts.find(p => p.id === activeSinglePostId);
-                                        if (!post) return null;
-                                        
-                                        const author = getAuthorForPost(post, users, brands);
-                                        if (!author) return null;
-                                        
-                                        if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
-                                            return renderMusicPost(post, author);
-                                        }
-                                        
-                                        return (
-                                            <Post
-                                                key={activeSinglePostId}
-                                                post={{...post, formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())}}
-                                                author={author}
-                                                currentUser={currentUser}
-                                                users={users}
-                                                onProfileClick={(id) => { 
-                                                    if (author.type === 'brand') {
-                                                        setActiveBrandId(id);
-                                                        handleNavigate('brand_view');
-                                                    } else {
-                                                        setSelectedUserId(id); 
-                                                        setView('profile');
-                                                    }
-                                                }}
-                                                onReact={handleReact}
-                                                onShare={(id) => setActiveSharePostId(id)}
-                                                onViewImage={setFullScreenImage}
-                                                onOpenComments={setActiveCommentsPostId}
-                                                onVideoClick={() => {}}
-                                                onPlayAudioTrack={handlePlayTrack}
-                                                onFollow={author.type === 'brand' ? handleFollowBrand : handleFollowUser}
-                                                isFollowing={author.type === 'brand' && currentUser ? 
-                                                    brands.find(b => b.id === author.id)?.followers.includes(currentUser.id) || false :
-                                                    author.type === 'user' && currentUser ?
-                                                    currentUser.following.includes(author.id) : false}
-                                                onHashtagClick={handleTagClick}
-                                                onDeletePost={handleDeletePost}
-                                                isAdmin={isAdmin}
-                                            />
-                                        );
-                                    })()}
-                                </div>
-                            )}
-                            
-                            {effectiveView === 'marketplace' && (
-                                <MarketplacePage 
-                                    products={products} 
-                                    currentUser={currentUser} 
-                                    onNavigateHome={() => handleNavigate('home')}
-                                    onCreateProduct={handleCreateProduct}
-                                    onViewProduct={(product) => setActiveProduct(product)}
-                                />
-                            )}
-                            
-                            {effectiveView === 'reels' && (
-                                <ReelsFeed 
-                                    reels={reels} 
-                                    users={users} 
-                                    currentUser={currentUser} 
-                                    activeReelId={activeReelId} 
-                                    onReelClick={setActiveReelId} 
-                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
-                                    onNavigate={handleNavigate} 
-                                    onReact={handleReelReact}
-                                    onShare={(reelId, type) => {
-                                        if (type === 'feed') {
-                                            const reel = reels.find(r => r.id === reelId);
-                                            if (reel && currentUser) {
-                                                const timestamp = Date.now();
-                                                const formattedTime = formatRelativeTime(timestamp);
-                                                const newPost: PostType = { 
-                                                    id: timestamp, 
-                                                    authorId: currentUser.id, 
-                                                    content: `Shared a reel: ${reel.caption}`, 
-                                                    video: reel.videoUrl,
-                                                    timestamp: timestamp,
-                                                    formattedTime: formattedTime,
-                                                    createdAt: timestamp, 
-                                                    reactions: [], 
-                                                    comments: [], 
-                                                    shares: 0, 
-                                                    views: 0, 
-                                                    type: 'video', 
-                                                    visibility: 'Public' 
-                                                };
-                                                setPosts([newPost, ...posts]);
-                                                setReels(prev => prev.map(r => 
-                                                    r.id === reelId 
-                                                        ? { ...r, shares: (r.shares || 0) + 1 }
-                                                        : r
-                                                ));
-                                                
-                                                if (reel.userId !== currentUser.id) {
-                                                    handleCreateNotification(
-                                                        reel.userId,
-                                                        currentUser.id,
-                                                        'reel_share',
-                                                        'shared your reel.',
-                                                        { reelId }
-                                                    );
-                                                }
-                                                
-                                                alert("Reel shared to your feed!");
-                                            }
-                                        } else if (type === 'copy' && isClient) {
-                                            navigator.clipboard.writeText(`https://unera.social/reels/${reelId}`);
-                                            alert("Link copied to clipboard!");
-                                        }
-                                    }}
-                                    onComment={(reelId, text) => {
-                                        if (!currentUser) return;
-                                        const timestamp = Date.now();
-                                        const formattedTime = formatRelativeTime(timestamp);
-                                        const newComment = { 
-                                            id: timestamp, 
-                                            userId: currentUser.id, 
-                                            text, 
-                                            timestamp: timestamp,
-                                            formattedTime: formattedTime,
-                                            likes: 0,
-                                            authorName: currentUser.name,
-                                            authorImage: currentUser.profileImage
-                                        };
-                                        setReels(prev => prev.map(reel => 
-                                            reel.id === reelId 
-                                                ? { ...reel, comments: [...reel.comments, newComment] }
-                                                : reel
-                                        ));
-                                        
-                                        const reel = reels.find(r => r.id === reelId);
-                                        if (reel && reel.userId !== currentUser.id) {
-                                            handleCreateNotification(
-                                                reel.userId,
-                                                currentUser.id,
-                                                'reel_comment',
-                                                'commented on your reel.',
-                                                { reelId, commentId: newComment.id }
-                                            );
-                                        }
-                                    }}
-                                    onCreateReelClick={() => setShowCreateReelModal(true)}
-                                    onFollow={handleFollowUser}
-                                    getCommentAuthor={(id) => users.find(u => u.id === id)}
-                                />
-                            )}
-                            
-                            {effectiveView === 'groups' && (
-                                <GroupsPage 
-                                    key="groups-page"
-                                    groups={groups}
-                                    currentUser={currentUser}
-                                    users={users}
-                                    initialGroupId={initialGroupIdToView}
-                                    onCreateGroup={handleCreateGroup}
-                                    onJoinGroup={handleJoinGroup}
-                                    onLeaveGroup={handleLeaveGroup}
-                                    onDeleteGroup={handleDeleteGroup}
-                                    onUpdateGroupImage={handleUpdateGroupImage}
-                                    onPostToGroup={handlePostToGroup}
-                                    onCreateGroupEvent={handleCreateGroupEvent}
-                                    onInviteToGroup={handleInviteToGroup}
-                                    onProfileClick={(id) => { 
-                                        setSelectedUserId(id); 
-                                        setView('profile'); 
-                                        setActiveTab('profile');
-                                    }}
-                                    onLikePost={handleReactGroupPost}
-                                    onOpenComments={handleOpenGroupComments}
-                                    onSharePost={handleShareGroupPost}
-                                    onDeleteGroupPost={handleDeleteGroupPost}
-                                    onRemoveMember={handleRemoveMember}
-                                    onUpdateGroupSettings={handleUpdateGroupSettings}
-                                    onPlayAudioTrack={handlePlayTrack}
-                                />
-                            )}
-                            
-                            {effectiveView === 'brands' && (
-                                <BrandsPage 
-                                    currentUser={currentUser}
-                                    brands={brands}
-                                    posts={posts}
-                                    users={users}
-                                    onCreateBrand={handleCreateBrand}
-                                    onFollowBrand={handleFollowBrand}
-                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
-                                    onPostAsBrand={() => {}} // Removed handlePostAsBrand
-                                    onReact={handleReact}
-                                    onShare={(id) => setActiveSharePostId(id)}
-                                    onOpenComments={(postId) => setActiveCommentsPostId(postId)}
-                                    onUpdateBrand={() => {}} // Removed handleUpdateBrand
-                                    onDeleteBrand={() => {}} // Removed handleDeleteBrand
-                                    onMessage={(brandId) => {
-                                        const brand = brands.find(b => b.id === brandId);
-                                        if (brand && currentUser) {
-                                            alert(`Messaging ${brand.name} - Feature coming soon!`);
-                                        }
-                                    }}
-                                    onCreateEvent={(brandId, eventData) => {
-                                        if (currentUser) {
-                                            const eventWithBrand = {
-                                                ...eventData,
-                                                brandId: brandId,
-                                                brandName: brands.find(b => b.id === brandId)?.name
-                                            };
-                                            handleCreateEvent(eventWithBrand);
-                                        }
-                                    }}
-                                    onUpdateBrandImage={() => {}} // Removed handleUpdateBrandImage
-                                    onDeletePost={handleDeletePost}
-                                    onVerifyBrand={() => {}} // Removed handleVerifyBrand
-                                    initialBrandId={activeBrandId}
-                                    onPlayAudioTrack={handlePlayTrack}
-                                />
-                            )}
-                            
-                            {effectiveView === 'events' && (
-                                <EventsPage 
-                                    events={events} 
-                                    users={users} 
-                                    currentUser={currentUser} 
-                                    onJoinEvent={handleJoinEvent} 
-                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
-                                    onCreateEvent={() => setShowCreateEventModal(true)} 
-                                />
-                            )}
-                            
-                            {effectiveView === 'birthdays' && (
-                                <BirthdaysPage 
-                                    users={users} 
-                                    currentUser={currentUser} 
-                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
-                                />
-                            )}
-                            
-                            {effectiveView === 'suggested_profiles' && (
-                                <SuggestedProfilesPage 
-                                    users={users} 
-                                    currentUser={currentUser} 
-                                    onFollow={handleFollowUser} 
-                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
-                                />
-                            )}
-                            
-                            {effectiveView === 'memories' && (
-                                <MemoriesPage 
-                                    posts={posts} 
-                                    currentUser={currentUser} 
-                                    users={users} 
-                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
-                                    onPostClick={(postId) => { setActiveSinglePostId(postId); setView('single_post'); }} 
-                                />
-                            )}
-                            
-                            {effectiveView === 'music' && (
-                                <MusicSystem 
-                                    songs={songs} 
-                                    episodes={episodes} 
-                                    currentUser={currentUser} 
-                                    onPlayTrack={handlePlayTrack} 
-                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
-                                    onDeleteSong={handleDeleteSong} 
-                                    onDeleteEpisode={handleDeleteEpisode} 
-                                    likedTracks={likedTracks} 
-                                    onToggleLike={handleLikeTrack} 
-                                    onUploadToFeed={handleUploadToFeed} 
-                                    onAddSong={handleAddSong} 
-                                    onAddEpisode={() => {}} // Removed handleAddEpisode
-                                    playHistory={playHistory}
-                                />
-                            )}
-                            
-                            {effectiveView === 'tools' && (
-                                <ToolsPage 
-                                    currentUser={currentUser} 
-                                    onNavigate={handleNavigate} 
-                                />
-                            )}
-                            
-                            {effectiveView === 'help_support' && (
-                                <HelpSupportPage 
-                                    currentUser={currentUser} 
-                                />
-                            )}
-                            
-                            {effectiveView === 'settings' && (
-                                <SettingsPage 
-                                    currentUser={currentUser} 
-                                    onUpdateUser={(updates) => { 
-                                        if (currentUser) {
-                                            const updatedUser = { ...currentUser, ...updates };
-                                            setCurrentUser(updatedUser);
-                                            setUsers(users.map(u => u.id === currentUser.id ? updatedUser : u));
-                                        }
-                                    }} 
-                                    onLogout={handleLogout} 
-                                />
-                            )}
-                            
-                            {effectiveView === 'privacy_policy' && (
-                                <PrivacyPolicyPage />
-                            )}
-                            
-                            {effectiveView === 'terms_of_service' && (
-                                <TermsOfServicePage />
-                            )}
-                        </div>
-                        <div className="sticky top-14 h-[calc(100vh-56px)] z-20 hidden xl:block pl-4">
-                            <RightSidebar 
-                                contacts={users.filter(u => u.id !== currentUser?.id)} 
-                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
-                            />
+                )}
+                
+                {apiError && (
+                    <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50">
+                        <div className="bg-red-900 text-red-100 px-4 py-2 rounded-lg shadow-lg">
+                            API Error: {apiError}
+                            <button 
+                                onClick={() => setApiError(null)}
+                                className="ml-3 text-red-300 hover:text-white"
+                            >
+                                ✕
+                            </button>
                         </div>
                     </div>
-                    
-                    {/* Modals */}
-                    {showCreatePostModal && currentUser && (
-                        <CreatePostModal 
-                            currentUser={currentUser} 
-                            users={users} 
-                            onClose={() => setShowCreatePostModal(false)} 
-                            onCreatePost={handleCreatePost} 
+                )}
+                
+                <Header 
+                    onHomeClick={() => handleNavigate('home')} 
+                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                    onReelsClick={() => handleNavigate('reels')} 
+                    onMarketplaceClick={() => handleNavigate('marketplace')} 
+                    onGroupsClick={() => handleNavigate('groups')} 
+                    currentUser={currentUser} 
+                    notifications={notifications} 
+                    users={users} 
+                    onLogout={handleLogout} 
+                    onLoginClick={() => setView('login')} 
+                    onMarkNotificationsRead={handleMarkAllNotificationsRead} 
+                    onNotificationClick={handleNotificationClick}
+                    activeTab={activeTab} 
+                    onNavigate={handleNavigate} 
+                />
+                <div className="flex justify-center w-full max-w-[1920px] mx-auto relative flex-1">
+                    <div className="sticky top-14 h-[calc(100vh-56px)] z-20 hidden lg:block">
+                        <Sidebar 
+                            currentUser={currentUser || { ...getDefaultUser(), profileImage: '/default-profile.png' }} 
+                            onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                            onReelsClick={() => handleNavigate('reels')} 
+                            onMarketplaceClick={() => handleNavigate('marketplace')} 
+                            onGroupsClick={() => handleNavigate('groups')} 
                         />
-                    )}
-                    
-                    {showCreateStoryModal && currentUser && (
-                        <CreateStoryModal 
-                            currentUser={currentUser} 
-                            songs={songs} 
-                            onClose={() => setShowCreateStoryModal(false)} 
-                            onCreate={handleCreateStory} 
+                    </div>
+                    <div className="w-full lg:w-[740px] xl:w-[700px] min-h-screen">
+                        {effectiveView === 'home' && (
+                            <div className="w-full pt-4 md:px-8 pb-10">
+                                <StoryReel 
+                                    stories={storiesWithUsers} 
+                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                    onCreateStory={() => currentUser ? setShowCreateStoryModal(true) : setView('login')} 
+                                    onViewStory={(s) => setActiveStory(s)} 
+                                    currentUser={currentUser} 
+                                    onRequestLogin={() => setView('login')} 
+                                />
+                                {currentUser && (
+                                    <> 
+                                        <CreatePost 
+                                            currentUser={currentUser} 
+                                            onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                            onClick={() => setShowCreatePostModal(true)} 
+                                            onCreateEventClick={() => setShowCreateEventModal(true)} 
+                                        /> 
+                                        <SuggestedProductsWidget 
+                                            products={products} 
+                                            currentUser={currentUser} 
+                                            onViewProduct={(p) => { setActiveProduct(p); }} 
+                                            onSeeAll={() => handleNavigate('marketplace')} 
+                                        /> 
+                                    </>
+                                )}
+                                {rankedPosts.map(post => {
+                                    const author = getAuthorForPost(post, users, brands);
+                                    if (!author) return null;
+                                    
+                                    let isFollowing = false;
+                                    if (author.type === 'user' && currentUser) {
+                                        isFollowing = currentUser.following.includes(author.id);
+                                    } else if (author.type === 'brand' && currentUser) {
+                                        const brand = brands.find(b => b.id === author.id);
+                                        isFollowing = brand ? brand.followers.includes(currentUser.id) : false;
+                                    }
+                                    
+                                    if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
+                                        return renderMusicPost(post, author);
+                                    }
+                                    
+                                    return renderRegularPost(post, author, isFollowing);
+                                })}
+                            </div>
+                        )}
+                        
+                        {effectiveView === 'profile' && selectedUserId !== null && (
+                            <UserProfile 
+                                user={users.find(u => u.id === selectedUserId) || getDefaultUser()} 
+                                currentUser={currentUser} 
+                                users={users} 
+                                posts={(() => {
+                                    const userPosts = posts.filter(p => p.authorId === selectedUserId);
+                                    const enhancedPosts = userPosts.map(post => ({
+                                        ...post,
+                                        formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+                                    }));
+                                    
+                                    return [
+                                        ...enhancedPosts,
+                                        ...products
+                                            .filter(p => p.sellerId === selectedUserId)
+                                            .map(p => ({
+                                                id: p.id + 100000,
+                                                authorId: p.sellerId,
+                                                content: `Just listed a new item: ${p.title}`,
+                                                timestamp: p.date,
+                                                formattedTime: formatRelativeTime(p.date),
+                                                createdAt: p.date,
+                                                reactions: [],
+                                                comments: [],
+                                                shares: 0,
+                                                views: p.views,
+                                                type: 'product' as const,
+                                                visibility: 'Public' as const,
+                                                product: p,
+                                                productId: p.id
+                                            }))
+                                    ];
+                                })()}
+                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                onFollow={handleFollowUser} 
+                                onReact={handleReact} 
+                                onComment={handleComment} 
+                                onShare={(id) => setActiveSharePostId(id)} 
+                                onMessage={(id) => setActiveChatUser(users.find(u => u.id === id) || null)} 
+                                onCreatePost={handleCreatePost} 
+                                onUpdateProfileImage={(f) => {}} 
+                                onUpdateCoverImage={(f) => {}} 
+                                onUpdateUserDetails={(d) => {}} 
+                                onDeletePost={(id) => {
+                                    if (id > 100000) {
+                                        const productId = id - 100000;
+                                        setProducts(prev => prev.filter(p => p.id !== productId));
+                                    } else {
+                                        const postToDelete = posts.find(p => p.id === id);
+                                        if (postToDelete && (postToDelete.type === 'music' || postToDelete.type === 'podcast') && postToDelete.audioTrack) {
+                                            const trackId = postToDelete.audioTrack.id;
+                                            setSongs(prev => prev.filter(s => s.id !== trackId));
+                                            setEpisodes(prev => prev.filter(e => e.id !== trackId));
+                                        }
+                                        setPosts(posts.filter(p => p.id !== id));
+                                    }
+                                }} 
+                                onEditPost={() => {}} 
+                                getCommentAuthor={(id) => users.find(u => u.id === id) || getDefaultUser()} 
+                                onViewImage={setFullScreenImage} 
+                                onOpenComments={setActiveCommentsPostId} 
+                                onVideoClick={() => {}} 
+                                onCreateEventClick={() => setShowCreateEventModal(true)} 
+                                onPlayAudioTrack={handlePlayTrack} 
+                                onVerifyUser={handleVerifyUser} 
+                                onRestrictUser={handleRestrictUser} 
+                                onDeleteUser={handleDeleteUser} 
+                                onMakeModerator={handleMakeModerator} 
+                                onHashtagClick={handleTagClick} 
+                                songs={songs}
+                                episodes={episodes}
+                                likedTracks={likedTracks}
+                                onLikeTrack={handleLikeTrack}
+                                onTrackComment={handleTrackComment}
+                                onTrackShare={handleTrackShare}
+                                renderMusicPost={(post: PostType, author: any) => {
+                                    return renderMusicPost(post, author);
+                                }}
+                                renderRegularPost={renderRegularPost}
+                            />
+                        )}
+                        
+                        {effectiveView === 'single_post' && activeSinglePostId !== null && (
+                            <div className="w-full pt-4 md:px-8 pb-10">
+                                {(() => {
+                                    const post = posts.find(p => p.id === activeSinglePostId);
+                                    if (!post) {
+                                        return (
+                                            <div className="text-center text-gray-400 p-8">
+                                                Post not found
+                                            </div>
+                                        );
+                                    }
+                                    
+                                    const author = getAuthorForPost(post, users, brands);
+                                    if (!author) {
+                                        return (
+                                            <div className="text-center text-gray-400 p-8">
+                                                Author not found
+                                            </div>
+                                        );
+                                    }
+                                    
+                                    if ((post.type === 'music' || post.type === 'podcast') && post.audioTrack) {
+                                        return renderMusicPost(post, author);
+                                    }
+                                    
+                                    return (
+                                        <Post
+                                            key={activeSinglePostId}
+                                            post={{...post, formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())}}
+                                            author={author}
+                                            currentUser={currentUser}
+                                            users={users}
+                                            onProfileClick={(id) => { 
+                                                if (author.type === 'brand') {
+                                                    setActiveBrandId(id);
+                                                    handleNavigate('brand_view');
+                                                } else {
+                                                    setSelectedUserId(id); 
+                                                    setView('profile');
+                                                }
+                                            }}
+                                            onReact={handleReact}
+                                            onShare={(id) => setActiveSharePostId(id)}
+                                            onViewImage={setFullScreenImage}
+                                            onOpenComments={setActiveCommentsPostId}
+                                            onVideoClick={() => {}}
+                                            onPlayAudioTrack={handlePlayTrack}
+                                            onFollow={author.type === 'brand' ? handleFollowBrand : handleFollowUser}
+                                            isFollowing={author.type === 'brand' && currentUser ? 
+                                                brands.find(b => b.id === author.id)?.followers.includes(currentUser.id) || false :
+                                                author.type === 'user' && currentUser ?
+                                                currentUser.following.includes(author.id) : false}
+                                            onHashtagClick={handleTagClick}
+                                            onDeletePost={handleDeletePost}
+                                            isAdmin={isAdmin}
+                                        />
+                                    );
+                                })()}
+                            </div>
+                        )}
+                        
+                        {effectiveView === 'marketplace' && (
+                            <MarketplacePage 
+                                products={products} 
+                                currentUser={currentUser} 
+                                onNavigateHome={() => handleNavigate('home')}
+                                onCreateProduct={handleCreateProduct}
+                                onViewProduct={(product) => setActiveProduct(product)}
+                            />
+                        )}
+                        
+                        {effectiveView === 'reels' && (
+                            <ReelsFeed 
+                                reels={reels} 
+                                users={users} 
+                                currentUser={currentUser} 
+                                activeReelId={activeReelId} 
+                                onReelClick={setActiveReelId} 
+                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                onNavigate={handleNavigate} 
+                                onReact={handleReelReact}
+                                onShare={(reelId, type) => {
+                                    if (type === 'feed') {
+                                        const reel = reels.find(r => r.id === reelId);
+                                        if (reel && currentUser) {
+                                            const timestamp = Date.now();
+                                            const formattedTime = formatRelativeTime(timestamp);
+                                            const newPost: PostType = { 
+                                                id: timestamp, 
+                                                authorId: currentUser.id, 
+                                                content: `Shared a reel: ${reel.caption}`, 
+                                                video: reel.videoUrl,
+                                                timestamp: timestamp,
+                                                formattedTime: formattedTime,
+                                                createdAt: timestamp, 
+                                                reactions: [], 
+                                                comments: [], 
+                                                shares: 0, 
+                                                views: 0, 
+                                                type: 'video', 
+                                                visibility: 'Public' 
+                                            };
+                                            setPosts([newPost, ...posts]);
+                                            setReels(prev => prev.map(r => 
+                                                r.id === reelId 
+                                                    ? { ...r, shares: (r.shares || 0) + 1 }
+                                                    : r
+                                            ));
+                                            
+                                            if (reel.userId !== currentUser.id) {
+                                                handleCreateNotification(
+                                                    reel.userId,
+                                                    currentUser.id,
+                                                    'reel_share',
+                                                    'shared your reel.',
+                                                    { reelId }
+                                                );
+                                            }
+                                            
+                                            alert("Reel shared to your feed!");
+                                        }
+                                    } else if (type === 'copy' && isClient) {
+                                        navigator.clipboard.writeText(`https://unera.social/reels/${reelId}`);
+                                        alert("Link copied to clipboard!");
+                                    }
+                                }}
+                                onComment={(reelId, text) => {
+                                    if (!currentUser) return;
+                                    const timestamp = Date.now();
+                                    const formattedTime = formatRelativeTime(timestamp);
+                                    const newComment = { 
+                                        id: timestamp, 
+                                        userId: currentUser.id, 
+                                        text, 
+                                        timestamp: timestamp,
+                                        formattedTime: formattedTime,
+                                        likes: 0,
+                                        authorName: currentUser.name,
+                                        authorImage: getSafeProfileImage(currentUser)
+                                    };
+                                    setReels(prev => prev.map(reel => 
+                                        reel.id === reelId 
+                                            ? { ...reel, comments: [...reel.comments, newComment] }
+                                            : reel
+                                    ));
+                                    
+                                    const reel = reels.find(r => r.id === reelId);
+                                    if (reel && reel.userId !== currentUser.id) {
+                                        handleCreateNotification(
+                                            reel.userId,
+                                            currentUser.id,
+                                            'reel_comment',
+                                            'commented on your reel.',
+                                            { reelId, commentId: newComment.id }
+                                        );
+                                    }
+                                }}
+                                onCreateReelClick={() => setShowCreateReelModal(true)}
+                                onFollow={handleFollowUser}
+                                getCommentAuthor={(id) => users.find(u => u.id === id) || getDefaultUser()}
+                            />
+                        )}
+                        
+                        {effectiveView === 'groups' && (
+                            <GroupsPage 
+                                key="groups-page"
+                                groups={groups}
+                                currentUser={currentUser}
+                                users={users}
+                                initialGroupId={initialGroupIdToView}
+                                onCreateGroup={handleCreateGroup}
+                                onJoinGroup={handleJoinGroup}
+                                onLeaveGroup={handleLeaveGroup}
+                                onDeleteGroup={handleDeleteGroup}
+                                onUpdateGroupImage={handleUpdateGroupImage}
+                                onPostToGroup={handlePostToGroup}
+                                onCreateGroupEvent={handleCreateGroupEvent}
+                                onInviteToGroup={handleInviteToGroup}
+                                onProfileClick={(id) => { 
+                                    setSelectedUserId(id); 
+                                    setView('profile'); 
+                                    setActiveTab('profile');
+                                }}
+                                onLikePost={handleReactGroupPost}
+                                onOpenComments={handleOpenGroupComments}
+                                onSharePost={handleShareGroupPost}
+                                onDeleteGroupPost={handleDeleteGroupPost}
+                                onRemoveMember={handleRemoveMember}
+                                onUpdateGroupSettings={handleUpdateGroupSettings}
+                                onPlayAudioTrack={handlePlayTrack}
+                            />
+                        )}
+                        
+                        {effectiveView === 'brands' && (
+                            <BrandsPage 
+                                currentUser={currentUser}
+                                brands={brands}
+                                posts={posts}
+                                users={users}
+                                onCreateBrand={handleCreateBrand}
+                                onFollowBrand={handleFollowBrand}
+                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }}
+                                onPostAsBrand={() => {}} // Removed handlePostAsBrand
+                                onReact={handleReact}
+                                onShare={(id) => setActiveSharePostId(id)}
+                                onOpenComments={(postId) => setActiveCommentsPostId(postId)}
+                                onUpdateBrand={() => {}} // Removed handleUpdateBrand
+                                onDeleteBrand={() => {}} // Removed handleDeleteBrand
+                                onMessage={(brandId) => {
+                                    const brand = brands.find(b => b.id === brandId);
+                                    if (brand && currentUser) {
+                                        alert(`Messaging ${brand.name} - Feature coming soon!`);
+                                    }
+                                }}
+                                onCreateEvent={(brandId, eventData) => {
+                                    if (currentUser) {
+                                        const eventWithBrand = {
+                                            ...eventData,
+                                            brandId: brandId,
+                                            brandName: brands.find(b => b.id === brandId)?.name
+                                        };
+                                        handleCreateEvent(eventWithBrand);
+                                    }
+                                }}
+                                onUpdateBrandImage={() => {}} // Removed handleUpdateBrandImage
+                                onDeletePost={handleDeletePost}
+                                onVerifyBrand={() => {}} // Removed handleVerifyBrand
+                                initialBrandId={activeBrandId}
+                                onPlayAudioTrack={handlePlayTrack}
+                            />
+                        )}
+                        
+                        {effectiveView === 'events' && (
+                            <EventsPage 
+                                events={events} 
+                                users={users} 
+                                currentUser={currentUser} 
+                                onJoinEvent={handleJoinEvent} 
+                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                onCreateEvent={() => setShowCreateEventModal(true)} 
+                            />
+                        )}
+                        
+                        {effectiveView === 'birthdays' && (
+                            <BirthdaysPage 
+                                users={users} 
+                                currentUser={currentUser} 
+                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                            />
+                        )}
+                        
+                        {effectiveView === 'suggested_profiles' && (
+                            <SuggestedProfilesPage 
+                                users={users} 
+                                currentUser={currentUser} 
+                                onFollow={handleFollowUser} 
+                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                            />
+                        )}
+                        
+                        {effectiveView === 'memories' && (
+                            <MemoriesPage 
+                                posts={posts} 
+                                currentUser={currentUser} 
+                                users={users} 
+                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                onPostClick={(postId) => { setActiveSinglePostId(postId); setView('single_post'); }} 
+                            />
+                        )}
+                        
+                        {effectiveView === 'music' && (
+                            <MusicSystem 
+                                songs={songs} 
+                                episodes={episodes} 
+                                currentUser={currentUser} 
+                                onPlayTrack={handlePlayTrack} 
+                                onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
+                                onDeleteSong={handleDeleteSong} 
+                                onDeleteEpisode={handleDeleteEpisode} 
+                                likedTracks={likedTracks} 
+                                onToggleLike={handleLikeTrack} 
+                                onUploadToFeed={handleUploadToFeed} 
+                                onAddSong={handleAddSong} 
+                                onAddEpisode={() => {}} // Removed handleAddEpisode
+                                playHistory={playHistory}
+                            />
+                        )}
+                        
+                        {effectiveView === 'tools' && (
+                            <ToolsPage 
+                                currentUser={currentUser} 
+                                onNavigate={handleNavigate} 
+                            />
+                        )}
+                        
+                        {effectiveView === 'help_support' && (
+                            <HelpSupportPage 
+                                currentUser={currentUser} 
+                            />
+                        )}
+                        
+                        {effectiveView === 'settings' && (
+                            <SettingsPage 
+                                currentUser={currentUser} 
+                                onUpdateUser={(updates) => { 
+                                    if (currentUser) {
+                                        const updatedUser = { ...currentUser, ...updates };
+                                        setCurrentUser(updatedUser);
+                                        setUsers(users.map(u => u.id === currentUser.id ? updatedUser : u));
+                                    }
+                                }} 
+                                onLogout={handleLogout} 
+                            />
+                        )}
+                        
+                        {effectiveView === 'privacy_policy' && (
+                            <PrivacyPolicyPage />
+                        )}
+                        
+                        {effectiveView === 'terms_of_service' && (
+                            <TermsOfServicePage />
+                        )}
+                    </div>
+                    <div className="sticky top-14 h-[calc(100vh-56px)] z-20 hidden xl:block pl-4">
+                        <RightSidebar 
+                            contacts={users.filter(u => u.id !== currentUser?.id)} 
+                            onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); }} 
                         />
-                    )}
-                    
-                    {showCreateReelModal && currentUser && (
-                        <CreateReelModal 
-                            currentUser={currentUser} 
-                            songs={songs} 
-                            onClose={() => setShowCreateReelModal(false)} 
-                            onSubmit={handleCreateReel} 
-                        />
-                    )}
-                    
-                    {showCreateEventModal && currentUser && (
-                        <CreateEventModal 
-                            currentUser={currentUser} 
-                            onClose={() => setShowCreateEventModal(false)} 
-                            onCreate={handleCreateEvent} 
-                        />
-                    )}
-                    
-                    {/* Regular Post Comments Modal */}
-                    {activeCommentsPostId && (
-                        <CommentsSheet 
-                            post={posts.find(p => p.id === activeCommentsPostId)!} 
-                            currentUser={currentUser || INITIAL_USERS[0]} 
-                            users={users} 
-                            onClose={() => setActiveCommentsPostId(null)} 
-                            onComment={handleComment} 
-                            onLikeComment={() => {}} 
-                            getCommentAuthor={(id) => users.find(u => u.id === id)} 
-                            onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); setActiveCommentsPostId(null); }} 
-                        />
-                    )}
-                    
-                    {/* Group Post Comments Modal */}
-                    {activeGroupComments && (
-                        (() => {
-                            const { groupId, postId } = activeGroupComments;
-                            const group = groups.find(g => g.id === groupId);
-                            const groupPost = group?.posts.find(p => p.id === postId);
+                    </div>
+                </div>
+                
+                {/* Modals */}
+                {showCreatePostModal && currentUser && (
+                    <CreatePostModal 
+                        currentUser={currentUser} 
+                        users={users} 
+                        onClose={() => setShowCreatePostModal(false)} 
+                        onCreatePost={handleCreatePost} 
+                    />
+                )}
+                
+                {showCreateStoryModal && currentUser && (
+                    <CreateStoryModal 
+                        currentUser={currentUser} 
+                        songs={songs} 
+                        onClose={() => setShowCreateStoryModal(false)} 
+                        onCreate={handleCreateStory} 
+                    />
+                )}
+                
+                {showCreateReelModal && currentUser && (
+                    <CreateReelModal 
+                        currentUser={currentUser} 
+                        songs={songs} 
+                        onClose={() => setShowCreateReelModal(false)} 
+                        onSubmit={handleCreateReel} 
+                    />
+                )}
+                
+                {showCreateEventModal && currentUser && (
+                    <CreateEventModal 
+                        currentUser={currentUser} 
+                        onClose={() => setShowCreateEventModal(false)} 
+                        onCreate={handleCreateEvent} 
+                    />
+                )}
+                
+                {/* Regular Post Comments Modal */}
+                {activeCommentsPostId && (
+                    <CommentsSheet 
+                        post={posts.find(p => p.id === activeCommentsPostId)!} 
+                        currentUser={currentUser || { ...getDefaultUser(), profileImage: '/default-profile.png' }} 
+                        users={users} 
+                        onClose={() => setActiveCommentsPostId(null)} 
+                        onComment={handleComment} 
+                        onLikeComment={() => {}} 
+                        getCommentAuthor={(id) => users.find(u => u.id === id) || getDefaultUser()} 
+                        onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); setActiveCommentsPostId(null); }} 
+                    />
+                )}
+                
+                {/* Group Post Comments Modal */}
+                {activeGroupComments && (
+                    (() => {
+                        const { groupId, postId } = activeGroupComments;
+                        const group = groups.find(g => g.id === groupId);
+                        const groupPost = group?.posts.find(p => p.id === postId);
+                        
+                        if (group && groupPost) {
+                            const postForComments: PostType = {
+                                id: groupPost.id,
+                                authorId: groupPost.authorId,
+                                content: groupPost.content || '',
+                                images: groupPost.images,
+                                video: groupPost.video,
+                                timestamp: groupPost.timestamp,
+                                formattedTime: groupPost.formattedTime || formatRelativeTime(groupPost.timestamp),
+                                createdAt: groupPost.timestamp,
+                                reactions: groupPost.reactions || [],
+                                comments: groupPost.comments || [],
+                                shares: groupPost.shares || 0,
+                                views: 0,
+                                type: groupPost.video ? 'video' : (groupPost.images ? 'image' : 'text'),
+                                visibility: 'Public',
+                                groupId: groupId,
+                                groupName: group.name
+                            };
                             
-                            if (group && groupPost) {
-                                const postForComments: PostType = {
-                                    id: groupPost.id,
-                                    authorId: groupPost.authorId,
-                                    content: groupPost.content || '',
-                                    images: groupPost.images,
-                                    video: groupPost.video,
-                                    timestamp: groupPost.timestamp,
-                                    formattedTime: groupPost.formattedTime || formatRelativeTime(groupPost.timestamp),
-                                    createdAt: groupPost.timestamp,
-                                    reactions: groupPost.reactions || [],
-                                    comments: groupPost.comments || [],
-                                    shares: groupPost.shares || 0,
-                                    views: 0,
-                                    type: groupPost.video ? 'video' : (groupPost.images ? 'image' : 'text'),
-                                    visibility: 'Public',
-                                    groupId: groupId,
-                                    groupName: group.name
-                                };
-                                
-                                return (
-                                    <CommentsSheet 
-                                        post={postForComments}
-                                        currentUser={currentUser || INITIAL_USERS[0]}
-                                        users={users}
-                                        onClose={() => setActiveGroupComments(null)}
-                                        onComment={(postId, text, attachment) => handleGroupComment(groupId, postId, text, attachment)}
-                                        onLikeComment={() => {}}
-                                        getCommentAuthor={(id) => users.find(u => u.id === id)}
-                                        onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); setActiveGroupComments(null); }}
-                                        title={`Comments from ${group.name}`}
-                                    />
-                                );
-                            }
-                            return null;
-                        })()
-                    )}
-                    
-                    {/* Regular Post Share Modal */}
-                    {activeSharePostId && (
-                        <ShareSheet 
-                            currentUser={currentUser} 
-                            groups={groups} 
-                            brands={brands} 
-                            postId={activeSharePostId} 
-                            onClose={() => setActiveSharePostId(null)} 
-                            onShare={(type, id, caption) => handleShare(activeSharePostId, type, id, caption)} 
-                            onCopyLink={() => { if(isClient) { navigator.clipboard.writeText(`https://unera.social/posts/${activeSharePostId}`); alert("Link copied!"); } }} 
-                        />
-                    )}
-                    
-                    {/* Group Post Share Modal */}
-                    {activeGroupShare && (
-                        (() => {
-                            const { groupId, postId } = activeGroupShare;
-                            const group = groups.find(g => g.id === groupId);
-                            
-                            if (group) {
-                                return (
-                                    <ShareSheet 
-                                        currentUser={currentUser} 
-                                        groups={groups.filter(g => g.id !== groupId)} 
-                                        brands={brands} 
-                                        postId={postId} 
-                                        onClose={() => setActiveGroupShare(null)} 
-                                        onShare={(type, id, caption) => handleGroupShare(groupId, postId, type, id, caption)} 
-                                        onCopyLink={() => { 
-                                            if(isClient) { 
-                                                navigator.clipboard.writeText(`https://unera.social/groups/${groupId}/posts/${postId}`); 
-                                                alert("Link copied!"); 
-                                            } 
-                                        }}
-                                        title={`Share post from ${group.name}`}
-                                    />
-                                );
-                            }
-                            return null;
-                        })()
-                    )}
-                    
-                    {activeStory && (
-                        <StoryViewer 
-                            story={activeStory} 
-                            user={users.find(u => u.id === activeStory.userId)!} 
-                            currentUser={currentUser} 
-                            allStories={storiesWithUsers} 
-                            onClose={() => setActiveStory(null)} 
-                            onLike={() => handleLikeStory(activeStory.id)} 
-                            onReply={(text) => handleReplyStory(activeStory.id, text)} 
-                            onNext={() => {}} 
-                            onPrev={() => {}} 
-                            onFollow={handleFollowUser} 
-                            isFollowing={currentUser ? currentUser.following.includes(activeStory.userId) : false} 
-                        />
-                    )}
-                    {activeChatUser && currentUser && (
-                        <ChatWindow 
-                            currentUser={currentUser} 
-                            recipient={activeChatUser} 
-                            messages={messages} 
-                            onClose={() => setActiveChatUser(null)} 
-                            onSendMessage={() => {}} 
-                        />
-                    )}
-                    {activeProduct && (
-                        <ProductDetailModal 
-                            product={activeProduct} 
-                            currentUser={currentUser} 
-                            onClose={() => setActiveProduct(null)} 
-                            onMessage={(sid) => setActiveChatUser(users.find(u => u.id === sid) || null)} 
-                        />
-                    )}
-                    {fullScreenImage && (
-                        <ImageViewer 
-                            imageUrl={fullScreenImage} 
-                            onClose={() => setFullScreenImage(null)} 
-                        />
-                    )}
-                </>
-            )}
-        </div>
+                            return (
+                                <CommentsSheet 
+                                    post={postForComments}
+                                    currentUser={currentUser || { ...getDefaultUser(), profileImage: '/default-profile.png' }}
+                                    users={users}
+                                    onClose={() => setActiveGroupComments(null)}
+                                    onComment={(postId, text, attachment) => handleGroupComment(groupId, postId, text, attachment)}
+                                    onLikeComment={() => {}}
+                                    getCommentAuthor={(id) => users.find(u => u.id === id) || getDefaultUser()}
+                                    onProfileClick={(id) => { setSelectedUserId(id); setView('profile'); setActiveGroupComments(null); }}
+                                    title={`Comments from ${group.name}`}
+                                />
+                            );
+                        }
+                        return null;
+                    })()
+                )}
+                
+                {/* Regular Post Share Modal */}
+                {activeSharePostId && (
+                    <ShareSheet 
+                        currentUser={currentUser} 
+                        groups={groups} 
+                        brands={brands} 
+                        postId={activeSharePostId} 
+                        onClose={() => setActiveSharePostId(null)} 
+                        onShare={(type, id, caption) => handleShare(activeSharePostId, type, id, caption)} 
+                        onCopyLink={() => { if(isClient) { navigator.clipboard.writeText(`https://unera.social/posts/${activeSharePostId}`); alert("Link copied!"); } }} 
+                    />
+                )}
+                
+                {/* Group Post Share Modal */}
+                {activeGroupShare && (
+                    (() => {
+                        const { groupId, postId } = activeGroupShare;
+                        const group = groups.find(g => g.id === groupId);
+                        
+                        if (group) {
+                            return (
+                                <ShareSheet 
+                                    currentUser={currentUser} 
+                                    groups={groups.filter(g => g.id !== groupId)} 
+                                    brands={brands} 
+                                    postId={postId} 
+                                    onClose={() => setActiveGroupShare(null)} 
+                                    onShare={(type, id, caption) => handleGroupShare(groupId, postId, type, id, caption)} 
+                                    onCopyLink={() => { 
+                                        if(isClient) { 
+                                            navigator.clipboard.writeText(`https://unera.social/groups/${groupId}/posts/${postId}`); 
+                                            alert("Link copied!"); 
+                                        } 
+                                    }}
+                                    title={`Share post from ${group.name}`}
+                                />
+                            );
+                        }
+                        return null;
+                    })()
+                )}
+                
+                {activeStory && (
+                    <StoryViewer 
+                        story={activeStory} 
+                        user={users.find(u => u.id === activeStory.userId) || getDefaultUser()} 
+                        currentUser={currentUser} 
+                        allStories={storiesWithUsers} 
+                        onClose={() => setActiveStory(null)} 
+                        onLike={() => handleLikeStory(activeStory.id)} 
+                        onReply={(text) => handleReplyStory(activeStory.id, text)} 
+                        onNext={() => {}} 
+                        onPrev={() => {}} 
+                        onFollow={handleFollowUser} 
+                        isFollowing={currentUser ? currentUser.following.includes(activeStory.userId) : false} 
+                    />
+                )}
+                {activeChatUser && currentUser && (
+                    <ChatWindow 
+                        currentUser={currentUser} 
+                        recipient={activeChatUser} 
+                        messages={messages} 
+                        onClose={() => setActiveChatUser(null)} 
+                        onSendMessage={() => {}} 
+                    />
+                )}
+                {activeProduct && (
+                    <ProductDetailModal 
+                        product={activeProduct} 
+                        currentUser={currentUser} 
+                        onClose={() => setActiveProduct(null)} 
+                        onMessage={(sid) => setActiveChatUser(users.find(u => u.id === sid) || null)} 
+                    />
+                )}
+                {fullScreenImage && (
+                    <ImageViewer 
+                        imageUrl={fullScreenImage} 
+                        onClose={() => setFullScreenImage(null)} 
+                    />
+                )}
+            </>
+        );
+    };
+    
+    return (
+        <ErrorBoundary>
+            <div className="bg-[#18191A] min-h-screen flex flex-col font-sans">
+                {renderContent()}
+            </div>
+        </ErrorBoundary>
+    );
+}
+
+// Export the wrapped App component
+export default function WrappedApp(props: { initialData?: any, initialPath?: string }) {
+    return (
+        <ErrorBoundary>
+            <App {...props} />
+        </ErrorBoundary>
     );
 }
