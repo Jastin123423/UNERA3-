@@ -1,3 +1,37 @@
+
+// Add this at the VERY TOP of the file
+console.log('=== DEBUGGING PROFILE IMAGE ERRORS ===');
+
+// Monkey patch to catch all profile image access errors
+const originalGetSafeProfileImage = getSafeProfileImage;
+
+// Enhanced debug version
+getSafeProfileImage = (user: User | Brand | null | undefined): string => {
+  try {
+    if (!user || typeof user !== 'object') {
+      console.error('❌ getSafeProfileImage called with null/undefined:', user);
+      console.trace('Stack trace:'); // This shows where the error is coming from
+      return '/default-profile.png';
+    }
+    
+    if (!('profileImage' in user)) {
+      console.warn('⚠️ User object missing profileImage property:', user);
+      if ('isVerified' in user && 'followers' in user) {
+        return '/default-brand.png';
+      }
+      return '/default-profile.png';
+    }
+    
+    return user.profileImage || 
+      (('isVerified' in user && 'followers' in user) 
+        ? '/default-brand.png' 
+        : '/default-profile.png');
+  } catch (error) {
+    console.error('🔥 Error in getSafeProfileImage:', error, 'User:', user);
+    console.trace('Error stack:');
+    return '/default-profile.png';
+  }
+};
 // App.tsx - Fully Fixed Version with Complete API Integration
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Login, Register, ForgotPassword } from './components/Auth';
