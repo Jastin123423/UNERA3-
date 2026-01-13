@@ -1,7 +1,100 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { User } from '../types';
+
+// ========== API BASE URL ==========
+const API_BASE_URL = 'https://unera.social';
+
+// ========== API HELPER FUNCTIONS ==========
+const apiRequest = async <T = any>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> => {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+
+  const url = `${API_BASE_URL}${endpoint}`;
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error(`API Request failed for ${endpoint}:`, error);
+    throw error;
+  }
+};
+
+// ========== AUTH API ENDPOINTS ==========
+const AUTH_API = {
+  login: async (email: string, password: string) => {
+    return apiRequest<{ token: string; user: any }>('/users/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  },
+
+  register: async (userData: {
+    firstName: string;
+    lastName?: string;
+    email: string;
+    password: string;
+    nationality: string;
+    location: string;
+    birthDate: string;
+    gender: string;
+  }) => {
+    return apiRequest<{ token: string; user: any }>('/users/signup', {
+      method: 'POST',
+      body: JSON.stringify({
+        username: `${userData.firstName.toLowerCase()}${userData.lastName ? userData.lastName.toLowerCase() : ''}${Math.floor(Math.random() * 1000)}`,
+        email: userData.email,
+        password: userData.password,
+        name: `${userData.firstName} ${userData.lastName || ''}`.trim(),
+        firstName: userData.firstName,
+        lastName: userData.lastName || '',
+        nationality: userData.nationality,
+        location: userData.location,
+        birthDate: userData.birthDate,
+        gender: userData.gender,
+        profileImage: `https://ui-avatars.com/api/?name=${userData.firstName}+${userData.lastName || ''}&background=random`,
+        coverImage: 'https://images.unsplash.com/photo-1554034483-04fda0d3507b?ixlib=rb-1.2.1&auto=format&fit=crop&w=1500&q=80',
+        bio: `Hello! I'm ${userData.firstName} ${userData.lastName || ''} from ${userData.location}, ${userData.nationality}.`,
+      }),
+    });
+  },
+
+  forgotPassword: async (email: string) => {
+    return apiRequest('/users/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  resetPassword: async (token: string, newPassword: string) => {
+    return apiRequest('/users/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, newPassword }),
+    });
+  },
+
+  verifyEmail: async (token: string) => {
+    return apiRequest('/users/verify-email', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    });
+  },
+};
 
 interface ForgotPasswordProps {
     onBackToLogin: () => void;
@@ -10,12 +103,23 @@ interface ForgotPasswordProps {
 export const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBackToLogin }) => {
     const [email, setEmail] = useState('');
     const [isSent, setIsSent] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (email.trim()) {
-            // Simulate sending email
+        if (!email.trim()) return;
+        
+        try {
+            setIsLoading(true);
+            setError('');
+            
+            await AUTH_API.forgotPassword(email);
             setIsSent(true);
+        } catch (err: any) {
+            setError(err.message || 'Failed to send reset email');
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -27,14 +131,23 @@ export const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBackToLogin })
                     <p className="text-[#B0B3B8] text-[15px]">Please enter your email to search for your account.</p>
                 </div>
                 
+                {error && (
+                    <div className="mb-4 p-3 bg-red-900/30 border border-red-500 rounded text-red-200 text-sm">
+                        {error}
+                    </div>
+                )}
+                
                 {isSent ? (
                     <div className="text-center p-4">
                         <i className="fas fa-check-circle text-5xl text-green-500 mb-4"></i>
                         <h3 className="text-xl font-bold text-[#E4E6EB]">Reset Link Sent!</h3>
                         <p className="text-[#B0B3B8] mt-2 text-sm">
-                            If an account with the email <strong>{email}</strong> exists, a password reset link has been sent from <strong>chapchaputz@gmail.com</strong>. Please check your inbox and spam folder.
+                            If an account with the email <strong>{email}</strong> exists, a password reset link has been sent. Please check your inbox and spam folder.
                         </p>
-                        <button onClick={onBackToLogin} className="w-full mt-6 bg-[#3A3B3C] hover:bg-[#4E4F50] text-white font-bold text-[17px] py-2 rounded-md transition-colors">
+                        <button 
+                            onClick={onBackToLogin} 
+                            className="w-full mt-6 bg-[#3A3B3C] hover:bg-[#4E4F50] text-white font-bold text-[17px] py-2 rounded-md transition-colors"
+                        >
                             Back to Login
                         </button>
                     </div>
@@ -47,13 +160,23 @@ export const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBackToLogin })
                             value={email} 
                             onChange={(e) => setEmail(e.target.value)} 
                             required 
+                            disabled={isLoading}
                         />
                         <div className="flex gap-2 mt-2">
-                             <button type="button" onClick={onBackToLogin} className="w-full bg-[#3A3B3C] hover:bg-[#4E4F50] text-white font-bold text-[17px] py-2 rounded-md transition-colors">
+                             <button 
+                                type="button" 
+                                onClick={onBackToLogin} 
+                                className="w-full bg-[#3A3B3C] hover:bg-[#4E4F50] text-white font-bold text-[17px] py-2 rounded-md transition-colors"
+                                disabled={isLoading}
+                             >
                                 Cancel
                             </button>
-                            <button type="submit" className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold text-[17px] py-2 rounded-md transition-colors">
-                                Send Reset Link
+                            <button 
+                                type="submit" 
+                                className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold text-[17px] py-2 rounded-md transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                                disabled={isLoading}
+                            >
+                                {isLoading ? 'Sending...' : 'Send Reset Link'}
                             </button>
                         </div>
                     </form>
@@ -74,11 +197,29 @@ interface LoginProps {
 export const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onNavigateToForgotPassword, onClose, error }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [localError, setLocalError] = useState('');
     const { t, setLanguage, language } = useLanguage();
     
-    const handleSubmit = (e: React.FormEvent) => { 
+    const handleSubmit = async (e: React.FormEvent) => { 
         e.preventDefault(); 
-        onLogin(email, password); 
+        
+        if (!email.trim() || !password.trim()) {
+            setLocalError('Please enter both email and password');
+            return;
+        }
+        
+        try {
+            setIsLoading(true);
+            setLocalError('');
+            
+            // Call the provided onLogin handler which should handle API call
+            onLogin(email, password);
+        } catch (err: any) {
+            setLocalError(err.message || 'Login failed');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -98,7 +239,12 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onN
                 
                 <div className="bg-[#242526] p-4 rounded-lg shadow-lg w-full max-w-[396px] flex flex-col gap-4 border border-[#3E4042]">
                     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                        {error && <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded text-sm text-center">{error}</div>}
+                        {(error || localError) && (
+                            <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded text-sm text-center">
+                                {error || localError}
+                            </div>
+                        )}
+                        
                         <input 
                             type="email" 
                             placeholder="Email address"
@@ -106,6 +252,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onN
                             value={email} 
                             onChange={(e) => setEmail(e.target.value)} 
                             required 
+                            disabled={isLoading}
                         />
                         <input 
                             type="password" 
@@ -114,20 +261,33 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onN
                             value={password} 
                             onChange={(e) => setPassword(e.target.value)} 
                             required 
+                            disabled={isLoading}
                         />
-                        <button type="submit" className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold text-[20px] py-2.5 rounded-md transition-colors">
-                            {t('login_btn')}
+                        <button 
+                            type="submit" 
+                            className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold text-[20px] py-2.5 rounded-md transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                            disabled={isLoading}
+                        >
+                            {isLoading ? 'Logging in...' : t('login_btn')}
                         </button>
                     </form>
                     
                     <div className="text-center">
-                        <span onClick={onNavigateToForgotPassword} className="text-[#1877F2] text-[14px] hover:underline cursor-pointer">{t('forgot_password')}</span>
+                        <span 
+                            onClick={onNavigateToForgotPassword} 
+                            className="text-[#1877F2] text-[14px] hover:underline cursor-pointer"
+                        >
+                            {t('forgot_password')}
+                        </span>
                     </div>
                     
                     <div className="border-b border-[#3E4042] my-1"></div>
                     
                     <div className="flex flex-col gap-3">
-                        <button onClick={onNavigateToRegister} className="w-auto mx-auto bg-[#42B72A] hover:bg-[#36A420] text-white font-bold text-[17px] px-8 py-3 rounded-md transition-colors">
+                        <button 
+                            onClick={onNavigateToRegister} 
+                            className="w-auto mx-auto bg-[#42B72A] hover:bg-[#36A420] text-white font-bold text-[17px] px-8 py-3 rounded-md transition-colors"
+                        >
                             {t('create_new_account')}
                         </button>
                     </div>
@@ -162,9 +322,10 @@ interface CountryData {
 
 export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin }) => {
     const [firstName, setFirstName] = useState('');
-    const [surname, setSurname] = useState(''); // Optional
+    const [surname, setSurname] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [nationality, setNationality] = useState('Tanzania');
     const [countryInput, setCountryInput] = useState('🇹🇿 Tanzania');
     const [countrySearch, setCountrySearch] = useState('');
@@ -172,7 +333,6 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
     const countryRef = useRef<HTMLDivElement>(null);
     const [region, setRegion] = useState('');
     
-    // Date of birth
     const [day, setDay] = useState(new Date().getDate());
     const [month, setMonth] = useState(new Date().getMonth() + 1);
     const [year, setYear] = useState(new Date().getFullYear() - 18);
@@ -180,11 +340,12 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
     const [gender, setGender] = useState('Female');
     const [countries, setCountries] = useState<CountryData[]>([]);
     const [isLoadingCountries, setIsLoadingCountries] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [registerError, setRegisterError] = useState('');
     
     const { t } = useLanguage();
 
     useEffect(() => {
-        // Fetch countries with flags
         fetch('https://restcountries.com/v3.1/all?fields=name,flag')
             .then(res => res.json())
             .then(data => {
@@ -217,33 +378,76 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
         );
     }, [countries, countrySearch]);
 
-    const handleSubmit = (e: React.FormEvent) => { 
-        e.preventDefault(); 
-        
-        if (password.length < 6 || isNaN(Number(password))) {
-            alert("Password must be at least 6 numbers.");
-            return;
+    const validateForm = (): boolean => {
+        if (!firstName.trim()) {
+            setRegisterError('First name is required');
+            return false;
         }
 
-        const fullName = surname.trim() ? `${firstName} ${surname}` : firstName; 
+        if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) {
+            setRegisterError('Please enter a valid email address');
+            return false;
+        }
+
+        if (!password.trim() || password.length < 6 || !/^\d+$/.test(password)) {
+            setRegisterError('Password must be at least 6 numbers');
+            return false;
+        }
+
+        if (password !== confirmPassword) {
+            setRegisterError('Passwords do not match');
+            return false;
+        }
+
+        if (!nationality.trim()) {
+            setRegisterError('Please select your nationality');
+            return false;
+        }
+
+        if (!region.trim()) {
+            setRegisterError('Please enter your region');
+            return false;
+        }
+
+        // Age validation (must be at least 13)
+        const birthDate = new Date(year, month - 1, day);
+        const age = new Date().getFullYear() - birthDate.getFullYear();
+        if (age < 13) {
+            setRegisterError('You must be at least 13 years old to register');
+            return false;
+        }
+
+        return true;
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => { 
+        e.preventDefault();
         
-        onRegister({ 
-            name: fullName, 
-            firstName, 
-            lastName: surname, 
-            email, 
-            password, 
-            nationality,
-            location: region,
-            birthDate: `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`, 
-            gender, 
-            profileImage: `https://ui-avatars.com/api/?name=${firstName}+${surname || ''}&background=random`, 
-            coverImage: 'https://images.unsplash.com/photo-1554034483-04fda0d3507b?ixlib=rb-1.2.1&auto=format&fit=crop&w=1500&q=80', 
-            bio: `Hello! I'm ${fullName} from ${region}, ${nationality}.`, 
-            followers: [], 
-            following: [], 
-            isOnline: true 
-        }); 
+        if (!validateForm()) return;
+        
+        try {
+            setIsSubmitting(true);
+            setRegisterError('');
+            
+            const userData = {
+                firstName,
+                lastName: surname || '',
+                email,
+                password,
+                nationality,
+                location: region,
+                birthDate: `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`,
+                gender,
+            };
+            
+            // Call the provided onRegister handler which should handle API call
+            onRegister(userData);
+            
+        } catch (err: any) {
+            setRegisterError(err.message || 'Registration failed');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const days = Array.from({ length: 31 }, (_, i) => i + 1); 
@@ -265,6 +469,12 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
                     <p className="text-[#B0B3B8] text-[15px]">{t('quick_easy')}</p>
                 </div>
                 
+                {registerError && (
+                    <div className="mb-4 p-3 bg-red-900/30 border border-red-500 rounded text-red-200 text-sm">
+                        {registerError}
+                    </div>
+                )}
+                
                 <form onSubmit={handleSubmit} className="flex flex-col gap-3">
                     <div className="flex gap-2">
                         <input 
@@ -274,6 +484,7 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
                             value={firstName} 
                             onChange={(e) => setFirstName(e.target.value)} 
                             required 
+                            disabled={isSubmitting}
                         />
                         <input 
                             type="text" 
@@ -281,6 +492,7 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
                             className="w-1/2 bg-[#3A3B3C] border border-[#3E4042] rounded-md px-3 py-2 text-[15px] text-[#E4E6EB] placeholder-[#B0B3B8] focus:outline-none focus:border-[#505151]" 
                             value={surname} 
                             onChange={(e) => setSurname(e.target.value)} 
+                            disabled={isSubmitting}
                         />
                     </div>
 
@@ -298,8 +510,9 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
                                 }}
                                 onFocus={() => setShowCountryList(true)}
                                 placeholder="Search for a country..."
+                                disabled={isSubmitting}
                             />
-                            {showCountryList && (
+                            {showCountryList && !isSubmitting && (
                                 <div className="absolute top-full left-0 right-0 z-10 mt-1 bg-[#3A3B3C] border border-[#505151] rounded-md max-h-48 overflow-y-auto">
                                     {isLoadingCountries ? (
                                         <div className="p-2 text-center text-[#B0B3B8]">Loading...</div>
@@ -327,7 +540,6 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
                         </div>
                     </div>
 
-
                     <input 
                         type="text" 
                         placeholder="Region (e.g. Dar es Salaam)" 
@@ -335,6 +547,7 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
                         value={region} 
                         onChange={(e) => setRegion(e.target.value)} 
                         required 
+                        disabled={isSubmitting}
                     />
                     
                     <input 
@@ -344,11 +557,12 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
                         value={email} 
                         onChange={(e) => setEmail(e.target.value)} 
                         required 
+                        disabled={isSubmitting}
                     />
                     
                     <input 
                         type="password" 
-                        placeholder="Password (6 numbers)" 
+                        placeholder="Password (6 numbers minimum)" 
                         pattern="[0-9]*"
                         inputMode="numeric"
                         minLength={6}
@@ -357,18 +571,47 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
                         onChange={(e) => setPassword(e.target.value)} 
                         required 
                         title="Password must be at least 6 numbers"
+                        disabled={isSubmitting}
+                    />
+                    
+                    <input 
+                        type="password" 
+                        placeholder="Confirm Password" 
+                        pattern="[0-9]*"
+                        inputMode="numeric"
+                        minLength={6}
+                        className="w-full bg-[#3A3B3C] border border-[#3E4042] rounded-md px-3 py-2 text-[15px] text-[#E4E6EB] placeholder-[#B0B3B8] focus:outline-none focus:border-[#505151]" 
+                        value={confirmPassword} 
+                        onChange={(e) => setConfirmPassword(e.target.value)} 
+                        required 
+                        disabled={isSubmitting}
                     />
                     
                     <div className="mt-1">
                         <label className="text-[12px] text-[#B0B3B8] block mb-1">{t('dob') || "Date of birth"}</label>
                         <div className="flex gap-2">
-                            <select value={day} onChange={(e) => setDay(Number(e.target.value))} className="w-1/3 bg-[#3A3B3C] border border-[#3E4042] rounded-md p-1 text-[#E4E6EB]">
+                            <select 
+                                value={day} 
+                                onChange={(e) => setDay(Number(e.target.value))} 
+                                className="w-1/3 bg-[#3A3B3C] border border-[#3E4042] rounded-md p-1 text-[#E4E6EB]"
+                                disabled={isSubmitting}
+                            >
                                 {days.map(d => <option key={d} value={d}>{d}</option>)}
                             </select>
-                            <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="w-1/3 bg-[#3A3B3C] border border-[#3E4042] rounded-md p-1 text-[#E4E6EB]">
+                            <select 
+                                value={month} 
+                                onChange={(e) => setMonth(Number(e.target.value))} 
+                                className="w-1/3 bg-[#3A3B3C] border border-[#3E4042] rounded-md p-1 text-[#E4E6EB]"
+                                disabled={isSubmitting}
+                            >
                                 {months.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
                             </select>
-                            <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="w-1/3 bg-[#3A3B3C] border border-[#3E4042] rounded-md p-1 text-[#E4E6EB]">
+                            <select 
+                                value={year} 
+                                onChange={(e) => setYear(Number(e.target.value))} 
+                                className="w-1/3 bg-[#3A3B3C] border border-[#3E4042] rounded-md p-1 text-[#E4E6EB]"
+                                disabled={isSubmitting}
+                            >
                                 {years.map(y => <option key={y} value={y}>{y}</option>)}
                             </select>
                         </div>
@@ -377,13 +620,25 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
                     <div className="mt-1">
                         <label className="text-[12px] text-[#B0B3B8] block mb-1">{t('gender') || "Gender"}</label>
                         <div className="flex gap-2 justify-between">
-                            <label className="border border-[#3E4042] rounded-md p-2 flex items-center justify-between flex-1 cursor-pointer bg-[#3A3B3C]">
+                            <label className="border border-[#3E4042] rounded-md p-2 flex items-center justify-between flex-1 cursor-pointer bg-[#3A3B3C] hover:bg-[#4E4F50] transition-colors">
                                 <span className="text-[#E4E6EB]">{t('female')}</span>
-                                <input type="radio" name="gender" checked={gender === 'Female'} onChange={() => setGender('Female')} />
+                                <input 
+                                    type="radio" 
+                                    name="gender" 
+                                    checked={gender === 'Female'} 
+                                    onChange={() => setGender('Female')}
+                                    disabled={isSubmitting}
+                                />
                             </label>
-                            <label className="border border-[#3E4042] rounded-md p-2 flex items-center justify-between flex-1 cursor-pointer bg-[#3A3B3C]">
+                            <label className="border border-[#3E4042] rounded-md p-2 flex items-center justify-between flex-1 cursor-pointer bg-[#3A3B3C] hover:bg-[#4E4F50] transition-colors">
                                 <span className="text-[#E4E6EB]">{t('male')}</span>
-                                <input type="radio" name="gender" checked={gender === 'Male'} onChange={() => setGender('Male')} />
+                                <input 
+                                    type="radio" 
+                                    name="gender" 
+                                    checked={gender === 'Male'} 
+                                    onChange={() => setGender('Male')}
+                                    disabled={isSubmitting}
+                                />
                             </label>
                         </div>
                     </div>
@@ -391,13 +646,20 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
                     <p className="text-[11px] text-[#B0B3B8] my-2">{t('terms_text')}</p>
                     
                     <div className="text-center mt-2">
-                        <button type="submit" className="w-[200px] bg-[#00A400] hover:bg-[#008f00] text-white font-bold text-[18px] px-8 py-1.5 rounded-md transition-colors shadow-sm">
-                            {t('sign_up_btn')}
+                        <button 
+                            type="submit" 
+                            className="w-[200px] bg-[#00A400] hover:bg-[#008f00] text-white font-bold text-[18px] px-8 py-1.5 rounded-md transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
+                            disabled={isSubmitting}
+                        >
+                            {isSubmitting ? 'Creating Account...' : t('sign_up_btn')}
                         </button>
                     </div>
                     
                     <div className="text-center mt-4">
-                        <span className="text-[#1877F2] cursor-pointer hover:underline text-sm" onClick={onBackToLogin}>
+                        <span 
+                            className="text-[#1877F2] cursor-pointer hover:underline text-sm" 
+                            onClick={onBackToLogin}
+                        >
                             {t('have_account')}
                         </span>
                     </div>
