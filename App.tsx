@@ -1,4 +1,4 @@
-// App.tsx - Professional Version with API-Only Data
+// App.tsx - Professional Version with Complete Null Safety
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Login, Register, ForgotPassword } from './components/Auth';
 import { Header, Sidebar, RightSidebar, MenuOverlay } from './components/Layout';
@@ -21,7 +21,14 @@ import { TermsOfServicePage } from './components/TermsOfService';
 import { useLanguage } from './contexts/LanguageContext';
 import { User, Post as PostType, Story, Reel, Notification, Message, Event, Product, Comment, ReactionType, LinkPreview, Group, GroupPost, AudioTrack, Brand, Song, Episode } from './types';
 import { rankFeed } from './utils/ranking'; 
-import { LOCATIONS_DATA } from './constants';
+
+// ========== SAFE IMAGE HELPER ==========
+const getSafeImage = (url: string | undefined | null, type: 'profile' | 'cover' = 'profile'): string => {
+  if (!url || url.trim() === '') {
+    return type === 'profile' ? '/default-profile.png' : '/default-cover.jpg';
+  }
+  return url;
+};
 
 // ========== ERROR BOUNDARY ==========
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: Error | null}> {
@@ -143,23 +150,23 @@ const parsePath = (path: string, users: User[]) => {
 };
 
 // ========== CRITICAL FIX: Safe Profile Image Helper ==========
-const getSafeProfileImage = (user: User | Brand | null | undefined): string => {
+const getSafeProfileImage = (userOrBrand: User | Brand | null | undefined): string => {
   // First check: handle null/undefined immediately
-  if (!user || typeof user !== 'object') {
+  if (!userOrBrand || typeof userOrBrand !== 'object') {
     return '/default-profile.png';
   }
   
   // Second check: handle missing profileImage property safely
-  if (!('profileImage' in user) || !user.profileImage) {
+  if (!('profileImage' in userOrBrand) || !userOrBrand.profileImage) {
     // Check if it's a Brand or User to return appropriate default
-    if ('isVerified' in user && 'followers' in user) {
+    if ('isVerified' in userOrBrand && 'followers' in userOrBrand) {
       return '/default-brand.png';
     }
     return '/default-profile.png';
   }
   
   // Safe to access profileImage now
-  return user.profileImage;
+  return userOrBrand.profileImage;
 };
 
 const getDefaultUser = (): User => ({
@@ -192,7 +199,7 @@ const getDefaultBrand = (): Brand => ({
   contactPhone: '',
   adminId: 0,
   profileImage: '/default-brand.png',
-  coverImage: 'https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-1.2.1&auto=format&fit=crop&w=1500&q=80',
+  coverImage: '/default-cover.jpg',
   isVerified: false,
   followers: [],
   posts: [],
@@ -486,6 +493,14 @@ const UNERA_API = {
 
 // ========== CRITICAL FIX: Safe getAuthorForPost function ==========
 const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
+  // CRITICAL: Always return a safe object, never null
+  if (!post) {
+    return {
+      ...getDefaultUser(),
+      type: 'user' as const
+    };
+  }
+  
   // Try to find by brandId first
   if (post.brandId) {
     const brand = brands.find(b => b.id === post.brandId);
@@ -526,11 +541,13 @@ const getAuthorForPost = (post: PostType, users: User[], brands: Brand[]) => {
     };
   }
   
-  // Return a safe default user if none found
+  // CRITICAL: Always return a safe default, never null
   return {
     ...getDefaultUser(),
     id: post.authorId || 0,
-    type: 'user' as const
+    name: post.authorId ? `User ${post.authorId}` : 'Unknown User',
+    type: 'user' as const,
+    profileImage: '/default-profile.png'
   };
 };
 
@@ -563,7 +580,7 @@ const getSongForPost = (post: PostType, songs: Song[], episodes: Episode[]) => {
       id: episode.id,
       title: episode.title,
       artist: episode.host || 'Podcast Host',
-      cover: episode.thumbnail || episode.cover || '/default-cover.jpg',
+      cover: getSafeImage(episode.thumbnail || episode.cover, 'cover'),
       audioUrl: episode.audioUrl,
       duration: episode.duration,
       uploaderId: episode.uploaderId,
@@ -1068,7 +1085,7 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
     
     setCurrentAudioTrack({
       ...track,
-      cover: track.cover || '/default-cover.jpg',
+      cover: getSafeImage(track.cover, 'cover'),
       title: track.title || 'Unknown Track',
       artist: track.artist || 'Unknown Artist'
     });
@@ -1110,7 +1127,7 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
         ...brandData,
         admin_id: currentUser.id,
         profile_image: getSafeProfileImage(brandData),
-        cover_image: brandData.coverImage || 'https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-1.2.1&auto=format&fit=crop&w=1500&q=80',
+        cover_image: brandData.coverImage || '/default-cover.jpg',
       });
       
       const safeBrand = {
@@ -1875,8 +1892,10 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
 
   const effectiveView = isClient ? view : (initialData?.view || parsedPath.view);
 
-  // ========== RENDER FUNCTIONS ==========
-  const renderMusicPost = (post: PostType, author: any) => {
+  // ========== CRITICAL FIX: Safe render functions ==========
+  const renderMusicPost = useCallback((post: PostType, author: any) => {
+    // Double-check author is not null
+    const safeAuthor = author || getDefaultUser();
     const song = getSongForPost(post, songs, episodes);
     if (!song) return null;
     
@@ -1889,11 +1908,11 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
       <Post 
         key={post.id} 
         post={safePost}
-        author={author} 
+        author={safeAuthor} 
         currentUser={currentUser}
         users={users} 
         onProfileClick={(id) => { 
-          if (author.type === 'brand') {
+          if (safeAuthor.type === 'brand') {
             handleNavigate('brand_view', { brandId: id });
           } else {
             handleNavigate('profile', { userId: id });
@@ -1905,22 +1924,24 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
         onOpenComments={(postId) => setActiveCommentsPostId(postId)} 
         onVideoClick={() => {}} 
         onPlayAudioTrack={handlePlayTrack} 
-        onFollow={author.type === 'brand' ? handleFollowBrand : handleFollowUser} 
-        isFollowing={author.type === 'brand' && currentUser ? 
-          brands.find(b => b.id === author.id)?.followers.includes(currentUser.id) || false :
-          author.type === 'user' && currentUser ?
-          currentUser.following.includes(author.id) : false}
+        onFollow={safeAuthor.type === 'brand' ? handleFollowBrand : handleFollowUser} 
+        isFollowing={safeAuthor.type === 'brand' && currentUser ? 
+          brands.find(b => b.id === safeAuthor.id)?.followers.includes(currentUser.id) || false :
+          safeAuthor.type === 'user' && currentUser ?
+          currentUser.following.includes(safeAuthor.id) : false}
         onHashtagClick={handleTagClick} 
         onDeletePost={handleDeletePost} 
         isAdmin={isAdmin}
       />
     );
-  };
+  }, [currentUser, users, brands, songs, episodes, handleNavigate, handleReact, handleShare, handleFollowBrand, handleFollowUser, handleTagClick, handleDeletePost, isAdmin]);
 
-  const renderRegularPost = (post: PostType, author: any, isFollowing?: boolean) => {
-    const isBrandAuthor = author?.type === 'brand';
+  const renderRegularPost = useCallback((post: PostType, author: any, isFollowing?: boolean) => {
+    // Double-check author is not null
+    const safeAuthor = author || getDefaultUser();
+    const isBrandAuthor = safeAuthor?.type === 'brand';
     const isFollowingBrand = isBrandAuthor && currentUser ? 
-      brands.find(b => b.id === author.id)?.followers.includes(currentUser.id) || false : 
+      brands.find(b => b.id === safeAuthor.id)?.followers.includes(currentUser.id) || false : 
       false;
     
     const postWithFormattedTime = {
@@ -1932,7 +1953,7 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
       <Post 
         key={post.id} 
         post={postWithFormattedTime}
-        author={author} 
+        author={safeAuthor} 
         currentUser={currentUser} 
         users={users} 
         onProfileClick={(id) => { 
@@ -1957,7 +1978,7 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
         isAdmin={isAdmin}
       />
     );
-  };
+  }, [currentUser, users, brands, handleNavigate, handleReact, handleShare, handleFollowBrand, handleFollowUser, handleTagClick, handleDeletePost, isAdmin]);
 
   // ========== MAIN RENDER ==========
   if (!isClient) {
@@ -2014,9 +2035,12 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
               <div className="max-w-4xl mx-auto flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <img 
-                    src={getSafeProfileImage(currentAudioTrack)} 
+                    src={getSafeImage(currentAudioTrack.cover, 'cover')} 
                     alt={currentAudioTrack.title}
                     className="w-12 h-12 rounded"
+                    onError={(e) => {
+                      e.currentTarget.src = '/default-cover.jpg';
+                    }}
                   />
                   <div>
                     <h4 className="text-white font-medium">{currentAudioTrack.title || 'Unknown Track'}</h4>
@@ -2148,6 +2172,12 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
                     <div className="space-y-4 mt-4">
                       {rankedPosts.map(post => {
                         const author = getAuthorForPost(post, users, brands);
+                        
+                        // DOUBLE SAFETY CHECK: author should never be null now
+                        if (!author) {
+                          console.warn('Post has no author, skipping:', post.id);
+                          return null;
+                        }
                         
                         if (post.type === 'music' || post.type === 'podcast') {
                           return renderMusicPost(post, author);
@@ -2308,6 +2338,20 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
                     }
                     
                     const author = getAuthorForPost(post, users, brands);
+                    if (!author) {
+                      return (
+                        <div className="text-center py-10">
+                          <p className="text-gray-400">Author not found for this post</p>
+                          <button 
+                            onClick={() => handleNavigate('home')}
+                            className="mt-4 bg-[#1877F2] text-white px-4 py-2 rounded"
+                          >
+                            Go Home
+                          </button>
+                        </div>
+                      );
+                    }
+                    
                     if (post.type === 'music' || post.type === 'podcast') {
                       return renderMusicPost(post, author);
                     } else {
