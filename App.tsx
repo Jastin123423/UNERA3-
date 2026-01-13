@@ -1,4 +1,4 @@
-// App.tsx - Fixed Version with Complete API Integration
+// App.tsx - Professional Version with API-Only Data
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Login, Register, ForgotPassword } from './components/Auth';
 import { Header, Sidebar, RightSidebar, MenuOverlay } from './components/Layout';
@@ -20,8 +20,8 @@ import { PrivacyPolicyPage } from './components/PrivacyPolicy';
 import { TermsOfServicePage } from './components/TermsOfService';
 import { useLanguage } from './contexts/LanguageContext';
 import { User, Post as PostType, Story, Reel, Notification, Message, Event, Product, Comment, ReactionType, LinkPreview, Group, GroupPost, AudioTrack, Brand, Song, Episode } from './types';
-import { INITIAL_USERS, INITIAL_POSTS, INITIAL_STORIES, INITIAL_REELS, INITIAL_EVENTS, INITIAL_GROUPS, INITIAL_BRANDS, MOCK_SONGS, MOCK_EPISODES } from './constants';
 import { rankFeed } from './utils/ranking'; 
+import { LOCATIONS_DATA } from './constants';
 
 // ========== ERROR BOUNDARY ==========
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: Error | null}> {
@@ -75,6 +75,37 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
 const API_BASE_URL = 'https://unera.social';
 
 // ========== UTILITY FUNCTIONS ==========
+const formatRelativeTime = (timestamp: number): string => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    
+    if (diff < 0 || !timestamp) return 'Just now';
+    
+    const diffInSeconds = Math.floor(diff / 1000);
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    const diffInDays = Math.floor(diffInHours / 24);
+    const diffInWeeks = Math.floor(diffInDays / 7);
+    const diffInMonths = Math.floor(diffInDays / 30);
+    const diffInYears = Math.floor(diffInDays / 365);
+    
+    if (diffInSeconds < 60) {
+        return diffInSeconds < 10 ? 'Just now' : `${diffInSeconds}s`;
+    } else if (diffInMinutes < 60) {
+        return `${diffInMinutes}m`;
+    } else if (diffInHours < 24) {
+        return `${diffInHours}h`;
+    } else if (diffInDays < 7) {
+        return `${diffInDays}d`;
+    } else if (diffInDays < 30) {
+        return `${diffInWeeks}w`;
+    } else if (diffInDays < 365) {
+        return `${diffInMonths}mo`;
+    } else {
+        return `${diffInYears}y`;
+    }
+};
+
 const getPath = () => {
     if (typeof window !== 'undefined') {
         return window.location.pathname;
@@ -109,37 +140,6 @@ const parsePath = (path: string, users: User[]) => {
     if (path === '/terms') return { view: 'terms_of_service' };
     
     return { view: 'home' };
-};
-
-const formatRelativeTime = (timestamp: number): string => {
-    const now = Date.now();
-    const diff = now - timestamp;
-    
-    if (diff < 0 || !timestamp) return 'Just now';
-    
-    const diffInSeconds = Math.floor(diff / 1000);
-    const diffInMinutes = Math.floor(diffInSeconds / 60);
-    const diffInHours = Math.floor(diffInMinutes / 60);
-    const diffInDays = Math.floor(diffInHours / 24);
-    const diffInWeeks = Math.floor(diffInDays / 7);
-    const diffInMonths = Math.floor(diffInDays / 30);
-    const diffInYears = Math.floor(diffInDays / 365);
-    
-    if (diffInSeconds < 60) {
-        return diffInSeconds < 10 ? 'Just now' : `${diffInSeconds}s`;
-    } else if (diffInMinutes < 60) {
-        return `${diffInMinutes}m`;
-    } else if (diffInHours < 24) {
-        return `${diffInHours}h`;
-    } else if (diffInDays < 7) {
-        return `${diffInDays}d`;
-    } else if (diffInDays < 30) {
-        return `${diffInWeeks}w`;
-    } else if (diffInDays < 365) {
-        return `${diffInMonths}mo`;
-    } else {
-        return `${diffInYears}y`;
-    }
 };
 
 // ========== CRITICAL FIX: Safe Profile Image Helper ==========
@@ -201,14 +201,17 @@ const getDefaultBrand = (): Brand => ({
 
 // ========== API HELPER FUNCTIONS ==========
 const getAuthToken = (): string | null => {
+  if (typeof window === 'undefined') return null;
   return localStorage.getItem('unera_token');
 };
 
 const setAuthToken = (token: string): void => {
+  if (typeof window === 'undefined') return;
   localStorage.setItem('unera_token', token);
 };
 
 const clearAuthToken = (): void => {
+  if (typeof window === 'undefined') return;
   localStorage.removeItem('unera_token');
   localStorage.removeItem('uneraCurrentUser');
 };
@@ -581,28 +584,7 @@ const getSongForPost = (post: PostType, songs: Song[], episodes: Episode[]) => {
     };
   }
   
-  return {
-    id: post.audioTrack.id,
-    title: post.audioTrack.title || 'Unknown Track',
-    artist: post.audioTrack.artist || 'Unknown Artist',
-    cover: post.audioTrack.cover || '/default-cover.jpg',
-    audioUrl: post.audioTrack.url || '',
-    duration: post.audioTrack.duration || 180,
-    uploaderId: post.audioTrack.uploaderId || 0,
-    type: post.type === 'podcast' ? 'podcast' : 'music',
-    plays: post.audioTrack.plays || 0,
-    likes: post.audioTrack.likes || 0,
-    shares: post.audioTrack.shares || 0,
-    comments: 0,
-    stats: {
-      plays: post.audioTrack.plays || 0,
-      likes: post.audioTrack.likes || 0,
-      shares: post.audioTrack.shares || 0,
-      comments: 0,
-      downloads: 0,
-      reelsUse: 0
-    }
-  };
+  return null;
 };
 
 const notificationExists = (notifications: Notification[], userId: number, senderId: number, type: string, postId?: number): boolean => {
@@ -655,109 +637,36 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
   const [isClient, setIsClient] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [dataLoaded, setDataLoaded] = useState(false);
   
-  // ========== ENHANCED SAFE PROFILE IMAGE WITH DEBUGGING ==========
-  const debugGetSafeProfileImage = useCallback((user: User | Brand | null | undefined): string => {
-    try {
-      if (!user || typeof user !== 'object') {
-        console.error('❌ getSafeProfileImage called with null/undefined:', user);
-        console.trace('Stack trace:');
-        return '/default-profile.png';
-      }
-      
-      if (!('profileImage' in user) || !user.profileImage) {
-        console.warn('⚠️ User object missing profileImage property:', user);
-        if ('isVerified' in user && 'followers' in user) {
-          return '/default-brand.png';
-        }
-        return '/default-profile.png';
-      }
-      
-      return user.profileImage || 
-        (('isVerified' in user && 'followers' in user) 
-          ? '/default-brand.png' 
-          : '/default-profile.png');
-    } catch (error) {
-      console.error('🔥 Error in getSafeProfileImage:', error, 'User:', user);
-      console.trace('Error stack:');
-      return '/default-profile.png';
-    }
-  }, []);
-  
-  // State with safe initialization - ALL using getSafeProfileImage
-  const [users, setUsers] = useState<User[]>(() => {
-    return (initialData?.users || INITIAL_USERS).map(user => ({
-      ...user,
-      profileImage: getSafeProfileImage(user)
-    }));
-  });
-  
-  const [posts, setPosts] = useState<PostType[]>(() => {
-    const initialPosts = initialData?.posts || INITIAL_POSTS;
-    return initialPosts.map(post => ({
-      ...post,
-      formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
-    }));
-  });
-  
-  const [stories, setStories] = useState<Story[]>(() => {
-    return INITIAL_STORIES.map(s => ({
-      ...s, 
-      createdAt: Date.now(), 
-      user: (initialData?.users || INITIAL_USERS).find((u: User) => u.id === s.userId) || getDefaultUser()
-    }));
-  }); 
-  
-  const [reels, setReels] = useState<Reel[]>(INITIAL_REELS);
-  const [events, setEvents] = useState<Event[]>(INITIAL_EVENTS);
+  // State with empty initialization - ALL data will come from API
+  const [users, setUsers] = useState<User[]>([]);
+  const [posts, setPosts] = useState<PostType[]>([]);
+  const [stories, setStories] = useState<Story[]>([]);
+  const [reels, setReels] = useState<Reel[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [groups, setGroups] = useState<Group[]>(INITIAL_GROUPS);
-  const [brands, setBrands] = useState<Brand[]>(() => {
-    return INITIAL_BRANDS.map(brand => ({
-      ...brand,
-      profileImage: getSafeProfileImage(brand)
-    }));
-  });
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [songs, setSongs] = useState<Song[]>([]);
+  const [episodes, setEpisodes] = useState<Episode[]>([]);
   
-  const [songs, setSongs] = useState<Song[]>(MOCK_SONGS.map(song => ({
-    ...song,
-    plays: song.plays || 0,
-    likes: song.likes || 0,
-    shares: song.shares || 0,
-    comments: song.comments || 0,
-    stats: song.stats || {
-      plays: song.plays || 0,
-      likes: song.likes || 0,
-      shares: song.shares || 0,
-      comments: song.comments || 0,
-      downloads: 0,
-      reelsUse: 0
-    }
-  })));
-  
-  const [episodes, setEpisodes] = useState<Episode[]>(MOCK_EPISODES.map(episode => ({
-    ...episode,
-    plays: episode.plays || 0,
-    likes: episode.likes || 0,
-    shares: episode.shares || 0,
-    comments: episode.comments || 0,
-    stats: episode.stats || {
-      plays: episode.plays || 0,
-      likes: episode.likes || 0,
-      shares: episode.shares || 0,
-      comments: episode.comments || 0,
-      downloads: 0,
-      reelsUse: 0
-    }
-  })));
-  
+  // Current user state
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const user = initialData?.currentUser || null;
-    if (user) {
-      return {
-        ...user,
-        profileImage: getSafeProfileImage(user)
-      };
+    // Only try to get from localStorage on client side
+    if (typeof window !== 'undefined') {
+      const savedUser = localStorage.getItem('uneraCurrentUser');
+      if (savedUser) {
+        try {
+          const user = JSON.parse(savedUser);
+          return {
+            ...user,
+            profileImage: getSafeProfileImage(user)
+          };
+        } catch (e) {
+          return null;
+        }
+      }
     }
     return null;
   });
@@ -795,75 +704,14 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
   const [activeCommentsPostId, setActiveCommentsPostId] = useState<number | null>(null);
   const [activeSharePostId, setActiveSharePostId] = useState<number | null>(null);
   const [activeChatUser, setActiveChatUser] = useState<User | null>(null);
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: 1,
-      userId: 1,
-      senderId: 2,
-      type: 'follow',
-      content: 'started following you.',
-      timestamp: Date.now() - 3600000,
-      read: false
-    },
-    {
-      id: 2,
-      userId: 1,
-      senderId: 3,
-      type: 'like',
-      content: 'liked your post.',
-      postId: 1,
-      timestamp: Date.now() - 1800000,
-      read: false
-    },
-    {
-      id: 3,
-      userId: 1,
-      senderId: 4,
-      type: 'comment',
-      content: 'commented on your post.',
-      postId: 1,
-      timestamp: Date.now() - 900000,
-      read: true
-    }
-  ]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [activeProduct, setActiveProduct] = useState<Product | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [activeSinglePostId, setActiveSinglePostId] = useState<number | null>(initialData?.activeSinglePostId || parsedPath.postId || null);
 
   const isAdmin = currentUser?.role === 'admin';
 
-  // ========== CLIENT-SIDE CHECK ==========
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  // ========== ERROR TRACKING ==========
-  useEffect(() => {
-    const handleError = (error: ErrorEvent) => {
-      console.error('Global error caught:', error);
-      console.error('Error stack:', error.error?.stack);
-      setApiError(`Runtime Error: ${error.message}`);
-    };
-    
-    window.addEventListener('error', handleError);
-    
-    return () => {
-      window.removeEventListener('error', handleError);
-    };
-  }, []);
-
-  // ========== MONKEY PATCH FOR DEBUGGING ==========
-  useEffect(() => {
-    // Add debugging in development only
-    if (process.env.NODE_ENV === 'development') {
-      console.log('=== DEBUGGING PROFILE IMAGE ERRORS ===');
-      console.log('Current users:', users.length);
-      console.log('Current brands:', brands.length);
-      console.log('Current user profile:', currentUser?.profileImage);
-    }
-  }, [users, brands, currentUser]);
-
-  // ========== CRITICAL FIX: handleNavigate function ==========
+  // ========== HANDLE NAVIGATION ==========
   const handleNavigate = useCallback((destination: string, params?: any) => {
     setApiError(null);
     
@@ -977,6 +825,136 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
     }
     
     window.scrollTo(0, 0);
+  }, [isClient]);
+
+  // ========== ERROR TRACKING ==========
+  useEffect(() => {
+    const handleError = (error: ErrorEvent) => {
+      console.error('Global error caught:', error);
+      console.error('Error stack:', error.error?.stack);
+      setApiError(`Runtime Error: ${error.message}`);
+    };
+    
+    window.addEventListener('error', handleError);
+    
+    return () => {
+      window.removeEventListener('error', handleError);
+    };
+  }, []);
+
+  // ========== CLIENT-SIDE DETECTION ==========
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // ========== LOAD DATA FROM API ==========
+  useEffect(() => {
+    const loadDataFromAPI = async () => {
+      if (!isClient) return;
+      
+      try {
+        setIsLoading(true);
+        setApiError(null);
+        
+        const token = getAuthToken();
+        
+        if (token) {
+          // Load current user first
+          try {
+            const userData = await UNERA_API.users.getCurrentUser();
+            if (userData) {
+              const safeUser = {
+                ...userData,
+                profileImage: getSafeProfileImage(userData)
+              };
+              setCurrentUser(safeUser);
+              // Save to localStorage for persistence
+              localStorage.setItem('uneraCurrentUser', JSON.stringify(safeUser));
+            }
+          } catch (userError) {
+            console.warn('Could not load current user:', userError);
+            // Token might be invalid, clear it
+            clearAuthToken();
+            setCurrentUser(null);
+          }
+        }
+        
+        // Load other data in parallel (only if we have a token)
+        const loadPromises = [];
+        
+        if (token) {
+          loadPromises.push(
+            UNERA_API.posts.getAll().then(postsData => {
+              if (postsData && Array.isArray(postsData)) {
+                setPosts(postsData.map((post: any) => ({
+                  ...post,
+                  formattedTime: formatRelativeTime(post.timestamp || post.createdAt || Date.now())
+                })));
+              }
+            }).catch(err => console.warn('Failed to load posts:', err)),
+            
+            UNERA_API.brands.getAll().then(brandsData => {
+              if (brandsData && Array.isArray(brandsData)) {
+                setBrands(brandsData.map((brand: any) => ({
+                  ...brand,
+                  profileImage: getSafeProfileImage(brand)
+                })));
+              }
+            }).catch(err => console.warn('Failed to load brands:', err)),
+            
+            UNERA_API.users.getAll().then(usersData => {
+              if (usersData && Array.isArray(usersData)) {
+                setUsers(usersData.map((user: any) => ({
+                  ...user,
+                  profileImage: getSafeProfileImage(user)
+                })));
+              }
+            }).catch(err => console.warn('Failed to load users:', err)),
+            
+            UNERA_API.stories.getAll().then(storiesData => {
+              if (storiesData && Array.isArray(storiesData)) {
+                setStories(storiesData);
+              }
+            }).catch(err => console.warn('Failed to load stories:', err)),
+            
+            UNERA_API.groups.getAll().then(groupsData => {
+              if (groupsData && Array.isArray(groupsData)) {
+                setGroups(groupsData);
+              }
+            }).catch(err => console.warn('Failed to load groups:', err)),
+            
+            UNERA_API.events.getAll().then(eventsData => {
+              if (eventsData && Array.isArray(eventsData)) {
+                setEvents(eventsData);
+              }
+            }).catch(err => console.warn('Failed to load events:', err)),
+            
+            UNERA_API.music.getAll().then(musicData => {
+              if (musicData && Array.isArray(musicData)) {
+                setSongs(musicData);
+              }
+            }).catch(err => console.warn('Failed to load music:', err)),
+            
+            UNERA_API.products.getAll().then(productsData => {
+              if (productsData && Array.isArray(productsData)) {
+                setProducts(productsData);
+              }
+            }).catch(err => console.warn('Failed to load products:', err))
+          );
+        }
+        
+        await Promise.allSettled(loadPromises);
+        setDataLoaded(true);
+        
+      } catch (error) {
+        console.error('Failed to load data from API:', error);
+        setApiError('Failed to load data. Please check your connection.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    loadDataFromAPI();
   }, [isClient]);
 
   // ========== OTHER HANDLERS ==========
@@ -1784,35 +1762,40 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
           profileImage: getSafeProfileImage(data.user)
         };
         setCurrentUser(safeUser);
+        localStorage.setItem('uneraCurrentUser', JSON.stringify(safeUser));
+        
+        // Reload data after login
+        setIsLoading(true);
         
         // Load user data after login
-        const [postsData, brandsData, usersData] = await Promise.all([
-          UNERA_API.posts.getAll().catch(() => []),
-          UNERA_API.brands.getAll().catch(() => []),
-          UNERA_API.users.getAll().catch(() => []),
+        const [postsData, brandsData, usersData] = await Promise.allSettled([
+          UNERA_API.posts.getAll(),
+          UNERA_API.brands.getAll(),
+          UNERA_API.users.getAll(),
         ]);
         
-        if (postsData && Array.isArray(postsData)) {
-          setPosts(postsData.map((post: any) => ({
+        if (postsData.status === 'fulfilled' && postsData.value && Array.isArray(postsData.value)) {
+          setPosts(postsData.value.map((post: any) => ({
             ...post,
             formattedTime: formatRelativeTime(post.timestamp || post.createdAt || Date.now())
           })));
         }
         
-        if (brandsData && Array.isArray(brandsData)) {
-          setBrands(brandsData.map((brand: any) => ({
+        if (brandsData.status === 'fulfilled' && brandsData.value && Array.isArray(brandsData.value)) {
+          setBrands(brandsData.value.map((brand: any) => ({
             ...brand,
             profileImage: getSafeProfileImage(brand)
           })));
         }
         
-        if (usersData && Array.isArray(usersData)) {
-          setUsers(usersData.map((user: any) => ({
+        if (usersData.status === 'fulfilled' && usersData.value && Array.isArray(usersData.value)) {
+          setUsers(usersData.value.map((user: any) => ({
             ...user,
             profileImage: getSafeProfileImage(user)
           })));
         }
         
+        setIsLoading(false);
         handleNavigate('home');
       } else {
         setLoginError('Invalid response from server');
@@ -1842,7 +1825,11 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
           profileImage: getSafeProfileImage(data.user)
         };
         setCurrentUser(safeUser);
+        localStorage.setItem('uneraCurrentUser', JSON.stringify(safeUser));
+        
+        // Add new user to users list
         setUsers(prev => [...prev, safeUser]);
+        
         setShowRegister(false);
         setShowForgotPassword(false);
         
@@ -1860,91 +1847,14 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
     setView('login');
     setCurrentAudioTrack(null);
     setIsAudioPlaying(false);
+    setPosts([]);
+    setUsers([]);
+    setBrands([]);
+    localStorage.removeItem('uneraCurrentUser');
     if (isClient) {
       window.history.pushState({}, '', '/');
     }
   };
-
-  // ========== DATA LOADING ==========
-  useEffect(() => {
-    const loadDataFromAPI = async () => {
-      if (isClient && getAuthToken()) {
-        try {
-          setIsLoading(true);
-          
-          // Load current user
-          const userData = await UNERA_API.users.getCurrentUser();
-          if (userData) {
-            const safeUser = {
-              ...userData,
-              profileImage: getSafeProfileImage(userData)
-            };
-            setCurrentUser(safeUser);
-          }
-          
-          // Load other data
-          const [postsData, brandsData, storiesData, groupsData, musicData, usersData, eventsData] = await Promise.all([
-            UNERA_API.posts.getAll().catch(() => []),
-            UNERA_API.brands.getAll().catch(() => []),
-            UNERA_API.stories.getAll().catch(() => []),
-            UNERA_API.groups.getAll().catch(() => []),
-            UNERA_API.music.getAll().catch(() => []),
-            UNERA_API.users.getAll().catch(() => []),
-            UNERA_API.events.getAll().catch(() => []),
-          ]);
-          
-          if (postsData && Array.isArray(postsData)) {
-            setPosts(postsData.map((post: any) => ({
-              ...post,
-              formattedTime: formatRelativeTime(post.timestamp || post.createdAt || Date.now())
-            })));
-          }
-          
-          if (brandsData && Array.isArray(brandsData)) {
-            setBrands(brandsData.map((brand: any) => ({
-              ...brand,
-              profileImage: getSafeProfileImage(brand)
-            })));
-          }
-          
-          if (storiesData && Array.isArray(storiesData)) {
-            setStories(storiesData);
-          }
-          
-          if (groupsData && Array.isArray(groupsData)) {
-            setGroups(groupsData);
-          }
-          
-          if (musicData && Array.isArray(musicData)) {
-            setSongs(musicData);
-          }
-          
-          if (usersData && Array.isArray(usersData)) {
-            setUsers(usersData.map((user: any) => ({
-              ...user,
-              profileImage: getSafeProfileImage(user)
-            })));
-          }
-          
-          if (eventsData && Array.isArray(eventsData)) {
-            setEvents(eventsData);
-          }
-          
-        } catch (error) {
-          console.error('Failed to load data from API:', error);
-          setApiError('Failed to load data. Please check your connection.');
-        } finally {
-          setIsLoading(false);
-        }
-      } else {
-        setTimeout(() => setIsLoading(false), 800);
-      }
-    };
-    
-    if (isClient) {
-      loadDataFromAPI();
-    }
-  }, [isClient]);
 
   // ========== MEMOIZED VALUES ==========
   const storiesWithUsers = useMemo(() => {
@@ -1960,42 +1870,8 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
       formattedTime: post.formattedTime || formatRelativeTime(post.timestamp || post.createdAt || Date.now())
     }));
     
-    const productPosts: PostType[] = products.map(p => ({ 
-      id: p.id + 100000, 
-      authorId: p.sellerId, 
-      content: `Just listed a new item: ${p.title}`, 
-      timestamp: p.date,
-      formattedTime: formatRelativeTime(p.date),
-      createdAt: p.date, 
-      reactions: [], 
-      comments: [], 
-      shares: 0, 
-      views: p.views, 
-      type: 'product', 
-      visibility: 'Public', 
-      product: p, 
-      productId: p.id 
-    }));
-    
-    const reelPosts: PostType[] = reels.map(reel => ({ 
-      id: reel.id + 200000, 
-      authorId: reel.userId, 
-      content: reel.caption, 
-      video: reel.videoUrl, 
-      timestamp: reel.createdAt,
-      formattedTime: formatRelativeTime(reel.createdAt),
-      createdAt: reel.createdAt, 
-      reactions: reel.reactions, 
-      comments: reel.comments, 
-      shares: reel.shares, 
-      views: (reel.reactions.length * 10) + (reel.shares * 5) + (reel.comments.length * 3), 
-      type: 'video', 
-      visibility: 'Public' 
-    }));
-    
-    const allContent = [...processedPosts, ...productPosts, ...reelPosts];
-    return rankFeed(allContent, currentUser, users, brands);
-  }, [posts, reels, products, currentUser, users, brands]);
+    return rankFeed(processedPosts, currentUser, users, brands);
+  }, [posts, currentUser, users, brands]);
 
   const effectiveView = isClient ? view : (initialData?.view || parsedPath.view);
 
@@ -2083,24 +1959,25 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
     );
   };
 
-  // ========== CLIENT-SIDE CHECK BEFORE RENDERING ==========
+  // ========== MAIN RENDER ==========
   if (!isClient) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#18191A] flex-col">
-        <div className="w-20 h-20 border-4 border-[#1877F2] border-t-transparent rounded-full animate-spin mb-4"></div>
-        <div className="text-[#1877F2] font-bold text-xl animate-pulse">Loading...</div>
+      <div className="flex items-center justify-center min-h-screen bg-[#18191A]">
+        <div className="text-center">
+          <div className="w-20 h-20 border-4 border-[#1877F2] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="text-[#1877F2] font-bold text-xl">Initializing...</div>
+        </div>
       </div>
     );
   }
 
-  // ========== MAIN RENDER ==========
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#18191A] flex-col">
         <div className="w-20 h-20 border-4 border-[#1877F2] border-t-transparent rounded-full animate-spin mb-4"></div>
         <div className="text-[#1877F2] font-bold text-xl animate-pulse">Loading UNERA...</div>
         {apiError && (
-          <div className="mt-4 p-3 bg-red-900/30 text-red-300 rounded-lg">
+          <div className="mt-4 p-3 bg-red-900/30 text-red-300 rounded-lg max-w-md text-center">
             API Error: {apiError}
           </div>
         )}
@@ -2226,37 +2103,63 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
             <main className="flex-1 overflow-y-auto pb-20 md:pb-4">
               {effectiveView === 'home' && (
                 <div className="max-w-[1000px] mx-auto p-4">
-                  <StoryReel 
-                    stories={storiesWithUsers} 
-                    currentUser={currentUser ? {
-                      ...currentUser,
-                      profileImage: getSafeProfileImage(currentUser)
-                    } : null} 
-                    onStoryClick={(story) => setActiveStory(story)} 
-                    onCreateStory={() => setShowCreateStoryModal(true)} 
-                  />
+                  {dataLoaded && currentUser && (
+                    <StoryReel 
+                      stories={storiesWithUsers} 
+                      currentUser={currentUser ? {
+                        ...currentUser,
+                        profileImage: getSafeProfileImage(currentUser)
+                      } : null} 
+                      onStoryClick={(story) => setActiveStory(story)} 
+                      onCreateStory={() => setShowCreateStoryModal(true)} 
+                    />
+                  )}
                   
-                  <CreatePost 
-                    currentUser={currentUser} 
-                    users={users} 
-                    onCreatePost={handleCreatePost} 
-                    onNavigate={handleNavigate} 
-                  />
+                  {currentUser && (
+                    <CreatePost 
+                      currentUser={currentUser} 
+                      users={users} 
+                      onCreatePost={handleCreatePost} 
+                      onNavigate={handleNavigate} 
+                    />
+                  )}
                   
-                  <div className="space-y-4 mt-4">
-                    {rankedPosts.map(post => {
-                      const author = getAuthorForPost(post, users, brands);
-                      
-                      if (post.type === 'music' || post.type === 'podcast') {
-                        return renderMusicPost(post, author);
-                      } else {
-                        const isFollowing = author.type === 'user' && currentUser 
-                          ? currentUser.following.includes(author.id) 
-                          : false;
-                        return renderRegularPost(post, author, isFollowing);
-                      }
-                    })}
-                  </div>
+                  {rankedPosts.length === 0 ? (
+                    <div className="bg-[#242526] rounded-lg p-8 text-center mt-6">
+                      <div className="text-5xl mb-4">📭</div>
+                      <h3 className="text-xl text-white mb-2">
+                        {currentUser ? 'No posts yet' : 'Welcome to UNERA'}
+                      </h3>
+                      <p className="text-gray-400 mb-6">
+                        {currentUser 
+                          ? 'Be the first to create a post! Click "Create Post" above.'
+                          : 'Sign in to see posts from your network.'}
+                      </p>
+                      {!currentUser && (
+                        <button 
+                          onClick={() => setView('login')}
+                          className="bg-[#1877F2] text-white px-6 py-3 rounded-lg font-medium hover:bg-[#166FE5] transition text-lg"
+                        >
+                          Sign In to Continue
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-4 mt-4">
+                      {rankedPosts.map(post => {
+                        const author = getAuthorForPost(post, users, brands);
+                        
+                        if (post.type === 'music' || post.type === 'podcast') {
+                          return renderMusicPost(post, author);
+                        } else {
+                          const isFollowing = author.type === 'user' && currentUser 
+                            ? currentUser.following.includes(author.id) 
+                            : false;
+                          return renderRegularPost(post, author, isFollowing);
+                        }
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
               
