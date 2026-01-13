@@ -4,11 +4,36 @@ import { Post, CreatePostModal } from './Feed';
 import { BRAND_CATEGORIES, LOCATIONS_DATA } from '../constants';
 import { CreateEventModal } from './Events';
 
+// ========== SAFE IMAGE HELPER ==========
+const getSafeImage = (url: string | undefined | null, type: 'profile' | 'cover' = 'profile'): string => {
+  if (!url || url.trim() === '') {
+    return type === 'profile' ? '/default-profile.png' : '/default-cover.jpg';
+  }
+  return url;
+};
+
+// ========== SAFE PROFILE IMAGE HELPER ==========
+const getSafeProfileImage = (userOrBrand: User | Brand | null | undefined): string => {
+  if (!userOrBrand || typeof userOrBrand !== 'object') {
+    return '/default-profile.png';
+  }
+  
+  if (!('profileImage' in userOrBrand) || !userOrBrand.profileImage) {
+    if ('isVerified' in userOrBrand && 'followers' in userOrBrand) {
+      return '/default-brand.png';
+    }
+    return '/default-profile.png';
+  }
+  
+  return userOrBrand.profileImage;
+};
+
 // API Base URL
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://unera.social';
 
 // API Helper Functions
 const getAuthToken = (): string | null => {
+  if (typeof window === 'undefined') return null;
   return localStorage.getItem('unera_token');
 };
 
@@ -931,11 +956,25 @@ const BrandsPage: React.FC<BrandsPageProps> = ({
                   onClick={() => handleBrandClick(brand.id)}
                 >
                   <div className="h-32 bg-gray-700 relative">
-                    <img src={brand.coverImage} className="w-full h-full object-cover" alt="" />
+                    <img 
+                      src={getSafeImage(brand.coverImage, 'cover')} 
+                      className="w-full h-full object-cover" 
+                      alt="Cover" 
+                      onError={(e) => {
+                        e.currentTarget.src = '/default-cover.jpg';
+                      }}
+                    />
                   </div>
                   <div className="p-4 pt-10 relative">
                     <div className="absolute -top-8 left-4 rounded-full border-4 border-[#242526] overflow-hidden w-16 h-16 bg-[#3A3B3C]">
-                      <img src={brand.profileImage} className="w-full h-full object-cover" alt="" />
+                      <img 
+                        src={getSafeImage(brand.profileImage)} 
+                        className="w-full h-full object-cover" 
+                        alt="Profile" 
+                        onError={(e) => {
+                          e.currentTarget.src = '/default-profile.png';
+                        }}
+                      />
                     </div>
                     <h4 className="font-bold text-lg text-[#E4E6EB]">{brand.name}</h4>
                     <p className="text-[#B0B3B8] text-xs">{brand.category} • {brand.followers.length} followers</p>
@@ -953,11 +992,25 @@ const BrandsPage: React.FC<BrandsPageProps> = ({
               {otherBrands.map(brand => (
                 <div key={brand.id} className="bg-[#242526] rounded-xl overflow-hidden border border-[#3E4042] flex flex-col">
                   <div className="h-32 relative cursor-pointer" onClick={() => handleBrandClick(brand.id)}>
-                    <img src={brand.coverImage} className="w-full h-full object-cover" alt="" />
+                    <img 
+                      src={getSafeImage(brand.coverImage, 'cover')} 
+                      className="w-full h-full object-cover" 
+                      alt="Cover" 
+                      onError={(e) => {
+                        e.currentTarget.src = '/default-cover.jpg';
+                      }}
+                    />
                   </div>
                   <div className="p-4 flex flex-col flex-1 relative">
                     <div className="absolute -top-8 left-4 rounded-full border-4 border-[#242526] overflow-hidden w-16 h-16 bg-[#3A3B3C] cursor-pointer" onClick={() => handleBrandClick(brand.id)}>
-                      <img src={brand.profileImage} className="w-full h-full object-cover" alt="" />
+                      <img 
+                        src={getSafeImage(brand.profileImage)} 
+                        className="w-full h-full object-cover" 
+                        alt="Profile" 
+                        onError={(e) => {
+                          e.currentTarget.src = '/default-profile.png';
+                        }}
+                      />
                     </div>
                     <div className="mt-8">
                       <h4 className="font-bold text-lg text-[#E4E6EB] hover:underline cursor-pointer" onClick={() => handleBrandClick(brand.id)}>
@@ -1001,7 +1054,14 @@ const BrandsPage: React.FC<BrandsPageProps> = ({
       <div className="bg-[#242526] border-b border-[#3E4042] shadow-sm mb-4">
         <div className="max-w-[1100px] mx-auto">
           <div className="h-[200px] md:h-[350px] relative group bg-[#3A3B3C]">
-            <img src={activeBrand.coverImage} className="w-full h-full object-cover md:rounded-b-xl" alt="Cover" />
+            <img 
+              src={getSafeImage(activeBrand.coverImage, 'cover')} 
+              className="w-full h-full object-cover md:rounded-b-xl" 
+              alt="Cover" 
+              onError={(e) => {
+                e.currentTarget.src = '/default-cover.jpg';
+              }}
+            />
             {isAdmin && (
               <div 
                 className="absolute bottom-4 right-4 bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-lg cursor-pointer hover:bg-white/20 font-bold text-white text-sm flex items-center gap-2" 
@@ -1015,7 +1075,14 @@ const BrandsPage: React.FC<BrandsPageProps> = ({
             <div className="flex flex-col md:flex-row items-start md:items-end -mt-[40px] md:-mt-[30px] relative z-10 gap-4 mb-4">
               <div className="relative group">
                 <div className="w-[100px] h-[100px] md:w-[140px] md:h-[140px] rounded-full border-4 border-[#242526] overflow-hidden bg-[#242526]">
-                  <img src={activeBrand.profileImage} className="w-full h-full object-cover" alt="" />
+                  <img 
+                    src={getSafeImage(activeBrand.profileImage)} 
+                    className="w-full h-full object-cover" 
+                    alt="Profile" 
+                    onError={(e) => {
+                      e.currentTarget.src = '/default-profile.png';
+                    }}
+                  />
                 </div>
                 {isAdmin && (
                   <div 
@@ -1138,7 +1205,14 @@ const BrandsPage: React.FC<BrandsPageProps> = ({
                 <>
                   <div className="bg-[#242526] rounded-xl p-3 md:p-4 mb-4 shadow-sm border border-[#3E4042]">
                     <div className="flex gap-2 mb-3">
-                      <img src={activeBrand.profileImage} alt="" className="w-10 h-10 rounded-full object-cover cursor-pointer border border-[#3E4042]" />
+                      <img 
+                        src={getSafeImage(activeBrand.profileImage)} 
+                        alt="" 
+                        className="w-10 h-10 rounded-full object-cover cursor-pointer border border-[#3E4042]" 
+                        onError={(e) => {
+                          e.currentTarget.src = '/default-profile.png';
+                        }}
+                      />
                       <div 
                         className="flex-1 bg-[#3A3B3C] rounded-full px-3 md:px-4 py-2 hover:bg-[#4E4F50] cursor-pointer flex items-center transition-colors" 
                         onClick={() => setShowCreatePostModal(true)}
@@ -1176,7 +1250,7 @@ const BrandsPage: React.FC<BrandsPageProps> = ({
                       currentUser={{
                         ...currentUser, 
                         name: activeBrand.name, 
-                        profileImage: activeBrand.profileImage
+                        profileImage: getSafeImage(activeBrand.profileImage)
                       }} 
                       users={users} 
                       onClose={() => setShowCreatePostModal(false)}
@@ -1193,7 +1267,7 @@ const BrandsPage: React.FC<BrandsPageProps> = ({
                     type: 'brand' as const,
                     id: activeBrand.id,
                     name: activeBrand.name,
-                    profileImage: activeBrand.profileImage,
+                    profileImage: getSafeImage(activeBrand.profileImage),
                     isVerified: activeBrand.isVerified,
                     followers: activeBrand.followers
                   };
@@ -1240,10 +1314,26 @@ const BrandsPage: React.FC<BrandsPageProps> = ({
                   .flatMap(p => {
                     if (p.images && p.images.length > 0) {
                       return p.images.map((img, idx) => (
-                        <img key={`${p.id}-${idx}`} src={img} className="aspect-square object-cover w-full cursor-pointer hover:opacity-90" alt="" />
+                        <img 
+                          key={`${p.id}-${idx}`} 
+                          src={img} 
+                          className="aspect-square object-cover w-full cursor-pointer hover:opacity-90" 
+                          alt="" 
+                          onError={(e) => {
+                            e.currentTarget.src = '/default-cover.jpg';
+                          }}
+                        />
                       ));
                     } else if (p.image) {
-                      return [<img key={p.id} src={p.image} className="aspect-square object-cover w-full cursor-pointer hover:opacity-90" alt="" />];
+                      return [<img 
+                        key={p.id} 
+                        src={p.image} 
+                        className="aspect-square object-cover w-full cursor-pointer hover:opacity-90" 
+                        alt="" 
+                        onError={(e) => {
+                          e.currentTarget.src = '/default-cover.jpg';
+                        }}
+                      />];
                     }
                     return [];
                   })
