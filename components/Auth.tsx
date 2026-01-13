@@ -1,47 +1,26 @@
+// src/components/Auth/Auth.tsx
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { User } from '../types';
 
 // ========== API BASE URL ==========
-const API_BASE_URL = 'https://unera.social';
+const API_BASE_URL = 'https://unera.social/api';
 
-// ========== API HELPER FUNCTIONS ==========
-const apiRequest = async <T = any>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<T> => {
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-    ...options.headers,
-  };
-
-  const url = `${API_BASE_URL}${endpoint}`;
-  
-  try {
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error(`API Request failed for ${endpoint}:`, error);
-    throw error;
-  }
-};
-
-// ========== AUTH API ENDPOINTS ==========
+// ========== AUTH API ENDPOINTS (MATCHING YOUR PACKAGE) ==========
 const AUTH_API = {
   login: async (email: string, password: string) => {
-    return apiRequest<{ token: string; user: any }>('/users/login', {
+    const response = await fetch(`${API_BASE_URL}/users/login`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Login failed');
+    }
+    
+    return response.json();
   },
 
   register: async (userData: {
@@ -54,10 +33,14 @@ const AUTH_API = {
     birthDate: string;
     gender: string;
   }) => {
-    return apiRequest<{ token: string; user: any }>('/users/signup', {
+    // Generate username from first and last name
+    const username = `${userData.firstName.toLowerCase()}${userData.lastName ? userData.lastName.toLowerCase() : ''}${Math.floor(Math.random() * 1000)}`;
+    
+    const response = await fetch(`${API_BASE_URL}/users`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        username: `${userData.firstName.toLowerCase()}${userData.lastName ? userData.lastName.toLowerCase() : ''}${Math.floor(Math.random() * 1000)}`,
+        username,
         email: userData.email,
         password: userData.password,
         name: `${userData.firstName} ${userData.lastName || ''}`.trim(),
@@ -72,27 +55,29 @@ const AUTH_API = {
         bio: `Hello! I'm ${userData.firstName} ${userData.lastName || ''} from ${userData.location}, ${userData.nationality}.`,
       }),
     });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Registration failed');
+    }
+    
+    return response.json();
   },
 
   forgotPassword: async (email: string) => {
-    return apiRequest('/users/forgot-password', {
+    // Note: You need to implement this endpoint in your backend
+    const response = await fetch(`${API_BASE_URL}/users/forgot-password`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),
     });
-  },
-
-  resetPassword: async (token: string, newPassword: string) => {
-    return apiRequest('/users/reset-password', {
-      method: 'POST',
-      body: JSON.stringify({ token, newPassword }),
-    });
-  },
-
-  verifyEmail: async (token: string) => {
-    return apiRequest('/users/verify-email', {
-      method: 'POST',
-      body: JSON.stringify({ token }),
-    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to send reset email');
+    }
+    
+    return response.json();
   },
 };
 
@@ -108,7 +93,10 @@ export const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBackToLogin })
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!email.trim()) return;
+        if (!email.trim()) {
+            setError('Please enter your email address');
+            return;
+        }
         
         try {
             setIsLoading(true);
@@ -117,7 +105,7 @@ export const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBackToLogin })
             await AUTH_API.forgotPassword(email);
             setIsSent(true);
         } catch (err: any) {
-            setError(err.message || 'Failed to send reset email');
+            setError(err.message || 'Failed to send reset email. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -139,10 +127,11 @@ export const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBackToLogin })
                 
                 {isSent ? (
                     <div className="text-center p-4">
-                        <i className="fas fa-check-circle text-5xl text-green-500 mb-4"></i>
+                        <div className="text-4xl text-green-500 mb-4">✓</div>
                         <h3 className="text-xl font-bold text-[#E4E6EB]">Reset Link Sent!</h3>
                         <p className="text-[#B0B3B8] mt-2 text-sm">
-                            If an account with the email <strong>{email}</strong> exists, a password reset link has been sent. Please check your inbox and spam folder.
+                            If an account with the email <strong>{email}</strong> exists, 
+                            a password reset link has been sent. Please check your inbox and spam folder.
                         </p>
                         <button 
                             onClick={onBackToLogin} 
@@ -194,7 +183,13 @@ interface LoginProps {
     error: string;
 }
 
-export const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onNavigateToForgotPassword, onClose, error }) => {
+export const Login: React.FC<LoginProps> = ({ 
+    onLogin, 
+    onNavigateToRegister, 
+    onNavigateToForgotPassword, 
+    onClose, 
+    error 
+}) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -213,10 +208,10 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onN
             setIsLoading(true);
             setLocalError('');
             
-            // Call the provided onLogin handler which should handle API call
+            // Call the provided onLogin handler (which should handle the API call)
             onLogin(email, password);
         } catch (err: any) {
-            setLocalError(err.message || 'Login failed');
+            setLocalError(err.message || 'Login failed. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -224,17 +219,21 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onN
 
     return (
         <div className="min-h-screen bg-[#18191A] flex flex-col justify-between p-4 relative animate-fade-in">
-            <div className="absolute top-4 right-4 w-10 h-10 bg-[#3A3B3C] rounded-full flex items-center justify-center cursor-pointer hover:bg-[#4E4F50] transition-colors z-50" onClick={onClose} title="Continue as Guest">
-                <i className="fas fa-times text-[#E4E6EB] text-xl"></i>
+            <div className="absolute top-4 right-4 w-10 h-10 bg-[#3A3B3C] rounded-full flex items-center justify-center cursor-pointer hover:bg-[#4E4F50] transition-colors z-50" 
+                 onClick={onClose} 
+                 title="Continue as Guest">
+                <span className="text-[#E4E6EB] text-xl">✕</span>
             </div>
             
             <div className="flex-1 flex flex-col lg:flex-row items-center justify-center gap-8 lg:gap-16 max-w-[1000px] w-full mx-auto">
                 <div className="flex flex-col items-center lg:items-start text-center lg:text-left max-w-[500px]">
                     <div className="flex items-center gap-2 mb-4">
-                        <i className="fas fa-globe-americas text-[#1877F2] text-[40px] lg:text-[50px]"></i>
+                        <span className="text-[#1877F2] text-[40px] lg:text-[50px]">🌍</span>
                         <h1 className="text-[40px] lg:text-[50px] font-bold bg-gradient-to-r from-[#1877F2] to-[#1D8AF2] text-transparent bg-clip-text tracking-tight">UNERA</h1>
                     </div>
-                    <p className="text-[24px] lg:text-[28px] text-[#E4E6EB] font-normal leading-8">{t('tagline')}</p>
+                    <p className="text-[24px] lg:text-[28px] text-[#E4E6EB] font-normal leading-8">
+                        {t('tagline') || 'Connect with friends and the world around you'}
+                    </p>
                 </div>
                 
                 <div className="bg-[#242526] p-4 rounded-lg shadow-lg w-full max-w-[396px] flex flex-col gap-4 border border-[#3E4042]">
@@ -268,7 +267,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onN
                             className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold text-[20px] py-2.5 rounded-md transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                             disabled={isLoading}
                         >
-                            {isLoading ? 'Logging in...' : t('login_btn')}
+                            {isLoading ? 'Logging in...' : (t('login_btn') || 'Log In')}
                         </button>
                     </form>
                     
@@ -277,7 +276,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onN
                             onClick={onNavigateToForgotPassword} 
                             className="text-[#1877F2] text-[14px] hover:underline cursor-pointer"
                         >
-                            {t('forgot_password')}
+                            {t('forgot_password') || 'Forgot password?'}
                         </span>
                     </div>
                     
@@ -288,22 +287,50 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onN
                             onClick={onNavigateToRegister} 
                             className="w-auto mx-auto bg-[#42B72A] hover:bg-[#36A420] text-white font-bold text-[17px] px-8 py-3 rounded-md transition-colors"
                         >
-                            {t('create_new_account')}
+                            {t('create_new_account') || 'Create New Account'}
                         </button>
                     </div>
                 </div>
             </div>
             
             <div className="mt-8 text-center text-xs text-[#B0B3B8]">
-                <p>Login to comment, like, and share posts. <span className="text-[#E4E6EB] font-bold cursor-pointer hover:underline" onClick={onClose}>Continue as Guest</span> to view.</p>
+                <p>
+                    Login to comment, like, and share posts. 
+                    <span 
+                        className="text-[#E4E6EB] font-bold cursor-pointer hover:underline ml-1" 
+                        onClick={onClose}
+                    >
+                        Continue as Guest
+                    </span> to view.
+                </p>
             </div>
             
             <div className="mt-auto pt-8 pb-4 w-full max-w-[1000px] mx-auto border-t border-[#3E4042]">
                 <div className="flex flex-wrap justify-center gap-4 text-sm text-[#B0B3B8]">
-                    <span className={`cursor-pointer hover:underline ${language === 'en' ? 'font-bold text-[#E4E6EB]' : ''}`} onClick={() => setLanguage('en')}>English (US)</span>
-                    <span className={`cursor-pointer hover:underline ${language === 'sw' ? 'font-bold text-[#E4E6EB]' : ''}`} onClick={() => setLanguage('sw')}>Kiswahili</span>
-                    <span className={`cursor-pointer hover:underline ${language === 'fr' ? 'font-bold text-[#E4E6EB]' : ''}`} onClick={() => setLanguage('fr')}>Français (France)</span>
-                    <span className={`cursor-pointer hover:underline ${language === 'es' ? 'font-bold text-[#E4E6EB]' : ''}`} onClick={() => setLanguage('es')}>Español</span>
+                    <span 
+                        className={`cursor-pointer hover:underline ${language === 'en' ? 'font-bold text-[#E4E6EB]' : ''}`} 
+                        onClick={() => setLanguage('en')}
+                    >
+                        English (US)
+                    </span>
+                    <span 
+                        className={`cursor-pointer hover:underline ${language === 'sw' ? 'font-bold text-[#E4E6EB]' : ''}`} 
+                        onClick={() => setLanguage('sw')}
+                    >
+                        Kiswahili
+                    </span>
+                    <span 
+                        className={`cursor-pointer hover:underline ${language === 'fr' ? 'font-bold text-[#E4E6EB]' : ''}`} 
+                        onClick={() => setLanguage('fr')}
+                    >
+                        Français (France)
+                    </span>
+                    <span 
+                        className={`cursor-pointer hover:underline ${language === 'es' ? 'font-bold text-[#E4E6EB]' : ''}`} 
+                        onClick={() => setLanguage('es')}
+                    >
+                        Español
+                    </span>
                 </div>
             </div>
         </div>
@@ -349,7 +376,9 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
         fetch('https://restcountries.com/v3.1/all?fields=name,flag')
             .then(res => res.json())
             .then(data => {
-                const sorted = data.sort((a: CountryData, b: CountryData) => a.name.common.localeCompare(b.name.common));
+                const sorted = data.sort((a: CountryData, b: CountryData) => 
+                    a.name.common.localeCompare(b.name.common)
+                );
                 setCountries(sorted);
                 setIsLoadingCountries(false);
             })
@@ -369,7 +398,7 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
         return () => {
             document.removeEventListener("mousedown", handleClickOutside);
         };
-    }, [countryRef]);
+    }, []);
 
     const filteredCountries = useMemo(() => {
         if (!countrySearch) return countries;
@@ -440,11 +469,11 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
                 gender,
             };
             
-            // Call the provided onRegister handler which should handle API call
+            // Call the provided onRegister handler (which should handle the API call)
             onRegister(userData);
             
         } catch (err: any) {
-            setRegisterError(err.message || 'Registration failed');
+            setRegisterError(err.message || 'Registration failed. Please try again.');
         } finally {
             setIsSubmitting(false);
         }
@@ -458,15 +487,19 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
         <div className="min-h-screen bg-[#18191A] flex flex-col items-center justify-center p-4 py-8 animate-fade-in">
             <div className="flex flex-col items-center mb-6">
                 <div className="flex items-center gap-2">
-                    <i className="fas fa-globe-americas text-[#1877F2] text-[40px]"></i>
+                    <span className="text-[#1877F2] text-[40px]">🌍</span>
                     <h1 className="text-[40px] font-bold bg-gradient-to-r from-[#1877F2] to-[#1D8AF2] text-transparent bg-clip-text">UNERA</h1>
                 </div>
             </div>
             
             <div className="bg-[#242526] p-4 rounded-lg shadow-lg w-full max-w-[432px] border border-[#3E4042]">
                 <div className="text-center mb-4 border-b border-[#3E4042] pb-3">
-                    <h2 className="text-[25px] font-bold text-[#E4E6EB]">{t('sign_up_header')}</h2>
-                    <p className="text-[#B0B3B8] text-[15px]">{t('quick_easy')}</p>
+                    <h2 className="text-[25px] font-bold text-[#E4E6EB]">
+                        {t('sign_up_header') || 'Sign Up'}
+                    </h2>
+                    <p className="text-[#B0B3B8] text-[15px]">
+                        {t('quick_easy') || "It's quick and easy."}
+                    </p>
                 </div>
                 
                 {registerError && (
@@ -588,7 +621,9 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
                     />
                     
                     <div className="mt-1">
-                        <label className="text-[12px] text-[#B0B3B8] block mb-1">{t('dob') || "Date of birth"}</label>
+                        <label className="text-[12px] text-[#B0B3B8] block mb-1">
+                            {t('dob') || "Date of birth"}
+                        </label>
                         <div className="flex gap-2">
                             <select 
                                 value={day} 
@@ -618,10 +653,12 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
                     </div>
                     
                     <div className="mt-1">
-                        <label className="text-[12px] text-[#B0B3B8] block mb-1">{t('gender') || "Gender"}</label>
+                        <label className="text-[12px] text-[#B0B3B8] block mb-1">
+                            {t('gender') || "Gender"}
+                        </label>
                         <div className="flex gap-2 justify-between">
                             <label className="border border-[#3E4042] rounded-md p-2 flex items-center justify-between flex-1 cursor-pointer bg-[#3A3B3C] hover:bg-[#4E4F50] transition-colors">
-                                <span className="text-[#E4E6EB]">{t('female')}</span>
+                                <span className="text-[#E4E6EB]">{t('female') || 'Female'}</span>
                                 <input 
                                     type="radio" 
                                     name="gender" 
@@ -631,7 +668,7 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
                                 />
                             </label>
                             <label className="border border-[#3E4042] rounded-md p-2 flex items-center justify-between flex-1 cursor-pointer bg-[#3A3B3C] hover:bg-[#4E4F50] transition-colors">
-                                <span className="text-[#E4E6EB]">{t('male')}</span>
+                                <span className="text-[#E4E6EB]">{t('male') || 'Male'}</span>
                                 <input 
                                     type="radio" 
                                     name="gender" 
@@ -643,7 +680,9 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
                         </div>
                     </div>
                     
-                    <p className="text-[11px] text-[#B0B3B8] my-2">{t('terms_text')}</p>
+                    <p className="text-[11px] text-[#B0B3B8] my-2">
+                        {t('terms_text') || 'By clicking Sign Up, you agree to our Terms, Privacy Policy and Cookies Policy.'}
+                    </p>
                     
                     <div className="text-center mt-2">
                         <button 
@@ -651,7 +690,7 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
                             className="w-[200px] bg-[#00A400] hover:bg-[#008f00] text-white font-bold text-[18px] px-8 py-1.5 rounded-md transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
                             disabled={isSubmitting}
                         >
-                            {isSubmitting ? 'Creating Account...' : t('sign_up_btn')}
+                            {isSubmitting ? 'Creating Account...' : (t('sign_up_btn') || 'Sign Up')}
                         </button>
                     </div>
                     
@@ -660,7 +699,7 @@ export const Register: React.FC<RegisterProps> = ({ onRegister, onBackToLogin })
                             className="text-[#1877F2] cursor-pointer hover:underline text-sm" 
                             onClick={onBackToLogin}
                         >
-                            {t('have_account')}
+                            {t('have_account') || 'Already have an account?'}
                         </span>
                     </div>
                 </form>
