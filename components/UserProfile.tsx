@@ -59,6 +59,14 @@ const getSafeUserWebsite = (user: User | null | undefined): string => {
   return user.website || '';
 };
 
+// Safe image helper for direct URLs
+const getSafeImage = (url: string | undefined | null, type: 'profile' | 'cover' = 'profile'): string => {
+  if (!url || url.trim() === '') {
+    return type === 'profile' ? '/default-profile.png' : '/default-cover.jpg';
+  }
+  return url;
+};
+
 // ========== API CLIENT ==========
 const API_BASE_URL = 'https://unera.social';
 
@@ -146,7 +154,7 @@ const transformUserFromAPI = (apiUser: any): User => {
       username: 'unknown',
       password: '',
       profileImage: '/default-profile.png',
-      coverImage: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f',
+      coverImage: '/default-cover.jpg',
       bio: '',
       location: '',
       followers: [],
@@ -458,7 +466,7 @@ const getSongForPost = (post: PostType, songs?: Song[], episodes?: Episode[]) =>
             id: episode.id,
             title: episode.title,
             artist: episode.host || 'Podcast Host',
-            cover: episode.thumbnail || episode.cover,
+            cover: getSafeImage(episode.thumbnail || episode.cover, 'cover'),
             audioUrl: episode.audioUrl,
             duration: episode.duration,
             uploaderId: episode.uploaderId,
@@ -725,6 +733,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                         alt={getSafeUserName(author)} 
                         className="w-12 h-12 rounded-full cursor-pointer"
                         onClick={() => author?.id && onProfileClick(author.id)}
+                        onError={(e) => {
+                            e.currentTarget.src = '/default-profile.png';
+                        }}
                     />
                     <div>
                         <div className="flex items-center gap-2">
@@ -748,10 +759,13 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 
                 <div className="flex items-center gap-4 border border-[#3E4042] rounded-lg p-4 bg-[#3A3B3C]">
                     <img 
-                        src={song.cover || '/default-cover.jpg'} 
+                        src={getSafeImage(song.cover, 'cover')} 
                         alt={song.title || 'Unknown Track'} 
                         className="w-16 h-16 rounded-lg object-cover cursor-pointer"
                         onClick={() => onPlayAudioTrack && onPlayAudioTrack(song)}
+                        onError={(e) => {
+                            e.currentTarget.src = '/default-cover.jpg';
+                        }}
                     />
                     <div className="flex-1">
                         <div className="font-bold text-[#E4E6EB]">{song.title || 'Unknown Track'}</div>
@@ -809,10 +823,10 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         userPosts.forEach(post => {
             if (post.type === 'image') {
                 if (post.image) {
-                    photos.push(post.image);
+                    photos.push(getSafeImage(post.image, 'cover'));
                 }
                 if (post.images && post.images.length > 0) {
-                    photos.push(...post.images);
+                    photos.push(...post.images.map(img => getSafeImage(img, 'cover')));
                 }
             }
         });
@@ -887,7 +901,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {followers.map(follower => (
                                 <div key={follower.id} className="flex items-center gap-3 p-3 border border-[#3E4042] rounded-lg hover:bg-[#3A3B3C] cursor-pointer" onClick={() => onProfileClick(follower.id)}>
-                                    <img src={getSafeProfileImage(follower)} alt="" className="w-16 h-16 rounded-lg object-cover" />
+                                    <img 
+                                        src={getSafeProfileImage(follower)} 
+                                        alt="" 
+                                        className="w-16 h-16 rounded-lg object-cover" 
+                                        onError={(e) => {
+                                            e.currentTarget.src = '/default-profile.png';
+                                        }}
+                                    />
                                     <div>
                                         <h4 className="font-semibold text-[#E4E6EB]">{getSafeUserName(follower)}</h4>
                                         <span className="text-[#B0B3B8] text-sm">{getSafeUserLocation(follower)}</span>
@@ -905,7 +926,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {following.map(followed => (
                                 <div key={followed.id} className="flex items-center gap-3 p-3 border border-[#3E4042] rounded-lg hover:bg-[#3A3B3C] cursor-pointer" onClick={() => onProfileClick(followed.id)}>
-                                    <img src={getSafeProfileImage(followed)} alt="" className="w-16 h-16 rounded-lg object-cover" />
+                                    <img 
+                                        src={getSafeProfileImage(followed)} 
+                                        alt="" 
+                                        className="w-16 h-16 rounded-lg object-cover" 
+                                        onError={(e) => {
+                                            e.currentTarget.src = '/default-profile.png';
+                                        }}
+                                    />
                                     <div>
                                         <h4 className="font-semibold text-[#E4E6EB]">{getSafeUserName(followed)}</h4>
                                         <span className="text-[#B0B3B8] text-sm">{getSafeUserLocation(followed)}</span>
@@ -925,13 +953,20 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1">
                                 {photos.map((photo, index) => (
                                     <div key={index} className="aspect-square cursor-pointer overflow-hidden relative group" onClick={() => onViewImage(photo)}>
-                                        <img src={photo} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                        <img 
+                                            src={photo} 
+                                            alt="" 
+                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                            onError={(e) => {
+                                                e.currentTarget.src = '/default-cover.jpg';
+                                            }}
+                                        />
                                     </div>
                                 ))}
                             </div>
                         ) : <p className="text-[#B0B3B8]">No photos shared.</p>}
-                </div>
-            );
+                    </div>
+                );
             case 'Reels': 
                 return (
                     <div className="bg-[#242526] p-4 rounded-xl border border-[#3E4042] mx-4 md:mx-0">
@@ -995,7 +1030,16 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                             </div>
                             <div className="grid grid-cols-3 gap-1 rounded-lg overflow-hidden">
                                 {getAllPhotos().slice(0, 9).map((photo, index) => (
-                                    <img key={index} src={photo} className="w-full aspect-square object-cover cursor-pointer hover:opacity-90" alt="" onClick={() => onViewImage(photo)} />
+                                    <img 
+                                        key={index} 
+                                        src={photo} 
+                                        className="w-full aspect-square object-cover cursor-pointer hover:opacity-90" 
+                                        alt="" 
+                                        onClick={() => onViewImage(photo)} 
+                                        onError={(e) => {
+                                            e.currentTarget.src = '/default-cover.jpg';
+                                        }}
+                                    />
                                 ))}
                             </div>
                         </div>
@@ -1101,6 +1145,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                             alt="Cover" 
                             className="w-full h-full object-cover" 
                             onClick={() => onViewImage(getSafeCoverImage(user))} 
+                            onError={(e) => {
+                                e.currentTarget.src = '/default-cover.jpg';
+                            }}
                         />
                         {isCurrentUser && (
                             <div className="absolute bottom-4 right-4 bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-md cursor-pointer hover:bg-white/20 font-semibold text-white text-[15px] flex items-center gap-2" onClick={(e) => { e.stopPropagation(); coverInputRef.current?.click(); }}>
@@ -1119,6 +1166,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                                         alt={getSafeUserName(user)} 
                                         className="w-full h-full object-cover" 
                                         onClick={() => onViewImage(getSafeProfileImage(user))} 
+                                        onError={(e) => {
+                                            e.currentTarget.src = '/default-profile.png';
+                                        }}
                                     />
                                     {isCurrentUser && (
                                         <div className="absolute inset-0 bg-black/40 hidden group-hover:flex items-center justify-center" onClick={(e) => { e.stopPropagation(); profileInputRef.current?.click(); }}>
