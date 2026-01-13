@@ -1,5 +1,4 @@
-
-// App.tsx - Fully Fixed Version with Complete API Integration
+// App.tsx - Fixed Version with Complete API Integration
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Login, Register, ForgotPassword } from './components/Auth';
 import { Header, Sidebar, RightSidebar, MenuOverlay } from './components/Layout';
@@ -657,6 +656,34 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
   
+  // ========== ENHANCED SAFE PROFILE IMAGE WITH DEBUGGING ==========
+  const debugGetSafeProfileImage = useCallback((user: User | Brand | null | undefined): string => {
+    try {
+      if (!user || typeof user !== 'object') {
+        console.error('❌ getSafeProfileImage called with null/undefined:', user);
+        console.trace('Stack trace:');
+        return '/default-profile.png';
+      }
+      
+      if (!('profileImage' in user) || !user.profileImage) {
+        console.warn('⚠️ User object missing profileImage property:', user);
+        if ('isVerified' in user && 'followers' in user) {
+          return '/default-brand.png';
+        }
+        return '/default-profile.png';
+      }
+      
+      return user.profileImage || 
+        (('isVerified' in user && 'followers' in user) 
+          ? '/default-brand.png' 
+          : '/default-profile.png');
+    } catch (error) {
+      console.error('🔥 Error in getSafeProfileImage:', error, 'User:', user);
+      console.trace('Error stack:');
+      return '/default-profile.png';
+    }
+  }, []);
+  
   // State with safe initialization - ALL using getSafeProfileImage
   const [users, setUsers] = useState<User[]>(() => {
     return (initialData?.users || INITIAL_USERS).map(user => ({
@@ -805,119 +832,10 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
 
   const isAdmin = currentUser?.role === 'admin';
 
-  // ========== CRITICAL FIX: handleNavigate function INSIDE App component ==========
-  const handleNavigate = useCallback((destination: string, params?: any) => {
-    setApiError(null);
-    
-    switch (destination) {
-      case 'home':
-        setView('home');
-        setActiveTab('home');
-        setSelectedUserId(null);
-        setActiveBrandId(null);
-        setActiveSinglePostId(null);
-        if (isClient) window.history.pushState({}, '', '/');
-        break;
-        
-      case 'profile':
-        if (params?.userId) {
-          setSelectedUserId(params.userId);
-          setView('profile');
-          setActiveTab('profile');
-          if (isClient) window.history.pushState({}, '', `/@${params.userId}`);
-        }
-        break;
-        
-      case 'brand_view':
-        if (params?.brandId) {
-          setActiveBrandId(params.brandId);
-          setView('brands');
-          setActiveTab('brands');
-          if (isClient) window.history.pushState({}, '', `/brands/${params.brandId}`);
-        } else {
-          setView('brands');
-          setActiveTab('brands');
-          if (isClient) window.history.pushState({}, '', '/brands');
-        }
-        break;
-        
-      case 'marketplace':
-        setView('marketplace');
-        setActiveTab('marketplace');
-        if (isClient) window.history.pushState({}, '', '/marketplace');
-        break;
-        
-      case 'reels':
-        setView('reels');
-        setActiveTab('reels');
-        if (isClient) window.history.pushState({}, '', '/reels');
-        break;
-        
-      case 'groups':
-        setView('groups');
-        setActiveTab('groups');
-        if (isClient) window.history.pushState({}, '', '/groups');
-        break;
-        
-      case 'events':
-        setView('events');
-        setActiveTab('events');
-        if (isClient) window.history.pushState({}, '', '/events');
-        break;
-        
-      case 'music':
-        setView('music');
-        setActiveTab('music');
-        if (isClient) window.history.pushState({}, '', '/music');
-        break;
-        
-      case 'login':
-        setView('login');
-        setActiveTab('login');
-        if (isClient) window.history.pushState({}, '', '/login');
-        break;
-        
-      case 'single_post':
-        if (params?.postId) {
-          setActiveSinglePostId(params.postId);
-          setView('single_post');
-          if (isClient) window.history.pushState({}, '', `/post/${params.postId}`);
-        }
-        break;
-        
-      case 'settings':
-        setView('settings');
-        setActiveTab('settings');
-        if (isClient) window.history.pushState({}, '', '/settings');
-        break;
-        
-      case 'help_support':
-        setView('help_support');
-        setActiveTab('help_support');
-        if (isClient) window.history.pushState({}, '', '/help');
-        break;
-        
-      case 'privacy_policy':
-        setView('privacy_policy');
-        setActiveTab('privacy_policy');
-        if (isClient) window.history.pushState({}, '', '/privacy');
-        break;
-        
-      case 'terms_of_service':
-        setView('terms_of_service');
-        setActiveTab('terms_of_service');
-        if (isClient) window.history.pushState({}, '', '/terms');
-        break;
-        
-      default:
-        console.warn('Unknown navigation destination:', destination);
-        setView('home');
-        setActiveTab('home');
-        if (isClient) window.history.pushState({}, '', '/');
-    }
-    
-    window.scrollTo(0, 0);
-  }, [isClient]);
+  // ========== CLIENT-SIDE CHECK ==========
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // ========== ERROR TRACKING ==========
   useEffect(() => {
@@ -933,6 +851,133 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
       window.removeEventListener('error', handleError);
     };
   }, []);
+
+  // ========== MONKEY PATCH FOR DEBUGGING ==========
+  useEffect(() => {
+    // Add debugging in development only
+    if (process.env.NODE_ENV === 'development') {
+      console.log('=== DEBUGGING PROFILE IMAGE ERRORS ===');
+      console.log('Current users:', users.length);
+      console.log('Current brands:', brands.length);
+      console.log('Current user profile:', currentUser?.profileImage);
+    }
+  }, [users, brands, currentUser]);
+
+  // ========== CRITICAL FIX: handleNavigate function ==========
+  const handleNavigate = useCallback((destination: string, params?: any) => {
+    setApiError(null);
+    
+    if (!isClient) return;
+    
+    switch (destination) {
+      case 'home':
+        setView('home');
+        setActiveTab('home');
+        setSelectedUserId(null);
+        setActiveBrandId(null);
+        setActiveSinglePostId(null);
+        window.history.pushState({}, '', '/');
+        break;
+        
+      case 'profile':
+        if (params?.userId) {
+          setSelectedUserId(params.userId);
+          setView('profile');
+          setActiveTab('profile');
+          window.history.pushState({}, '', `/@${params.userId}`);
+        }
+        break;
+        
+      case 'brand_view':
+        if (params?.brandId) {
+          setActiveBrandId(params.brandId);
+          setView('brands');
+          setActiveTab('brands');
+          window.history.pushState({}, '', `/brands/${params.brandId}`);
+        } else {
+          setView('brands');
+          setActiveTab('brands');
+          window.history.pushState({}, '', '/brands');
+        }
+        break;
+        
+      case 'marketplace':
+        setView('marketplace');
+        setActiveTab('marketplace');
+        window.history.pushState({}, '', '/marketplace');
+        break;
+        
+      case 'reels':
+        setView('reels');
+        setActiveTab('reels');
+        window.history.pushState({}, '', '/reels');
+        break;
+        
+      case 'groups':
+        setView('groups');
+        setActiveTab('groups');
+        window.history.pushState({}, '', '/groups');
+        break;
+        
+      case 'events':
+        setView('events');
+        setActiveTab('events');
+        window.history.pushState({}, '', '/events');
+        break;
+        
+      case 'music':
+        setView('music');
+        setActiveTab('music');
+        window.history.pushState({}, '', '/music');
+        break;
+        
+      case 'login':
+        setView('login');
+        setActiveTab('login');
+        window.history.pushState({}, '', '/login');
+        break;
+        
+      case 'single_post':
+        if (params?.postId) {
+          setActiveSinglePostId(params.postId);
+          setView('single_post');
+          window.history.pushState({}, '', `/post/${params.postId}`);
+        }
+        break;
+        
+      case 'settings':
+        setView('settings');
+        setActiveTab('settings');
+        window.history.pushState({}, '', '/settings');
+        break;
+        
+      case 'help_support':
+        setView('help_support');
+        setActiveTab('help_support');
+        window.history.pushState({}, '', '/help');
+        break;
+        
+      case 'privacy_policy':
+        setView('privacy_policy');
+        setActiveTab('privacy_policy');
+        window.history.pushState({}, '', '/privacy');
+        break;
+        
+      case 'terms_of_service':
+        setView('terms_of_service');
+        setActiveTab('terms_of_service');
+        window.history.pushState({}, '', '/terms');
+        break;
+        
+      default:
+        console.warn('Unknown navigation destination:', destination);
+        setView('home');
+        setActiveTab('home');
+        window.history.pushState({}, '', '/');
+    }
+    
+    window.scrollTo(0, 0);
+  }, [isClient]);
 
   // ========== OTHER HANDLERS ==========
   const handleTagClick = useCallback((tag: string) => {
@@ -1901,10 +1946,6 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
     }
   }, [isClient]);
 
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
   // ========== MEMOIZED VALUES ==========
   const storiesWithUsers = useMemo(() => {
     return stories.map(story => {
@@ -2041,6 +2082,16 @@ function App({ initialData, initialPath }: { initialData?: any, initialPath?: st
       />
     );
   };
+
+  // ========== CLIENT-SIDE CHECK BEFORE RENDERING ==========
+  if (!isClient) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#18191A] flex-col">
+        <div className="w-20 h-20 border-4 border-[#1877F2] border-t-transparent rounded-full animate-spin mb-4"></div>
+        <div className="text-[#1877F2] font-bold text-xl animate-pulse">Loading...</div>
+      </div>
+    );
+  }
 
   // ========== MAIN RENDER ==========
   if (isLoading) {
